@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dorp tot Stad — middeleeuwse city builder</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ===== Bovenbalk ===== -->
+  <header id="hud">
+    <div id="hud-left">
+      <div class="crest">🏰</div>
+      <div class="townmeta">
+        <div id="townname">Nieuw Dorp</div>
+        <div id="agename" class="sub">Tijdperk 1 — Nederzetting</div>
+      </div>
+    </div>
+
+    <div id="hud-res">
+      <div id="res-primary" class="resrow"></div>
+      <div id="res-secondary" class="resrow small"></div>
+    </div>
+
+    <div id="hud-right">
+      <div id="stats">
+        <div class="stat" id="stat-pop" title="Inwoners (werkloos)"><span class="ico">👥</span><span class="val">0</span></div>
+        <div class="stat" id="stat-happy" title="Tevredenheid"><span class="ico">😀</span><span class="val">0%</span></div>
+        <div class="stat" id="stat-def" title="Verdediging"><span class="ico">🛡️</span><span class="val">0</span></div>
+        <div class="stat" id="stat-season" title="Seizoen"><span class="ico">🌱</span><span class="val">Lente, jaar 1</span></div>
+      </div>
+      <div id="speeds">
+        <button class="spd" data-speed="0" title="Pauze (spatie)">⏸</button>
+        <button class="spd active" data-speed="1" title="Normale snelheid">1×</button>
+        <button class="spd" data-speed="2" title="Snel">2×</button>
+        <button class="spd" data-speed="4" title="Zeer snel">4×</button>
+        <button id="btn-menu" title="Menu">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== Speelveld ===== -->
+  <main id="stage">
+    <canvas id="canvas"></canvas>
+
+    <div id="ghost-info" class="hidden"></div>
+
+    <!-- Doelen + tijdperk -->
+    <aside id="right-col">
+      <section id="agebox" class="card">
+        <h3>Volgend tijdperk <span id="age-next-name"></span></h3>
+        <ul id="age-reqs"></ul>
+        <button id="btn-advance" disabled>Bevorder tijdperk</button>
+      </section>
+      <section id="questbox" class="card">
+        <h3>Doelen</h3>
+        <ul id="quest-list"></ul>
+      </section>
+    </aside>
+
+    <!-- Selectiepaneel -->
+    <aside id="panel" class="card hidden"></aside>
+
+    <!-- Log -->
+    <div id="logbox"></div>
+
+    <!-- Waarschuwing voor rovers -->
+    <div id="raid-warning" class="hidden"></div>
+
+    <!-- Meldingen midden in beeld -->
+    <div id="toast" class="hidden"></div>
+  </main>
+
+  <!-- ===== Bouwmenu ===== -->
+  <footer id="buildbar">
+    <div id="build-tabs"></div>
+    <div id="build-list"></div>
+  </footer>
+
+</div>
+
+<!-- ===== Overlays ===== -->
+<div id="overlay" class="hidden">
+  <div id="overlay-card">
+    <h2 id="overlay-title"></h2>
+    <div id="overlay-body"></div>
+    <div id="overlay-actions"></div>
+  </div>
+</div>
+
+<!-- Scripts: klassieke script-tags in afhankelijkheidsvolgorde,
+     zodat het spel ook werkt door index.html gewoon te openen (file://). -->
+<script src="js/namespace.js"></script>
+
+<script src="js/config/resources.js"></script>
+<script src="js/config/jobs.js"></script>
+<script src="js/config/buildings.js"></script>
+<script src="js/config/ages.js"></script>
+<script src="js/config/quests.js"></script>
+
+<script src="js/core/rng.js"></script>
+<script src="js/core/map.js"></script>
+<script src="js/core/state.js"></script>
+<script src="js/core/construction.js"></script>
+<script src="js/core/economy.js"></script>
+<script src="js/core/population.js"></script>
+<script src="js/core/seasons.js"></script>
+<script src="js/core/raids.js"></script>
+<script src="js/core/ages.js"></script>
+<script src="js/core/save.js"></script>
+
+<script src="js/render/camera.js"></script>
+<script src="js/render/sprites.js"></script>
+<script src="js/render/renderer.js"></script>
+
+<script src="js/ui/log.js"></script>
+<script src="js/ui/hud.js"></script>
+<script src="js/ui/buildmenu.js"></script>
+<script src="js/ui/panel.js"></script>
+<script src="js/ui/quests.js"></script>
+<script src="js/ui/overlay.js"></script>
+
+<script src="js/devcheck.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

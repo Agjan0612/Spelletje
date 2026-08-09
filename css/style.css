@@ -1,0 +1,345 @@
+/* ==========================================================================
+   Dorp tot Stad — stylesheet
+   Kleurenpalet: perkament, donker hout, goud, mos.
+   ========================================================================== */
+
+:root {
+  --hout-donker: #2b1d12;
+  --hout: #3d2b1c;
+  --hout-licht: #55402c;
+  --perkament: #efe0c4;
+  --perkament-dof: #cbb894;
+  --goud: #d7a94b;
+  --goud-licht: #f0cd7f;
+  --mos: #6c8a4a;
+  --bloed: #a63a2a;
+  --lucht: #7fa8c9;
+  --rand: rgba(0, 0, 0, .45);
+  --schaduw: 0 4px 14px rgba(0, 0, 0, .45);
+  --hudhoogte: 78px;
+  --barhoogte: 132px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #1a120b;
+  color: var(--perkament);
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+button {
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.hidden { display: none !important; }
+
+/* ==========================================================================
+   Bovenbalk
+   ========================================================================== */
+
+#hud {
+  height: var(--hudhoogte);
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 14px;
+  background: linear-gradient(180deg, var(--hout-licht), var(--hout-donker));
+  border-bottom: 3px solid var(--goud);
+  box-shadow: var(--schaduw);
+  z-index: 20;
+}
+
+#hud-left { display: flex; align-items: center; gap: 10px; min-width: 190px; }
+.crest { font-size: 30px; filter: drop-shadow(0 2px 3px #000); }
+#townname { font-size: 18px; font-weight: 700; color: var(--goud-licht); letter-spacing: .4px; }
+.sub { font-size: 12px; color: var(--perkament-dof); }
+
+#hud-res { flex: 1 1 auto; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
+.resrow { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.res {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  background: rgba(0, 0, 0, .3);
+  border: 1px solid var(--rand);
+  border-radius: 5px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.resrow.small .res { font-size: 12.5px; padding: 2px 7px; opacity: .92; }
+.res .ico { font-size: 15px; }
+.res .val { font-weight: 700; }
+.res .cap { font-size: 10px; color: var(--perkament-dof); }
+.res.vol .val { color: var(--goud-licht); }
+.res.leeg .val { color: #e08a7a; }
+.res .delta { font-size: 10px; color: var(--mos); }
+.res .delta.neg { color: #e08a7a; }
+
+#hud-right { display: flex; align-items: center; gap: 14px; }
+#stats { display: flex; gap: 8px; }
+.stat {
+  display: flex; align-items: center; gap: 4px;
+  padding: 3px 8px; font-size: 13px;
+  background: rgba(0, 0, 0, .3); border: 1px solid var(--rand); border-radius: 5px;
+  white-space: nowrap;
+}
+.stat .val { font-weight: 700; }
+
+#speeds { display: flex; gap: 4px; }
+#speeds button {
+  width: 34px; height: 30px; font-size: 13px; font-weight: 700;
+  background: var(--hout); border: 1px solid var(--rand); border-radius: 5px;
+}
+#speeds button:hover { background: var(--hout-licht); }
+#speeds button.active { background: var(--goud); color: #2b1d12; border-color: var(--goud-licht); }
+
+/* ==========================================================================
+   Speelveld
+   ========================================================================== */
+
+#stage { position: relative; flex: 1 1 auto; overflow: hidden; }
+#canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
+#canvas.dragging { cursor: grabbing; }
+#canvas.placing { cursor: crosshair; }
+
+.card {
+  background: linear-gradient(180deg, rgba(43, 29, 18, .96), rgba(26, 18, 11, .96));
+  border: 2px solid var(--goud);
+  border-radius: 8px;
+  box-shadow: var(--schaduw);
+  padding: 10px 12px;
+}
+.card h3 {
+  margin: 0 0 8px; font-size: 14px; color: var(--goud-licht);
+  text-transform: uppercase; letter-spacing: .8px;
+  border-bottom: 1px solid var(--rand); padding-bottom: 5px;
+}
+
+/* Rechterkolom: tijdperk + doelen */
+#right-col {
+  position: absolute; top: 10px; right: 10px; width: 258px;
+  display: flex; flex-direction: column; gap: 10px;
+  max-height: calc(100% - 20px); overflow-y: auto;
+  z-index: 10;
+}
+
+#age-reqs, #quest-list { list-style: none; margin: 0; padding: 0; font-size: 12.5px; }
+#age-reqs li, #quest-list li {
+  display: flex; gap: 6px; align-items: flex-start;
+  padding: 3px 0; line-height: 1.3; color: var(--perkament-dof);
+}
+#age-reqs li.ok, #quest-list li.ok { color: var(--mos); text-decoration: none; }
+#age-reqs li .mark, #quest-list li .mark { flex: 0 0 14px; }
+
+#btn-advance {
+  margin-top: 8px; width: 100%; padding: 8px;
+  background: var(--goud); color: #2b1d12; font-weight: 700; font-size: 13px;
+  border: 1px solid var(--goud-licht); border-radius: 5px;
+}
+#btn-advance:disabled { background: #4a3a26; color: #8b7a62; border-color: var(--rand); cursor: not-allowed; }
+#btn-advance:not(:disabled) { animation: gloed 1.6s ease-in-out infinite; }
+@keyframes gloed {
+  0%, 100% { box-shadow: 0 0 0 rgba(215, 169, 75, 0); }
+  50% { box-shadow: 0 0 14px rgba(215, 169, 75, .85); }
+}
+
+/* Selectiepaneel links */
+#panel {
+  position: absolute; top: 10px; left: 10px; width: 272px;
+  max-height: calc(100% - 20px); overflow-y: auto; z-index: 10;
+  font-size: 13px;
+}
+#panel .titelrij { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+#panel .titelrij .emoji { font-size: 26px; }
+#panel .titelrij h2 { margin: 0; font-size: 17px; color: var(--goud-licht); }
+#panel .beschrijving { font-size: 12px; color: var(--perkament-dof); font-style: italic; margin-bottom: 8px; line-height: 1.35; }
+#panel .regel { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
+#panel .regel .k { color: var(--perkament-dof); }
+#panel .kop { margin: 9px 0 3px; font-size: 11px; letter-spacing: .8px; text-transform: uppercase; color: var(--goud); }
+
+.werkers { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+.werkers button {
+  width: 30px; height: 28px; font-size: 16px; font-weight: 700;
+  background: var(--hout-licht); border: 1px solid var(--rand); border-radius: 5px;
+}
+.werkers button:hover:not(:disabled) { background: var(--goud); color: #2b1d12; }
+.werkers button:disabled { opacity: .35; cursor: not-allowed; }
+.werkers .telling { flex: 1; text-align: center; font-weight: 700; font-size: 15px; }
+
+.balk { height: 7px; background: rgba(0, 0, 0, .45); border-radius: 4px; overflow: hidden; margin: 3px 0 6px; }
+.balk > div { height: 100%; background: var(--mos); transition: width .2s; }
+.balk.bouw > div { background: var(--goud); }
+
+.knoprij { display: flex; gap: 6px; margin-top: 10px; }
+.knoprij button {
+  flex: 1; padding: 6px; font-size: 12px;
+  background: var(--hout-licht); border: 1px solid var(--rand); border-radius: 5px;
+}
+.knoprij button:hover { background: var(--goud); color: #2b1d12; }
+.knoprij button.gevaar:hover { background: var(--bloed); color: #fff; }
+
+.waarschuwing { color: #e8a37a; font-size: 12px; margin-top: 6px; line-height: 1.35; }
+
+/* Log linksonder */
+#logbox {
+  position: absolute; left: 10px; bottom: 10px; width: 330px;
+  display: flex; flex-direction: column-reverse; gap: 3px;
+  pointer-events: none; z-index: 9;
+}
+#panel:not(.hidden) ~ #logbox { bottom: 10px; }
+.logregel {
+  background: rgba(26, 18, 11, .86); border-left: 3px solid var(--goud);
+  padding: 4px 8px; font-size: 12px; border-radius: 0 4px 4px 0;
+  animation: vervaag .4s ease-out;
+}
+.logregel.goed { border-left-color: var(--mos); }
+.logregel.slecht { border-left-color: var(--bloed); }
+.logregel .tijd { color: var(--perkament-dof); font-size: 10.5px; margin-right: 5px; }
+@keyframes vervaag { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: none; } }
+
+/* Zwevende hint bij plaatsen */
+#ghost-info {
+  position: absolute; z-index: 12; pointer-events: none;
+  background: rgba(26, 18, 11, .93); border: 1px solid var(--goud);
+  border-radius: 5px; padding: 4px 8px; font-size: 12px; white-space: nowrap;
+  transform: translate(14px, 14px);
+}
+#ghost-info.fout { border-color: var(--bloed); color: #f0b3a6; }
+
+/* Roverswaarschuwing */
+#raid-warning {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+  background: rgba(120, 30, 20, .93); border: 2px solid #e07a5f;
+  border-radius: 7px; padding: 8px 18px; font-size: 15px; font-weight: 700;
+  z-index: 14; animation: klop 1s ease-in-out infinite; text-align: center;
+}
+#raid-warning .klein { display: block; font-size: 11.5px; font-weight: 400; opacity: .85; }
+@keyframes klop { 0%, 100% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) scale(1.04); } }
+
+/* Toast */
+#toast {
+  position: absolute; top: 42%; left: 50%; transform: translate(-50%, -50%);
+  background: rgba(26, 18, 11, .95); border: 2px solid var(--goud);
+  border-radius: 9px; padding: 14px 28px; font-size: 19px; text-align: center;
+  z-index: 15; pointer-events: none;
+}
+
+/* ==========================================================================
+   Bouwmenu onderaan
+   ========================================================================== */
+
+#buildbar {
+  height: var(--barhoogte); flex: 0 0 auto;
+  background: linear-gradient(0deg, var(--hout-donker), var(--hout));
+  border-top: 3px solid var(--goud); box-shadow: 0 -4px 14px rgba(0, 0, 0, .5);
+  display: flex; flex-direction: column; z-index: 20;
+}
+
+#build-tabs { display: flex; gap: 4px; padding: 5px 10px 0; }
+#build-tabs button {
+  padding: 4px 13px; font-size: 12px; border: 1px solid var(--rand);
+  border-bottom: none; border-radius: 5px 5px 0 0; background: var(--hout-donker);
+  color: var(--perkament-dof);
+}
+#build-tabs button.active { background: var(--goud); color: #2b1d12; font-weight: 700; }
+#build-tabs button.op-slot { opacity: .55; }
+
+#build-list {
+  flex: 1; display: flex; gap: 7px; padding: 7px 10px;
+  overflow-x: auto; overflow-y: hidden; align-items: stretch;
+}
+#build-list::-webkit-scrollbar { height: 8px; }
+#build-list::-webkit-scrollbar-thumb { background: var(--hout-licht); border-radius: 4px; }
+
+.bouwkaart {
+  flex: 0 0 118px; display: flex; flex-direction: column; align-items: center;
+  padding: 5px 4px; background: rgba(0, 0, 0, .28);
+  border: 1px solid var(--rand); border-radius: 6px; text-align: center;
+  position: relative;
+}
+.bouwkaart:hover:not(.vergrendeld) { border-color: var(--goud); background: rgba(215, 169, 75, .14); }
+.bouwkaart.geselecteerd { border-color: var(--goud-licht); background: rgba(215, 169, 75, .28); }
+.bouwkaart.vergrendeld { opacity: .4; cursor: not-allowed; }
+.bouwkaart.tekort { border-color: #7a3a2a; }
+.bouwkaart .em { font-size: 22px; line-height: 1.1; }
+.bouwkaart .nm { font-size: 11.5px; font-weight: 700; line-height: 1.15; margin: 1px 0 2px; }
+.bouwkaart .ks { font-size: 10.5px; color: var(--perkament-dof); line-height: 1.35; }
+.bouwkaart .ks .mist { color: #e08a7a; }
+.bouwkaart .slot { position: absolute; top: 3px; right: 5px; font-size: 12px; }
+
+/* Tooltip voor bouwkaarten */
+.tip {
+  position: fixed; z-index: 40; max-width: 268px; pointer-events: none;
+  background: rgba(20, 14, 9, .97); border: 1px solid var(--goud);
+  border-radius: 6px; padding: 8px 10px; font-size: 12px; line-height: 1.4;
+  box-shadow: var(--schaduw);
+}
+.tip h4 { margin: 0 0 4px; font-size: 13.5px; color: var(--goud-licht); }
+.tip .cursief { font-style: italic; color: var(--perkament-dof); }
+.tip .rij { margin-top: 4px; }
+.tip .label { color: var(--goud); }
+
+/* ==========================================================================
+   Overlay (menu, tijdperk, einde)
+   ========================================================================== */
+
+#overlay {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(10, 7, 4, .82);
+  display: flex; align-items: center; justify-content: center;
+}
+#overlay-card {
+  width: min(560px, 92vw); max-height: 86vh; overflow-y: auto;
+  background: linear-gradient(180deg, #3a2818, #221709);
+  border: 3px solid var(--goud); border-radius: 12px;
+  padding: 22px 26px; box-shadow: 0 12px 48px rgba(0, 0, 0, .7);
+  text-align: center;
+}
+#overlay-title { margin: 0 0 12px; font-size: 26px; color: var(--goud-licht); }
+#overlay-body { font-size: 14px; line-height: 1.6; text-align: left; }
+#overlay-body h4 { margin: 14px 0 4px; color: var(--goud); font-size: 13px; text-transform: uppercase; letter-spacing: .7px; }
+#overlay-body ul { margin: 4px 0; padding-left: 20px; }
+#overlay-body li { margin: 2px 0; }
+#overlay-body textarea {
+  width: 100%; height: 92px; margin-top: 6px; font-family: monospace; font-size: 11px;
+  background: #150e07; color: var(--perkament); border: 1px solid var(--rand); border-radius: 5px; padding: 6px;
+}
+#overlay-actions { display: flex; gap: 9px; justify-content: center; flex-wrap: wrap; margin-top: 18px; }
+#overlay-actions button {
+  padding: 9px 18px; font-size: 14px; border-radius: 6px;
+  background: var(--hout-licht); border: 1px solid var(--goud);
+}
+#overlay-actions button:hover { background: var(--goud); color: #2b1d12; }
+#overlay-actions button.primair { background: var(--goud); color: #2b1d12; font-weight: 700; }
+
+/* ==========================================================================
+   Smalle schermen
+   ========================================================================== */
+
+@media (max-width: 900px) {
+  :root { --hudhoogte: 100px; --barhoogte: 124px; }
+  #hud { flex-wrap: wrap; height: auto; padding: 6px 10px; }
+  #hud-left { min-width: 0; }
+  #right-col { width: 200px; }
+  #panel { width: 232px; }
+  #logbox { width: 232px; }
+}

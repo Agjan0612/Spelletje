@@ -1,0 +1,125 @@
+/* The top bar: resources, population, happiness, defence, season, speed. */
+(function (Game) {
+
+  var H = {};
+  var els = {};
+  var resEls = {};
+
+  H.init = function (spel) {
+    els.naam = document.getElementById('townname');
+    els.tijdperk = document.getElementById('agename');
+    els.primair = document.getElementById('res-primary');
+    els.secundair = document.getElementById('res-secondary');
+    els.pop = document.querySelector('#stat-pop .val');
+    els.happy = document.querySelector('#stat-happy .val');
+    els.happyIco = document.querySelector('#stat-happy .ico');
+    els.def = document.querySelector('#stat-def .val');
+    els.seizoen = document.querySelector('#stat-season .val');
+    els.seizoenIco = document.querySelector('#stat-season .ico');
+    els.raid = document.getElementById('raid-warning');
+
+    bouwResourceRij();
+
+    var knoppen = document.querySelectorAll('#speeds .spd');
+    Array.prototype.forEach.call(knoppen, function (k) {
+      k.addEventListener('click', function () {
+        spel.zetSnelheid(parseInt(k.dataset.speed, 10));
+      });
+    });
+  };
+
+  function bouwResourceRij() {
+    els.primair.innerHTML = '';
+    els.secundair.innerHTML = '';
+
+    Game.config.resourceOrder.forEach(function (id) {
+      var def = Game.config.resources[id];
+      var el = Game.util.el('div', 'res');
+      el.title = def.naam;
+      el.appendChild(Game.util.el('span', 'ico', def.emoji));
+      var val = Game.util.el('span', 'val', '0');
+      el.appendChild(val);
+      var delta = Game.util.el('span', 'delta', '');
+      el.appendChild(delta);
+      (def.primair ? els.primair : els.secundair).appendChild(el);
+      resEls[id] = { wrap: el, val: val, delta: delta };
+    });
+  }
+
+  H.ververs = function (s) {
+    els.naam.textContent = s.dorpsnaam;
+    var tp = Game.config.age(s.tijdperk);
+    els.tijdperk.textContent = 'Tijdperk ' + s.tijdperk + ' — ' + tp.naam;
+
+    Game.config.resourceOrder.forEach(function (id) {
+      var e = resEls[id];
+      var waarde = s.res[id];
+      e.val.textContent = Game.util.fmt(waarde);
+
+      var stroom = s.stroom[id] || 0;
+      if (Math.abs(stroom) >= 0.05) {
+        e.delta.textContent = (stroom > 0 ? '+' : '') + (Math.round(stroom * 10) / 10).toString().replace('.', ',');
+        e.delta.className = 'delta' + (stroom < 0 ? ' neg' : '');
+      } else {
+        e.delta.textContent = '';
+      }
+
+      e.wrap.classList.toggle('vol', waarde >= s.capaciteit - 0.5);
+      e.wrap.classList.toggle('leeg', waarde < 1 && stroom < 0);
+      e.wrap.title = Game.config.resources[id].naam + ': ' +
+        Math.floor(waarde) + ' / ' + s.capaciteit;
+    });
+
+    els.pop.textContent = s.bevolking.totaal + ' (' + s.bevolking.werkloos + ' vrij)';
+    document.getElementById('stat-pop').title =
+      'Inwoners: ' + s.bevolking.totaal +
+      ' · aan het werk: ' + s.bevolking.werkend +
+      ' · werkloos: ' + s.bevolking.werkloos +
+      ' · woonruimte: ' + s.bevolking.ruimte;
+
+    var h = Math.round(s.tevredenheid);
+    els.happy.textContent = h + '%';
+    els.happyIco.textContent = h >= 70 ? '😄' : h >= 50 ? '😀' : h >= 30 ? '😐' : '😟';
+    document.getElementById('stat-happy').title = tevredenheidUitleg(s);
+
+    els.def.textContent = s.verdediging;
+    document.getElementById('stat-def').title =
+      'Verdediging tegen rovers: ' + s.verdediging +
+      (s.tijdperk < 2 ? ' (rovers verschijnen vanaf tijdperk 2)' : '');
+
+    els.seizoen.textContent = Game.core.seasons.naam(s);
+    els.seizoenIco.textContent = Game.core.seasons.emoji(s);
+
+    /* Raid countdown. */
+    var raid = Game.core.raids.statusTekst(s);
+    if (raid) {
+      els.raid.classList.remove('hidden');
+      els.raid.innerHTML = '⚔️ Rovers vallen aan over ' + raid.seconden + 's' +
+        '<span class="klein">Hun kracht: ~' + raid.kracht +
+        ' · jouw verdediging: ' + raid.verdediging + '</span>';
+    } else {
+      els.raid.classList.add('hidden');
+    }
+
+    var knoppen = document.querySelectorAll('#speeds .spd');
+    Array.prototype.forEach.call(knoppen, function (k) {
+      k.classList.toggle('active', parseInt(k.dataset.speed, 10) === s.snelheid);
+    });
+  };
+
+  function tevredenheidUitleg(s) {
+    var d = Game.core.population.tevredenheidDetail(s);
+    function n(x) { return (x >= 0 ? '+' : '') + Math.round(x); }
+    return 'Tevredenheid ' + Math.round(s.tevredenheid) + '%  (streeft naar ' + Math.round(d.doel) + '%)\n' +
+      'Basis ' + n(d.basis) + '\n' +
+      'Voedselvoorraad ' + n(d.voedsel) + '\n' +
+      'Afwisseling in eten ' + n(d.variatie) + '\n' +
+      'Woonruimte ' + n(d.wonen) + '\n' +
+      'Voorzieningen ' + n(d.diensten) + '\n' +
+      (d.honger ? 'HONGER ' + n(d.honger) + '\n' : '') +
+      (d.moreel ? 'Moreel ' + n(d.moreel) : '');
+  }
+
+  Game.ui.hud = H;
+
+})(window.Game);
