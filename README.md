@@ -8,13 +8,27 @@ Geen installatie, geen internet nodig, geen account. Gewoon spelen.
 
 ---
 
-## Spelen
+## Spelen op je eigen computer
 
 **Dubbelklik op `index.html`.** Dat is alles — het spel opent in je browser.
 
-Wil je het online zetten zodat anderen het ook kunnen spelen? Ga in GitHub naar
-*Settings → Pages*, kies bij *Source* de branch en de map `/ (root)`, en na een
-minuutje staat het spel op je eigen webadres.
+Houd `index.html`, de map `css/` en de map `js/` wel bij elkaar in dezelfde map. Verplaats
+je alleen `index.html`, dan blijft het scherm zwart: hij zoekt die twee mappen naast zich.
+
+Gebruik Chrome, Edge of Firefox. Safari is strenger met opslaan in de browser, dus daar kan
+het bewaren van je dorp mislukken.
+
+## Online spelen (ook op telefoon en tablet)
+
+Het spel staat op **https://agjan0612.github.io/Spelletje/** zodra GitHub Pages aanstaat.
+Dat is eenmalig instellen:
+
+1. Ga in deze repository naar **Settings** → **Pages**
+2. Bij *Source*: kies **Deploy from a branch**
+3. Kies branch **`main`** en map **`/ (root)`**, en klik op **Save**
+
+Na een minuut of twee staat het spel live. Die link kun je gewoon delen; iedereen die hem
+opent speelt zijn eigen dorp, want alles wordt lokaal in de browser opgeslagen.
 
 ---
 
