@@ -110,7 +110,7 @@
       beschrijving: 'Bakt brood van graan. Brood voedt beter dan graan en maakt dorpelingen blijer.'
     },
     {
-      id: 'marktplaats', naam: 'Marktplaats', emoji: '🏪', tijdperk: 2, grootte: 2,
+      id: 'marktplaats', naam: 'Marktplaats', emoji: '⚖️', tijdperk: 2, grootte: 2,
       kosten: { hout: 100, steen: 60 }, bouwtijd: 22, muur: '#c9b48c', dak: '#a9552f',
       banen: { aantal: 3, baan: 'handelaar' },
       maakt: { in: {}, uit: { munten: 0.20 } },
@@ -207,7 +207,7 @@
       beschrijving: 'De ambachtslieden bundelen hun kennis: +10% op álle productie. Kost munten.'
     },
     {
-      id: 'pakhuis', naam: 'Pakhuis', emoji: '🏚️', tijdperk: 3, grootte: 2,
+      id: 'pakhuis', naam: 'Pakhuis', emoji: '🏬', tijdperk: 3, grootte: 2,
       kosten: { hout: 170, steen: 120 }, bouwtijd: 25, muur: '#b09a74', dak: '#5d3c26',
       opslag: 1200,
       beschrijving: 'Groot stenen pakhuis: 1200 extra opslag voor elke grondstof.'
