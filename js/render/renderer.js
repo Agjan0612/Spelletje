@@ -175,12 +175,19 @@
       var sp = cam.wereldNaarScherm(wx, wy);
       if (sp.x < -20 || sp.y < -20 || sp.x > cam.breedte + 20 || sp.y > cam.hoogte + 20) continue;
 
-      var baan = Game.config.jobs[w.baan] || Game.config.jobs.werkloos;
       ctx.fillStyle = 'rgba(0,0,0,.25)';
       ctx.beginPath();
       ctx.ellipse(sp.x, sp.y + p * 0.10, p * 0.09, p * 0.04, 0, 0, Math.PI * 2);
       ctx.fill();
 
+      var img = Game.render.atlas && Game.render.atlas.werker(w.baan);
+      if (img) {
+        var us = p * 0.62;
+        ctx.drawImage(img, sp.x - us / 2, sp.y - us * 0.78, us, us);
+        continue;
+      }
+
+      var baan = Game.config.jobs[w.baan] || Game.config.jobs.werkloos;
       ctx.fillStyle = baan.kleur;
       ctx.beginPath();
       ctx.arc(sp.x, sp.y, p * 0.075, 0, Math.PI * 2);
