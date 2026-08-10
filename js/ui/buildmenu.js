@@ -65,7 +65,20 @@
       if (vergrendeld || opMax) kaart.classList.add('vergrendeld');
       if (spel.plaatsType === d.id) kaart.classList.add('geselecteerd');
 
-      kaart.appendChild(Game.util.el('div', 'em', d.emoji));
+      var em = Game.util.el('div', 'em');
+      var spritePad = Game.render.atlas && Game.render.atlas.gebouwPad(d.id);
+      if (spritePad) {
+        var thumb = document.createElement('img');
+        thumb.className = 'sprite';
+        thumb.alt = '';
+        /* Fall back to the emoji if the image is missing. */
+        thumb.onerror = function () { em.textContent = d.emoji; };
+        thumb.src = spritePad;
+        em.appendChild(thumb);
+      } else {
+        em.textContent = d.emoji;
+      }
+      kaart.appendChild(em);
       kaart.appendChild(Game.util.el('div', 'nm', d.naam));
 
       var ks = Game.util.el('div', 'ks');

@@ -1,5 +1,7 @@
-/* All drawing of terrain and buildings. Everything is drawn with canvas
-   shapes — no image files, so the game runs straight from a folder. */
+/* All drawing of terrain and buildings. Shapes are the baseline; where the
+   image atlas (js/render/atlas.js) has a sprite loaded it is drawn instead
+   (buildings, trees, rocks), otherwise these shapes are the fallback so the
+   game still runs straight from a folder even without the assets. */
 (function (Game) {
 
   var S = {};
@@ -75,11 +77,19 @@
     var bladKleur = ['#2f5c2a', '#2b5526', '#7a5a1e', '#4a5a4a'][seizoen];
     var stam = '#4a3320';
 
+    var atlas = Game.render.atlas;
     for (var i = 0; i < aantal; i++) {
       var ox = x + p * (0.24 + ((i * 37 + t.v * 100) % 55) / 100);
       var oy = y + p * (0.28 + ((i * 61 + t.v * 70) % 45) / 100);
-      var r = p * (0.15 + deel * 0.07);
 
+      var img = atlas && atlas.boom(t.v, i);
+      if (img) {
+        var st = p * (0.62 + deel * 0.24);
+        ctx.drawImage(img, ox - st / 2, oy - st * 0.72, st, st);
+        continue;
+      }
+
+      var r = p * (0.15 + deel * 0.07);
       ctx.fillStyle = stam;
       ctx.fillRect(ox - p * 0.025, oy, p * 0.05, p * 0.16);
 
@@ -102,10 +112,19 @@
   }
 
   function rotsen(ctx, t, x, y, p) {
+    var atlas = Game.render.atlas;
     ctx.fillStyle = '#9a968c';
     for (var i = 0; i < 3; i++) {
       var ox = x + p * (0.2 + ((i * 41 + t.v * 90) % 60) / 100);
       var oy = y + p * (0.25 + ((i * 67 + t.v * 60) % 50) / 100);
+
+      var img = atlas && atlas.rots(t.v, i);
+      if (img) {
+        var rs = p * (0.34 + ((i * 13 + t.v * 30) % 10) / 100);
+        ctx.drawImage(img, ox - rs / 2, oy - rs * 0.6, rs, rs);
+        continue;
+      }
+
       var r = p * (0.1 + ((i * 13 + t.v * 30) % 8) / 100);
       ctx.beginPath();
       ctx.moveTo(ox - r, oy + r * 0.7);
@@ -180,6 +199,15 @@
     ctx.beginPath();
     ctx.ellipse(x + w / 2, y + h * 0.93, w * 0.42, h * 0.12, 0, 0, Math.PI * 2);
     ctx.fill();
+
+    /* Pretty sprite if the atlas has one loaded; otherwise fall through to the
+       hand-drawn shapes below (which also cover the assets-missing case). */
+    var img = Game.render.atlas && Game.render.atlas.gebouw(def.id);
+    if (img) {
+      var teken = w * 1.12;                 /* lift so the roof clears the tile */
+      ctx.drawImage(img, x + (w - teken) / 2, y + h - teken, teken, teken);
+      return;
+    }
 
     switch (def.id) {
       case 'kasteel': kasteel(ctx, def, x, y, w, h); break;

@@ -280,7 +280,8 @@ button {
 .bouwkaart.geselecteerd { border-color: var(--goud-licht); background: rgba(215, 169, 75, .28); }
 .bouwkaart.vergrendeld { opacity: .4; cursor: not-allowed; }
 .bouwkaart.tekort { border-color: #7a3a2a; }
-.bouwkaart .em { font-size: 22px; line-height: 1.1; }
+.bouwkaart .em { font-size: 22px; line-height: 1.1; height: 34px; display: flex; align-items: center; justify-content: center; }
+.bouwkaart .em img.sprite { width: 36px; height: 36px; object-fit: contain; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .45)); }
 .bouwkaart .nm { font-size: 11.5px; font-weight: 700; line-height: 1.15; margin: 1px 0 2px; }
 .bouwkaart .ks { font-size: 10.5px; color: var(--perkament-dof); line-height: 1.35; }
 .bouwkaart .ks .mist { color: #e08a7a; }
