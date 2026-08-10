@@ -7,6 +7,64 @@
 
   var canvas, ctx, dpr = 1;
 
+  /* Real-time clock (seconds) that drives all the decorative animation:
+     the villagers' footstep bob, tool swings, chimney smoke and the slow
+     evening light. It is never part of the saved state. */
+  var klok = 0;
+
+  var TEGEL = Game.render.TEGEL;
+
+  /* Per-trade tool shown while a villager works at a resource, and the colour
+     of the chips/splash/sparks that fly when they do. */
+  var GEREEDSCHAP = {
+    houthakker: '🪓', jager: '🏹', visser: '🎣',
+    steenhouwer: '⛏️', mijnwerker: '⛏️', boer: '🌾'
+  };
+  var SPATKLEUR = {
+    hout: '#8a6236', vis: 'rgba(150,205,235,.95)', steen: '#b7b2a6',
+    wild: '#b5563f', ijzer: '#c7d0da', koper: '#d98a3e',
+    edelsteen: '#7fe0ea', vruchtbaar: '#d9b45c'
+  };
+
+  /* Short-lived work particles, in world pixels. Decorative, module-local. */
+  var deeltjes = [];
+
+  function spatDeeltjes(wx, wy, kleur, n) {
+    for (var i = 0; i < n; i++) {
+      var a = -Math.PI / 2 + (Math.random() - 0.5) * 1.6;
+      var kr = 22 + Math.random() * 26;
+      deeltjes.push({
+        x: wx + (Math.random() - 0.5) * 4, y: wy,
+        vx: Math.cos(a) * kr, vy: Math.sin(a) * kr,
+        leven: 0, duur: 0.35 + Math.random() * 0.3, kleur: kleur
+      });
+    }
+    if (deeltjes.length > 220) deeltjes.splice(0, deeltjes.length - 220);
+  }
+
+  function tickDeeltjes(dt) {
+    for (var i = deeltjes.length - 1; i >= 0; i--) {
+      var d = deeltjes[i];
+      d.leven += dt;
+      d.x += d.vx * dt; d.y += d.vy * dt; d.vy += 90 * dt;   /* gravity */
+      if (d.leven >= d.duur) deeltjes.splice(i, 1);
+    }
+  }
+
+  function tekenDeeltjes(cam, p) {
+    if (!deeltjes.length) return;
+    for (var i = 0; i < deeltjes.length; i++) {
+      var d = deeltjes[i];
+      var sp = cam.wereldNaarScherm(d.x, d.y);
+      if (sp.x < -10 || sp.y < -10 || sp.x > cam.breedte + 10 || sp.y > cam.hoogte + 10) continue;
+      ctx.globalAlpha = Math.max(0, 1 - d.leven / d.duur);
+      ctx.fillStyle = d.kleur;
+      var r = Math.max(1.5, p * 0.035);
+      ctx.fillRect(sp.x - r / 2, sp.y - r / 2, r, r);
+    }
+    ctx.globalAlpha = 1;
+  }
+
   R.init = function (el) {
     canvas = el;
     ctx = canvas.getContext('2d');
@@ -25,8 +83,11 @@
 
   /* ------------------------------------------------------- wandelaars ---- */
 
-  /* Purely decorative villagers walking between their workplace and their
-     resource. They carry no simulation weight at all. */
+  /* Purely decorative villagers walking between their workplace and the
+     resource they harvest. They carry no simulation weight at all — the real
+     production lives in economy.js. A walker with a resource node (`heeftBron`)
+     runs a little loop: walk out → work (tool swing + flying chips) → carry the
+     goods home → deliver (a floating "+🪵"). */
   R.verversWandelaars = function (s) {
     var lijst = [];
     var plein = s.gebouwen.filter(function (g) { return g.type === 'dorpsplein'; })[0];
@@ -41,6 +102,7 @@
 
       var aantal = Math.max(1, Math.round(g.werkers / 2));
       var doelX = pleinX, doelY = pleinY;
+      var heeftBron = false, node = null, res = null;
 
       if (d.wint) {
         var t = map.zoekNode(s.kaart, g.x, g.y, d.wint.node, d.wint.straal);
@@ -48,6 +110,7 @@
           var idx = s.kaart.tegels.indexOf(t);
           doelX = idx % s.kaart.b;
           doelY = Math.floor(idx / s.kaart.b);
+          heeftBron = true; node = d.wint.node; res = d.wint.res;
         }
       }
 
@@ -55,22 +118,61 @@
         lijst.push({
           hx: g.x + d.grootte / 2, hy: g.y + d.grootte / 2,
           tx: doelX + 0.5, ty: doelY + 0.5,
-          p: Math.random(), richting: Math.random() < 0.5 ? 1 : -1,
+          p: Math.random(),
           snelheid: 0.09 + Math.random() * 0.07,
-          baan: d.banen.baan
+          baan: d.banen.baan,
+          heeftBron: heeftBron, node: node, res: res,
+          variant: g.id * 7 + n * 3,
+          bob: Math.random() * 6.283,
+          fase: Math.random() < 0.5 ? 'heen' : 'terug',
+          werkTimer: 0, slag: 0, spatTimer: 0, draagt: false
         });
       }
     }
     s.wandelaars = lijst;
+
+    if (Game.render.wildlife) Game.render.wildlife.ververs(s);
   };
 
   R.tickWandelaars = function (s, dt) {
+    klok += dt;
+    tickDeeltjes(dt);
     if (!s.wandelaars) return;
+
     for (var i = 0; i < s.wandelaars.length; i++) {
       var w = s.wandelaars[i];
-      w.p += w.richting * w.snelheid * dt;
-      if (w.p > 1) { w.p = 1; w.richting = -1; }
-      if (w.p < 0) { w.p = 0; w.richting = 1; }
+
+      if (w.fase === 'werk') {
+        w.werkTimer -= dt;
+        w.slag += dt;
+        if (w.heeftBron) {
+          w.spatTimer -= dt;
+          if (w.spatTimer <= 0) {
+            w.spatTimer = 0.32;
+            spatDeeltjes(w.tx * TEGEL, w.ty * TEGEL - TEGEL * 0.2,
+              SPATKLEUR[w.node] || '#cfcfcf', 3);
+          }
+        }
+        if (w.werkTimer <= 0) { w.fase = 'terug'; w.draagt = !!w.res; }
+        continue;
+      }
+
+      var richting = w.fase === 'terug' ? -1 : 1;
+      w.p += richting * w.snelheid * dt;
+
+      if (w.p >= 1) {
+        w.p = 1;
+        if (w.heeftBron) { w.fase = 'werk'; w.werkTimer = 0.7 + Math.random() * 0.8; w.slag = 0; }
+        else w.fase = 'terug';
+      } else if (w.p <= 0) {
+        w.p = 0;
+        if (w.draagt && w.res && Game.render.floaters) {
+          var em = (Game.config.resources[w.res] || {}).emoji || '';
+          Game.render.floaters.spat(w.hx * TEGEL, w.hy * TEGEL - TEGEL * 0.5, '+' + em, '#f3e7c6');
+        }
+        w.draagt = false;
+        w.fase = 'heen';
+      }
     }
   };
 
@@ -90,6 +192,8 @@
 
     var zicht = cam.zichtbaar(s.kaart);
     var tijd = s.tijd;
+    /* A slow evening cycle on the real-time clock: windows glow, then fade. */
+    var nacht = 0.5 - 0.5 * Math.cos(klok * (Math.PI * 2 / 120));
 
     /* --- terrein --- */
     for (var y = zicht.y0; y < zicht.y1; y++) {
@@ -133,7 +237,7 @@
       var w = p * d.grootte, h = p * d.grootte;
 
       if (g.gebouwd) {
-        sprites.tekenGebouw(ctx, d, sp2.x, sp2.y, w, h, { tijd: tijd });
+        sprites.tekenGebouw(ctx, d, sp2.x, sp2.y, w, h, { tijd: tijd, nacht: nacht, klok: klok, id: g.id });
         if (g.waarschuwing && p > 16) {
           ctx.font = Math.round(p * 0.34) + 'px serif';
           ctx.textAlign = 'center';
@@ -153,8 +257,11 @@
       }
     }
 
-    /* --- wandelaars --- */
+    /* --- dieren, wandelaars, werk-deeltjes en zwevende opbrengst --- */
+    if (p > 15 && Game.render.wildlife) Game.render.wildlife.teken(ctx, cam, p);
     if (p > 15) tekenWandelaars(s, cam, p);
+    if (p > 15) tekenDeeltjes(cam, p);
+    if (Game.render.floaters) Game.render.floaters.teken(ctx, cam);
 
     /* --- plaatsings-spook --- */
     if (ui.plaatsType && ui.muisTegel) tekenSpook(s, cam, ui, p);
@@ -170,32 +277,68 @@
     if (!s.wandelaars) return;
     for (var i = 0; i < s.wandelaars.length; i++) {
       var w = s.wandelaars[i];
-      var wx = (w.hx + (w.tx - w.hx) * w.p) * Game.render.TEGEL;
-      var wy = (w.hy + (w.ty - w.hy) * w.p) * Game.render.TEGEL;
+      var wx = (w.hx + (w.tx - w.hx) * w.p) * TEGEL;
+      var wy = (w.hy + (w.ty - w.hy) * w.p) * TEGEL;
       var sp = cam.wereldNaarScherm(wx, wy);
       if (sp.x < -20 || sp.y < -20 || sp.x > cam.breedte + 20 || sp.y > cam.hoogte + 20) continue;
+
+      /* Face the way they walk, and give a little footstep bob while moving. */
+      var dir = w.fase === 'terug' ? -1 : 1;
+      var flip = (w.tx - w.hx) * dir < 0 ? -1 : 1;
+      var stap = w.fase === 'werk' ? 0 : Math.abs(Math.sin(klok * 6 + w.bob)) * p * 0.05;
+      var vy = sp.y - stap;
 
       ctx.fillStyle = 'rgba(0,0,0,.25)';
       ctx.beginPath();
       ctx.ellipse(sp.x, sp.y + p * 0.10, p * 0.09, p * 0.04, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      var img = Game.render.atlas && Game.render.atlas.werker(w.baan);
+      var img = Game.render.atlas && Game.render.atlas.werker(w.baan, w.variant);
       if (img) {
         var us = p * 0.62;
-        ctx.drawImage(img, sp.x - us / 2, sp.y - us * 0.78, us, us);
-        continue;
+        if (flip < 0) {
+          ctx.save();
+          ctx.translate(sp.x, vy);
+          ctx.scale(-1, 1);
+          ctx.drawImage(img, -us / 2, -us * 0.78, us, us);
+          ctx.restore();
+        } else {
+          ctx.drawImage(img, sp.x - us / 2, vy - us * 0.78, us, us);
+        }
+      } else {
+        var baan = Game.config.jobs[w.baan] || Game.config.jobs.werkloos;
+        ctx.fillStyle = baan.kleur;
+        ctx.beginPath();
+        ctx.arc(sp.x, vy, p * 0.075, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#f0e0c0';
+        ctx.beginPath();
+        ctx.arc(sp.x, vy - p * 0.09, p * 0.05, 0, Math.PI * 2);
+        ctx.fill();
       }
 
-      var baan = Game.config.jobs[w.baan] || Game.config.jobs.werkloos;
-      ctx.fillStyle = baan.kleur;
-      ctx.beginPath();
-      ctx.arc(sp.x, sp.y, p * 0.075, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#f0e0c0';
-      ctx.beginPath();
-      ctx.arc(sp.x, sp.y - p * 0.09, p * 0.05, 0, Math.PI * 2);
-      ctx.fill();
+      /* Tool swing while working at the resource. */
+      if (w.fase === 'werk' && GEREEDSCHAP[w.baan]) {
+        ctx.save();
+        ctx.translate(sp.x + flip * p * 0.15, vy - p * 0.2);
+        ctx.rotate(Math.sin(w.slag * 9) * 0.7 * flip);
+        ctx.font = Math.round(p * 0.3) + 'px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(GEREEDSCHAP[w.baan], 0, 0);
+        ctx.restore();
+      }
+
+      /* The goods carried home on the way back. */
+      if (w.draagt && w.res) {
+        var em2 = (Game.config.resources[w.res] || {}).emoji;
+        if (em2) {
+          ctx.font = Math.round(p * 0.26) + 'px serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(em2, sp.x, vy - p * 0.62);
+        }
+      }
     }
   }
 

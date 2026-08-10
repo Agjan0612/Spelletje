@@ -133,8 +133,11 @@
       if (stappen >= MAX_STAPPEN) s.accu = 0;
     }
 
-    /* --- wandelaars en tekenen lopen op echte tijd --- */
-    Game.render.renderer.tickWandelaars(s, echteDt * Math.max(1, s.snelheid));
+    /* --- wandelaars, dieren en tekenen lopen op echte tijd --- */
+    var decDt = echteDt * Math.max(1, s.snelheid);
+    Game.render.renderer.tickWandelaars(s, decDt);
+    if (Game.render.floaters) Game.render.floaters.tick(decDt);
+    if (Game.render.wildlife) Game.render.wildlife.tick(decDt);
 
     Game.render.renderer.teken(s, spel.cam, {
       plaatsType: spel.plaatsType,

@@ -51,13 +51,17 @@
   var BOMEN = ['e04', 'e03', 'e02', 'e01'];
   var ROTSEN = ['e08', 'e09', 'e11', 'e10', 'e12'];
 
-  /* job id -> villager sprite, so a fisher looks different from a soldier. */
+  /* job id -> villager sprite, so a fisher looks different from a soldier.
+     A value may be an array of interchangeable sprites; A.werker() then picks
+     one deterministically per villager so a crowd of the same trade is not all
+     the exact same figure. Only the plainly-generic townsfolk get alternates;
+     the distinctive trades (soldier, priest…) keep their single sprite. */
   A.werkerMap = {
-    boer: 'u05', houthakker: 'u09', jager: 'u13', visser: 'u01',
-    steenhouwer: 'u21', mijnwerker: 'u21', bakker: 'u06', molenaar: 'u11',
-    smid: 'u20', wapensmid: 'u20', handelaar: 'u04', waard: 'u07',
+    boer: ['u05', 'u06', 'u08'], houthakker: 'u09', jager: 'u13', visser: 'u01',
+    steenhouwer: 'u21', mijnwerker: 'u21', bakker: ['u06', 'u05'], molenaar: ['u11', 'u06'],
+    smid: 'u20', wapensmid: 'u20', handelaar: ['u04', 'u08'], waard: ['u07', 'u06'],
     priester: 'u22', juwelier: 'u23', geleerde: 'u16', soldaat: 'u20',
-    bouwer: 'u08', werkloos: 'u05'
+    bouwer: ['u08', 'u05'], werkloos: ['u05', 'u06', 'u08']
   };
 
   /* -------------------------------------------------------------- laden --- */
@@ -65,7 +69,11 @@
   A.laden = function () {
     var set = {};
     Object.keys(A.gebouwMap).forEach(function (k) { set[A.gebouwMap[k]] = 1; });
-    Object.keys(A.werkerMap).forEach(function (k) { set[A.werkerMap[k]] = 1; });
+    Object.keys(A.werkerMap).forEach(function (k) {
+      var v = A.werkerMap[k];
+      if (Array.isArray(v)) v.forEach(function (n) { set[n] = 1; });
+      else set[v] = 1;
+    });
     BOMEN.forEach(function (n) { set[n] = 1; });
     ROTSEN.forEach(function (n) { set[n] = 1; });
     Object.keys(set).forEach(laad);
@@ -101,8 +109,11 @@
     return A.get(ROTSEN[Math.floor((v * 89 + i * 41) % ROTSEN.length + ROTSEN.length) % ROTSEN.length]);
   };
 
-  A.werker = function (baan) {
-    var naam = A.werkerMap[baan] || A.werkerMap.werkloos;
+  A.werker = function (baan, variant) {
+    var v = A.werkerMap[baan] || A.werkerMap.werkloos;
+    var naam;
+    if (Array.isArray(v)) naam = v[((variant || 0) % v.length + v.length) % v.length];
+    else naam = v;
     return A.get(naam);
   };
 

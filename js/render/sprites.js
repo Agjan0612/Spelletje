@@ -190,9 +190,16 @@
 
   /* -------------------------------------------------------------- gebouwen */
 
+  /* Buildings whose chimneys smoke and whose windows glow in the evening. */
+  var WARM = {
+    huisje: 1, bakkerij: 1, smederij: 1, wapensmid: 1, herberg: 1,
+    herenhuis: 1, dorpsplein: 1, stadhuis: 1
+  };
+
   /* Draws a building filling the given pixel box. */
   S.tekenGebouw = function (ctx, def, x, y, w, h, opties) {
     opties = opties || {};
+    var id = opties.id || 0;
     var schaduw = 'rgba(0,0,0,.28)';
 
     ctx.fillStyle = schaduw;
@@ -204,35 +211,73 @@
        hand-drawn shapes below (which also cover the assets-missing case). */
     var img = Game.render.atlas && Game.render.atlas.gebouw(def.id);
     if (img) {
-      var teken = w * 1.12;                 /* lift so the roof clears the tile */
+      /* A hair of per-building size variation so a row of identical houses does
+         not read as clones. Stable per building id, so it never flickers. */
+      var teken = w * 1.12 * (1 + ((id * 29) % 7 - 3) / 100);
       ctx.drawImage(img, x + (w - teken) / 2, y + h - teken, teken, teken);
-      return;
+    } else {
+      switch (def.id) {
+        case 'kasteel': kasteel(ctx, def, x, y, w, h); break;
+        case 'kathedraal':
+        case 'kerk':
+        case 'kapel': kerk(ctx, def, x, y, w, h); break;
+        case 'molen': molen(ctx, def, x, y, w, h, opties.tijd || 0); break;
+        case 'wachttoren': toren(ctx, def, x, y, w, h); break;
+        case 'stadsmuur': muur(ctx, def, x, y, w, h); break;
+        case 'universiteit':
+        case 'stadhuis':
+        case 'dorpsplein': hal(ctx, def, x, y, w, h); break;
+        default: huis(ctx, def, x, y, w, h, id); break;
+      }
+
+      /* Icon badge so every building stays recognisable at a glance. */
+      if (w >= 26 && def.id !== 'stadsmuur') {
+        ctx.font = Math.round(w * 0.34) + 'px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(def.emoji, x + w * 0.5, y + h * 0.34);
+      }
     }
 
-    switch (def.id) {
-      case 'kasteel': kasteel(ctx, def, x, y, w, h); break;
-      case 'kathedraal':
-      case 'kerk':
-      case 'kapel': kerk(ctx, def, x, y, w, h); break;
-      case 'molen': molen(ctx, def, x, y, w, h, opties.tijd || 0); break;
-      case 'wachttoren': toren(ctx, def, x, y, w, h); break;
-      case 'stadsmuur': muur(ctx, def, x, y, w, h); break;
-      case 'universiteit':
-      case 'stadhuis':
-      case 'dorpsplein': hal(ctx, def, x, y, w, h); break;
-      default: huis(ctx, def, x, y, w, h); break;
-    }
+    S.sfeer(ctx, def, x, y, w, h, opties);
+  };
 
-    /* Icon badge so every building stays recognisable at a glance. */
-    if (w >= 26 && def.id !== 'stadsmuur') {
-      ctx.font = Math.round(w * 0.34) + 'px serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(def.emoji, x + w * 0.5, y + h * 0.34);
+  /* Chimney smoke and, as evening falls, a warm glow from the windows. Both are
+     purely decorative and driven by the real-time clock passed in `opties`. */
+  S.sfeer = function (ctx, def, x, y, w, h, o) {
+    if (w < 20 || !WARM[def.id]) return;
+    var klok = o.klok || 0;
+    var faze = (o.id || 0) * 1.7;
+
+    /* smoke: a few puffs looping up out of the chimney */
+    var cx = x + w * 0.66, cy = y + h * 0.14;
+    for (var i = 0; i < 3; i++) {
+      var t = ((klok * 0.35 + faze + i * 0.55) % 1.65) / 1.65;
+      var r = w * (0.045 + t * 0.085);
+      ctx.globalAlpha = (1 - t) * 0.26;
+      ctx.fillStyle = '#c9ccd2';
+      ctx.beginPath();
+      ctx.arc(cx + Math.sin(t * 4 + faze) * w * 0.06, cy - t * h * 0.7, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    var nacht = o.nacht || 0;
+    if (nacht > 0.12) {
+      var gx = x + w * 0.5, gy = y + h * 0.66, gr = w * 0.42;
+      var g = ctx.createRadialGradient(gx, gy, 1, gx, gy, gr);
+      g.addColorStop(0, 'rgba(255,212,128,.85)');
+      g.addColorStop(1, 'rgba(255,212,128,0)');
+      ctx.globalAlpha = Math.min(0.5, nacht * 0.6);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(gx, gy, gr, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
     }
   };
 
-  function huis(ctx, def, x, y, w, h) {
+  function huis(ctx, def, x, y, w, h, id) {
     var muurH = h * 0.45;
     ctx.fillStyle = def.muur || '#d8c39a';
     ctx.fillRect(x + w * 0.12, y + h * 0.45, w * 0.76, muurH);
@@ -240,7 +285,8 @@
     ctx.lineWidth = 1;
     ctx.strokeRect(x + w * 0.12, y + h * 0.45, w * 0.76, muurH);
 
-    ctx.fillStyle = def.dak || '#7c4b2e';
+    /* Stable per-building roof tint so a row of cottages varies a little. */
+    ctx.fillStyle = schakering(def.dak || '#7c4b2e', ((id * 17) % 20) / 20);
     ctx.beginPath();
     ctx.moveTo(x + w * 0.5, y + h * 0.08);
     ctx.lineTo(x + w * 0.96, y + h * 0.5);
