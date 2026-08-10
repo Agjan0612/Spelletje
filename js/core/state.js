@@ -55,6 +55,13 @@
 
       raid: { fase: 'rust', timer: 90, kracht: 0, nummer: 0 },
 
+      /* Age-2+ activities: festivals, the travelling merchant, the lord's
+         orders and random events. All plain data so the save stays JSON. */
+      feest: { cooldown: 0 },
+      handel: { fase: 'rust', timer: 260, aanbod: null },
+      opdracht: { actief: false, cooldown: 50 },
+      gebeurtenisTimer: 200,
+
       questsGedaan: {},
       log: [],
 

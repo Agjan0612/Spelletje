@@ -162,6 +162,21 @@ button {
   50% { box-shadow: 0 0 14px rgba(215, 169, 75, .85); }
 }
 
+/* Actiepaneel: feest, koopman, opdracht van de heer */
+#actiebox .actieknop {
+  width: 100%; padding: 7px; margin-top: 8px;
+  background: #3a2817; color: var(--goud-licht);
+  border: 1px solid var(--rand); border-radius: 5px;
+  font-size: 12.5px; font-weight: 600;
+}
+#actiebox .actieknop:disabled { opacity: .5; cursor: not-allowed; }
+#actiebox .actieknop.op { border-color: var(--goud); animation: gloed 1.6s ease-in-out infinite; }
+#actiebox .opdracht {
+  font-size: 12.5px; color: var(--perkament-dof);
+  margin-top: 8px; line-height: 1.4;
+}
+#actiebox .opdracht b { color: var(--goud-licht); }
+
 /* Selectiepaneel links */
 #panel {
   position: absolute; top: 10px; left: 10px; width: 272px;

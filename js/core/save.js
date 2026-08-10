@@ -70,6 +70,10 @@
     s.bevolking = s.bevolking || { totaal: 5 };
     s.bonus = s.bonus || { productie: 1, mijnbouw: 1 };
     s.raid = s.raid || { fase: 'rust', timer: 200, kracht: 0, nummer: 0 };
+    s.feest = s.feest || { cooldown: 0 };
+    s.handel = s.handel || { fase: 'rust', timer: 260, aanbod: null };
+    s.opdracht = s.opdracht || { actief: false, cooldown: 50 };
+    if (typeof s.gebeurtenisTimer !== 'number') s.gebeurtenisTimer = 200;
     s.questsGedaan = s.questsGedaan || {};
     s.log = s.log || [];
     s.wandelaars = [];

@@ -164,6 +164,30 @@
     ]);
   };
 
+  /* ------------------------------------------------------- koopman -- */
+
+  O.koopman = function (s) {
+    var a = s.handel && s.handel.aanbod;
+    if (!a) { Game.ui.toast('🐴 De koopman is al vertrokken'); return; }
+    var H = Game.core.handel;
+    O.open('🐴 De reizende koopman', function (el) {
+      el.innerHTML =
+        '<p>Een koopman met een zwaarbeladen kar biedt je een ruil aan:</p>' +
+        '<p style="text-align:center;font-size:18px;margin:14px 0">' +
+        '<b>' + H.deelTekst(a.geef) + '</b>' +
+        ' &nbsp;→&nbsp; ' +
+        '<b>' + H.deelTekst(a.krijg) + '</b></p>' +
+        '<p>Hij trekt zo weer verder. Ruilen?</p>';
+    }, [
+      { tekst: '🤝 Ruilen', primair: true, actie: function () {
+        var r = Game.core.handel.accepteer(s);
+        if (!r.ok) { Game.ui.toast('⚠️ ' + r.reden); return; }
+        O.sluit();
+      } },
+      { tekst: 'Nee, bedankt', actie: function () { O.sluit(); } }
+    ]);
+  };
+
   /* ---------------------------------------------------------- tijdperk -- */
 
   O.tijdperk = function (age) {

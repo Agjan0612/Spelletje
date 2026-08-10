@@ -33,6 +33,7 @@
     Game.ui.buildmenu.init(spel);
     Game.ui.panel.init(spel);
     Game.ui.quests.init(spel);
+    Game.ui.acties.init(spel);
     Game.ui.overlay.init(spel);
 
     koppelInvoer(canvas);
@@ -70,6 +71,7 @@
     Game.ui.hud.ververs(s);
     Game.ui.buildmenu.ververs(s);
     Game.ui.quests.ververs(s);
+    Game.ui.acties.ververs(s);
     Game.ui.panel.ververs(s);
   };
 
@@ -152,6 +154,7 @@
       uiTimer = 0;
       Game.ui.hud.ververs(s);
       Game.ui.quests.ververs(s);
+      Game.ui.acties.ververs(s);
       Game.ui.panel.ververs(s);
       Game.ui.buildmenu.ververs(s);
     }
@@ -180,6 +183,10 @@
     Game.core.economy.tick(s, dt);
     Game.core.population.tick(s, dt);
     Game.core.raids.tick(s, dt);
+    Game.core.handel.tick(s, dt);
+    Game.core.opdrachten.tick(s, dt);
+    Game.core.gebeurtenissen.tick(s, dt);
+    Game.core.feesten.tick(s, dt);
     Game.ui.quests.controleer(s);
     Game.core.ages.controleerOverwinning(s);
   }
