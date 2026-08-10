@@ -62,6 +62,10 @@
       opdracht: { actief: false, cooldown: 50 },
       gebeurtenisTimer: 200,
 
+      /* The village register: named inhabitants, kept in step with the
+         headcount by core/dorpelingen.js. Flavour only, never authoritative. */
+      dorpelingen: [],
+
       questsGedaan: {},
       log: [],
 

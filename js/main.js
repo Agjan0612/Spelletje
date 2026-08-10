@@ -182,6 +182,7 @@
     Game.core.construction.tick(s, dt);
     Game.core.economy.tick(s, dt);
     Game.core.population.tick(s, dt);
+    Game.core.dorpelingen.tick(s);
     Game.core.raids.tick(s, dt);
     Game.core.handel.tick(s, dt);
     Game.core.opdrachten.tick(s, dt);

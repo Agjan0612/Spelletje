@@ -146,11 +146,41 @@
         Game.ui.toast('📥 Save geladen');
         O.sluit();
       } },
+      { tekst: '📖 Dorpsboek', actie: function () { O.dorpsboek(); } },
       { tekst: '❓ Uitleg', actie: function () { O.help(false); } },
       { tekst: '🌱 Nieuw spel', actie: function () {
         O.bevestigNieuw();
       } },
       { tekst: '← Verder spelen', actie: function () { O.sluit(); } }
+    ]);
+  };
+
+  /* -------------------------------------------------------- dorpsboek -- */
+
+  O.dorpsboek = function () {
+    var s = spel.state;
+    O.open('📖 Het dorpsboek van ' + s.dorpsnaam, function (el) {
+      var boek = Game.core.dorpelingen.boek(s);
+      if (!boek.length) {
+        el.innerHTML = '<p>Er woont nog niemand in je dorp.</p>';
+        return;
+      }
+      var kop = Game.util.el('p', '', boek.length +
+        ' inwoners noemen ' + s.dorpsnaam + ' hun thuis:');
+      el.appendChild(kop);
+
+      var ul = Game.util.el('ul');
+      ul.className = 'dorpsboek';
+      boek.forEach(function (m) {
+        var li = Game.util.el('li');
+        li.appendChild(Game.util.el('span', 'naam', m.naam));
+        li.appendChild(Game.util.el('span', 'baan', m.baan));
+        li.appendChild(Game.util.el('span', 'sinds', 'sinds jaar ' + m.sinds));
+        ul.appendChild(li);
+      });
+      el.appendChild(ul);
+    }, [
+      { tekst: '← Terug naar het menu', primair: true, actie: function () { O.menu(); } }
     ]);
   };
 

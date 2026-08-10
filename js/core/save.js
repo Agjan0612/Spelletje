@@ -74,6 +74,7 @@
     s.handel = s.handel || { fase: 'rust', timer: 260, aanbod: null };
     s.opdracht = s.opdracht || { actief: false, cooldown: 50 };
     if (typeof s.gebeurtenisTimer !== 'number') s.gebeurtenisTimer = 200;
+    s.dorpelingen = Array.isArray(s.dorpelingen) ? s.dorpelingen : [];
     s.questsGedaan = s.questsGedaan || {};
     s.log = s.log || [];
     s.wandelaars = [];
