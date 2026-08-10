@@ -30,28 +30,32 @@ Derived values (housing, storage cap, defence, worker totals, global bonuses) ar
 ### Layer separation
 
 - `js/config/` — **pure data**, the balance knobs. `buildings.js` is the heart (costs, production `wint`/`maakt`, worker slots, placement rules). Also `resources.js`, `jobs.js`, `ages.js` (age-up requirements + victory), `quests.js` (objective list).
-- `js/core/` — the simulation. Each module owns one concern and exposes a `tick(s, dt)` where relevant: `economy` (production/crafting/upkeep/storage), `population` (food/happiness/growth/jobs), `seasons`, `raids`, `construction`, `ages`, plus `map` (generation), `state`, `rng` (seeded), `save`.
-- `js/render/` — canvas drawing (`camera`, `sprites`, `renderer`, `atlas`). Buildings, trees, rocks and villagers are drawn from **local CC0 sprite images** (`assets/kenney/`, Kenney "RTS Pack: Medieval") loaded by `atlas.js`; everything else (terrain base colours + seasons, water waves, mountains, farmland, the windmill's turning sails, the town wall) is still drawn with shapes. The sprite layer is **optional and non-authoritative**: `atlas.js` preloads the images and every caller falls back to the original shape/emoji drawing while an image is still loading or if the `assets/` folder is missing, so the game keeps working from `file://` with or without the assets. Nothing in `atlas.js` touches `Game.state`, so saves stay pure JSON.
-- `js/ui/` — DOM panels (`hud`, `buildmenu`, `panel`, `quests`, `log`, `overlay`). `panel.js` and `buildmenu.js` use a `handtekening()` signature-diff so they only rebuild when something visible changed, otherwise the buttons would be ripped out from under the cursor each frame.
+- `js/core/` — the simulation. Each module owns one concern and exposes a `tick(s, dt)` where relevant: `economy` (production/crafting/upkeep/storage), `population` (food/happiness/growth/jobs), `seasons`, `raids`, `construction`, `ages`, plus `map` (generation), `state`, `rng` (seeded), `save`. The age-2+ **activity** modules live here too and follow the same event-with-a-timer shape as `raids.js`: `feesten` (festivals — spend food/coins for a happiness boost via the existing `moreel` field), `handel` (the travelling merchant with its trade offers), `opdrachten` (the lord's recurring delivery orders with a deadline on `s.dag`), `gebeurtenissen` (small random events — bard, harvest, frost…), and `dorpelingen` (a cosmetic named-inhabitant register kept in step with the headcount; it reads state but never changes the counts).
+- `js/render/` — canvas drawing (`camera`, `sprites`, `renderer`, `atlas`), plus the two **decorative-only** modules `floaters` (the "+🪵" numbers that rise when a villager delivers goods) and `wildlife` (deer/fish/sheep that wander near the matching resource nodes). Buildings, trees, rocks and villagers are drawn from **local CC0 sprite images** (`assets/kenney/`, Kenney "RTS Pack: Medieval") loaded by `atlas.js`; everything else (terrain base colours + seasons, water waves, mountains, farmland, the windmill's turning sails, the town wall, chimney smoke and the evening window glow in `sprites.sfeer`) is still drawn with shapes. The sprite layer is **optional and non-authoritative**: `atlas.js` preloads the images and every caller falls back to the original shape/emoji drawing while an image is still loading or if the `assets/` folder is missing, so the game keeps working from `file://` with or without the assets. The walkers in `renderer.js` run a purely cosmetic loop (walk out → swing a tool with flying particles → carry the goods home → deliver a floater), driven by a module-local real-time `klok`; none of this — not the walkers, particles, floaters or wildlife — touches `Game.state`, so saves stay pure JSON.
+- `js/ui/` — DOM panels (`hud`, `buildmenu`, `panel`, `quests`, `acties`, `log`, `overlay`). `acties.js` is the "Het dorp" card in the right column (throw a festival, visit the merchant, hand in the lord's order); it only reads/calls the core activity modules. `overlay.js` also hosts the merchant trade dialog and the `📖 Dorpsboek` register view. `panel.js` and `buildmenu.js` use a `handtekening()` signature-diff so they only rebuild when something visible changed, otherwise the buttons would be ripped out from under the cursor each frame.
 
 ### The game loop
 
 `js/main.js` runs a fixed-timestep accumulator (10 logic ticks/sec) decoupled from render framerate; speed buttons multiply the number of ticks, not `dt`. One simulation step, `stap(s, dt)`, runs modules in this order — **preserve it**, later steps read state the earlier ones wrote:
 
 ```
-seasons → construction → economy → population → raids → quests(check) → ages(victory)
+seasons → construction → economy → population → dorpelingen → raids
+        → handel → opdrachten → gebeurtenissen → feesten → quests(check) → ages(victory)
 ```
 
-Rendering, decorative walkers, HUD refresh, and autosave run on real time outside the fixed step.
+The activity modules (`handel`/`opdrachten`/`gebeurtenissen`/`feesten`) run after `raids` and mostly no-op before age 2. `dorpelingen.tick(s)` takes no `dt` — it just reconciles the register to the headcount. Rendering, the decorative walkers/wildlife/floaters, HUD refresh, and autosave run on real time outside the fixed step (`floaters.tick`/`wildlife.tick`/`renderer.tickWandelaars`).
 
 ### Adding content
 
 A new building is one object appended to the `B` array in `js/config/buildings.js` (fields documented in the header comment there; production numbers are **per worker per second**). Reload and it appears in the build menu; `devcheck.js` will complain in the console if it references an unknown resource/job/node. No other file needs touching for a standard building.
 
+The activity systems are list-driven in the same spirit: a new random event is one entry in the `EVENTS` array in `gebeurtenissen.js` (`{ id, eis?, doe(s) }`), a new merchant trade one entry in `AANBOD` in `handel.js`, and a new order type one entry in `VRAAG` in `opdrachten.js`. Keep event/order effects modest and food-safe (see Conventions).
+
 ## Conventions
 
 - **Language split:** domain code (identifiers, building/resource ids, log text) is in **Dutch**; code comments are in **English**. Match this when editing.
-- **Balancing = the food economy.** The two failure modes that were deliberately engineered out: hunger must remove food-workers *last* (`population.js` `rang()`), and low happiness must not throttle food production into a death spiral (production multiplier floors at `0.75`). Keep these invariants when touching `population.js` / `economy.js`.
+- **Balancing = the food economy.** The two failure modes that were deliberately engineered out: hunger must remove food-workers *last* (`population.js` `rang()`), and low happiness must not throttle food production into a death spiral (production multiplier floors at `0.75`). Keep these invariants when touching `population.js` / `economy.js`. The activity systems must not undo them: random events and lapsed orders carry no harsh food/morale penalty, and player-initiated actions (festival, trade, delivery) never fire unattended — so a fresh village still reaches age 4 without starving (validate headless).
+- **The decorative layer is non-authoritative.** Walkers, particles, floaters, wildlife and the day/night glow are cosmetic and driven by a real-time clock; they must never live in `Game.state` or feed back into the simulation. New activity state that *is* saved (e.g. `s.feest`, `s.handel`, `s.opdracht`, `s.dorpelingen`) must be plain JSON and get a default in `save.herstel` so old saves keep loading.
 
 ## Branches
 
