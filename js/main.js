@@ -33,6 +33,7 @@
     Game.ui.buildmenu.init(spel);
     Game.ui.panel.init(spel);
     Game.ui.quests.init(spel);
+    Game.ui.acties.init(spel);
     Game.ui.overlay.init(spel);
 
     koppelInvoer(canvas);
@@ -70,6 +71,7 @@
     Game.ui.hud.ververs(s);
     Game.ui.buildmenu.ververs(s);
     Game.ui.quests.ververs(s);
+    Game.ui.acties.ververs(s);
     Game.ui.panel.ververs(s);
   };
 
@@ -133,8 +135,11 @@
       if (stappen >= MAX_STAPPEN) s.accu = 0;
     }
 
-    /* --- wandelaars en tekenen lopen op echte tijd --- */
-    Game.render.renderer.tickWandelaars(s, echteDt * Math.max(1, s.snelheid));
+    /* --- wandelaars, dieren en tekenen lopen op echte tijd --- */
+    var decDt = echteDt * Math.max(1, s.snelheid);
+    Game.render.renderer.tickWandelaars(s, decDt);
+    if (Game.render.floaters) Game.render.floaters.tick(decDt);
+    if (Game.render.wildlife) Game.render.wildlife.tick(decDt);
 
     Game.render.renderer.teken(s, spel.cam, {
       plaatsType: spel.plaatsType,
@@ -149,6 +154,7 @@
       uiTimer = 0;
       Game.ui.hud.ververs(s);
       Game.ui.quests.ververs(s);
+      Game.ui.acties.ververs(s);
       Game.ui.panel.ververs(s);
       Game.ui.buildmenu.ververs(s);
     }
@@ -176,7 +182,12 @@
     Game.core.construction.tick(s, dt);
     Game.core.economy.tick(s, dt);
     Game.core.population.tick(s, dt);
+    Game.core.dorpelingen.tick(s);
     Game.core.raids.tick(s, dt);
+    Game.core.handel.tick(s, dt);
+    Game.core.opdrachten.tick(s, dt);
+    Game.core.gebeurtenissen.tick(s, dt);
+    Game.core.feesten.tick(s, dt);
     Game.ui.quests.controleer(s);
     Game.core.ages.controleerOverwinning(s);
   }
