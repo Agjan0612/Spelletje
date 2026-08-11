@@ -112,6 +112,7 @@
       Game.render.particles.rook(doel.x * TEGEL, doel.y * TEGEL, 6);
       Game.render.renderer.schok(7);
       Game.render.renderer.flits('224,80,60');
+      if (Game.ui.audio) Game.ui.audio.dreun();
       lok.gebrand = true;
     }
 

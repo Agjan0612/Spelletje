@@ -29,6 +29,7 @@
     Game.render.renderer.init(canvas);
 
     Game.ui.log.init();
+    if (Game.ui.audio) Game.ui.audio.init();
     Game.ui.hud.init(spel);
     Game.ui.buildmenu.init(spel);
     Game.ui.panel.init(spel);

@@ -111,6 +111,7 @@ button {
 }
 #speeds button:hover { background: var(--hout-licht); }
 #speeds button.active { background: var(--goud); color: #2b1d12; border-color: var(--goud-licht); }
+#btn-sound.uit { opacity: .5; }
 
 /* ==========================================================================
    Speelveld

@@ -66,6 +66,7 @@
     /* The whole city visibly matures: a construction sweep, then the new tier
        look (cosmetic — the mechanical weight is in the new buildings). */
     if (Game.render.renderer.tijdperkSweep) Game.render.renderer.tijdperkSweep(s);
+    if (Game.ui.audio) Game.ui.audio.klok();
 
     /* The bandits start paying attention from age 2 on. */
     if (s.tijdperk === 2 && s.raid.fase === 'rust') {
@@ -102,6 +103,7 @@
     s.gewonnen = true;
     Game.ui.overlay.overwinning(s);
     Game.ui.log.schrijf(s, '👑 Je stad is voltooid! ' + s.dorpsnaam + ' is een echte middeleeuwse stad.', 'goed');
+    if (Game.ui.audio) Game.ui.audio.zege();
   };
 
   Game.core.ages = A;

@@ -27,6 +27,7 @@
         r.uitslag = null;
         Game.ui.log.schrijf(s, '⚔️ Rovers gesignaleerd! Ze vallen over ' + R.WAARSCHUWING + ' seconden aan.', 'slecht');
         Game.ui.toast('⚔️ Rovers op komst!');
+        if (Game.ui.audio) Game.ui.audio.hoorn();
       }
       return;
     }
