@@ -86,7 +86,9 @@
         hh = hh * (0.35 + 0.65 * randFactor);
         var vv = vocht[i] * 0.75 + detail[i] * 0.25;
 
-        var t = { t: 'gras', n: null, amt: 0, max: 0, v: detail[i], b: null };
+        /* h (0..1) is the terrain height, kept for the relief/hillshade layer.
+           A plain number, so saves stay pure JSON. */
+        var t = { t: 'gras', n: null, amt: 0, max: 0, v: detail[i], b: null, h: hh };
 
         if (hh < 0.24) {
           t.t = 'water'; t.n = 'vis'; t.amt = M.ONEINDIG; t.max = M.ONEINDIG;
@@ -184,6 +186,26 @@
       }
     }
   }
+
+  /* Recomputes t.h for every tile from the map's seed, using the exact same
+     noise + edge-falloff as genereer(). Used to migrate saves made before the
+     relief layer existed, so they keep working and stay pure JSON. */
+  M.herstelHoogte = function (kaart) {
+    var b = kaart.b, h = kaart.h, seed = kaart.seed;
+    var hoogte = Game.core.ruis(seed * 7 + 11, b, h, 9);
+    var detail = Game.core.ruis(seed * 17 + 5, b, h, 3);
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < b; x++) {
+        var i = y * b + x;
+        var randX = Math.min(x, b - 1 - x) / (b * 0.5);
+        var randY = Math.min(y, h - 1 - y) / (h * 0.5);
+        var randFactor = Math.min(1, Math.min(randX, randY) * 2.6);
+        var hh = hoogte[i] * 0.72 + detail[i] * 0.28;
+        hh = hh * (0.35 + 0.65 * randFactor);
+        if (kaart.tegels[i]) kaart.tegels[i].h = hh;
+      }
+    }
+  };
 
   /* Scores a candidate spot for the starting village: we want flat buildable
      ground with fertile soil, forest and rock all within reach. */

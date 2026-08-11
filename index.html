@@ -40,6 +40,7 @@
         <button class="spd active" data-speed="1" title="Normale snelheid">1×</button>
         <button class="spd" data-speed="2" title="Snel">2×</button>
         <button class="spd" data-speed="4" title="Zeer snel">4×</button>
+        <button id="btn-sound" title="Geluid uit">🔊</button>
         <button id="btn-menu" title="Menu">☰</button>
       </div>
     </div>
@@ -69,6 +70,9 @@
 
     <!-- Log -->
     <div id="logbox"></div>
+
+    <!-- Minimap -->
+    <canvas id="minimap" title="Klik om de camera te verplaatsen"></canvas>
 
     <!-- Waarschuwing voor rovers -->
     <div id="raid-warning" class="hidden"></div>
@@ -117,10 +121,15 @@
 
 <script src="js/render/camera.js"></script>
 <script src="js/render/atlas.js"></script>
+<script src="js/render/particles.js"></script>
+<script src="js/render/paths.js"></script>
+<script src="js/render/raiders.js"></script>
 <script src="js/render/sprites.js"></script>
 <script src="js/render/renderer.js"></script>
+<script src="js/render/minimap.js"></script>
 
 <script src="js/ui/log.js"></script>
+<script src="js/ui/audio.js"></script>
 <script src="js/ui/hud.js"></script>
 <script src="js/ui/buildmenu.js"></script>
 <script src="js/ui/panel.js"></script>

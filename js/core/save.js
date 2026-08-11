@@ -76,6 +76,12 @@
     s.tevredenheid = typeof s.tevredenheid === 'number' ? s.tevredenheid : 60;
     s.snelheid = s.snelheid || 1;
 
+    /* Relief layer: saves from before it lack per-tile height. Recompute it
+       from the seed so old towns get relief too, without breaking pure JSON. */
+    if (s.kaart.seed != null && (!s.kaart.tegels[0] || typeof s.kaart.tegels[0].h !== 'number')) {
+      Game.core.map.herstelHoogte(s.kaart);
+    }
+
     /* Tiles lose their building links in nothing but a corrupted save, but
        rebuilding them is cheap and makes loading robust. */
     for (var i = 0; i < s.kaart.tegels.length; i++) s.kaart.tegels[i].b = null;

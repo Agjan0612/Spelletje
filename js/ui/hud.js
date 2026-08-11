@@ -94,9 +94,14 @@
     var raid = Game.core.raids.statusTekst(s);
     if (raid) {
       els.raid.classList.remove('hidden');
+      /* Effective defence is what actually meets the raiders in their corridor;
+         if it is below the town total, show both so the player learns why. */
+      var verd = raid.verdediging < raid.totaal
+        ? raid.verdediging + ' <span style="opacity:.7">(van ' + raid.totaal + ')</span>'
+        : raid.verdediging;
       els.raid.innerHTML = '⚔️ Rovers vallen aan over ' + raid.seconden + 's' +
         '<span class="klein">Hun kracht: ~' + raid.kracht +
-        ' · jouw verdediging: ' + raid.verdediging + '</span>';
+        ' · verdediging op hun route: ' + verd + '</span>';
     } else {
       els.raid.classList.add('hidden');
     }
