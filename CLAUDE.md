@@ -27,12 +27,15 @@ The entire game is one plain-object tree, `Game.state` (also `window.spel.state`
 
 Derived values (housing, storage cap, defence, worker totals, global bonuses) are **not** stored authoritatively — they are recomputed by `Game.core.state.herbereken(s)`, which must be called after any change to buildings or worker assignments.
 
+The visual/atmosphere layer (see below) keeps almost everything it needs out of `state`; the handful of fields it does add are all plain JSON-safe numbers/objects: `t.h` (per-tile terrain height for the relief/hillshade, migrated from the seed for old saves), `s.raid.vanaf`/`uitslag`/`doel` (raid approach point, outcome and hit location), and `g.geschroeid` (a scorch timer). The audio on/off preference lives in `localStorage`, not in `state`.
+
 ### Layer separation
 
 - `js/config/` — **pure data**, the balance knobs. `buildings.js` is the heart (costs, production `wint`/`maakt`, worker slots, placement rules). Also `resources.js`, `jobs.js`, `ages.js` (age-up requirements + victory), `quests.js` (objective list).
 - `js/core/` — the simulation. Each module owns one concern and exposes a `tick(s, dt)` where relevant: `economy` (production/crafting/upkeep/storage), `population` (food/happiness/growth/jobs), `seasons`, `raids`, `construction`, `ages`, plus `map` (generation), `state`, `rng` (seeded), `save`.
 - `js/render/` — canvas drawing (`camera`, `sprites`, `renderer`, `atlas`). Buildings, trees, rocks and villagers are drawn from **local CC0 sprite images** (`assets/kenney/`, Kenney "RTS Pack: Medieval") loaded by `atlas.js`; everything else (terrain base colours + seasons, water waves, mountains, farmland, the windmill's turning sails, the town wall) is still drawn with shapes. The sprite layer is **optional and non-authoritative**: `atlas.js` preloads the images and every caller falls back to the original shape/emoji drawing while an image is still loading or if the `assets/` folder is missing, so the game keeps working from `file://` with or without the assets. Nothing in `atlas.js` touches `Game.state`, so saves stay pure JSON.
-- `js/ui/` — DOM panels (`hud`, `buildmenu`, `panel`, `quests`, `log`, `overlay`). `panel.js` and `buildmenu.js` use a `handtekening()` signature-diff so they only rebuild when something visible changed, otherwise the buttons would be ripped out from under the cursor each frame.
+- `js/render/` — **visual/atmosphere layer** (fully decorative, derived from `state`, never stored in it): `particles.js` (smoke/sparks/fire/dust, real time), `paths.js` (the street network — a minimum spanning tree over the buildings, cached on a `handtekening()` signature, drawn under them and followed by the walkers), `raiders.js` (the raider band that visualises the abstract raid: it marches in from `s.raid.vanaf` and plays the already-decided outcome), and `minimap.js` (overview canvas). `sprites.js` also holds the relief/hillshade cache (built once per map by `bereidTerreinVoor`) and the per-age building tier-look. `renderer.js` draws in one deliberate stack (deep sea → terrain+relief → roads → buildings → walkers+raiders → particles → overlays) and runs the real-time effects (particles, raiders, screen-shake, age-up sweep, work-smoke, scorch decay, day/night) via `tickEffecten(s, dt)`, separate from the fixed simulation step.
+- `js/ui/` — DOM panels (`hud`, `buildmenu`, `panel`, `quests`, `log`, `overlay`) plus `audio.js`. `panel.js` and `buildmenu.js` use a `handtekening()` signature-diff so they only rebuild when something visible changed, otherwise the buttons would be ripped out from under the cursor each frame. `audio.js` **synthesises** its sounds (raid horn, age-up bell, breakthrough thud, victory peal) with the Web Audio API — no audio files to fetch or embed, so it works from `file://`; the `AudioContext` is created lazily and resumed on the first user gesture (autoplay policy), and the mute preference is kept in `localStorage`.
 
 ### The game loop
 
@@ -42,7 +45,7 @@ Derived values (housing, storage cap, defence, worker totals, global bonuses) ar
 seasons → construction → economy → population → raids → quests(check) → ages(victory)
 ```
 
-Rendering, decorative walkers, HUD refresh, and autosave run on real time outside the fixed step.
+Rendering, decorative walkers, the real-time effects (`renderer.tickEffecten`: particles, raiders, screen-shake, age-up sweep, work-smoke, scorch decay, day/night), HUD refresh, minimap refresh, and autosave all run on real time outside the fixed step.
 
 ### Adding content
 
