@@ -1,12 +1,15 @@
 /* Draws the whole scene in one clear stack:
  *
  *   deep sea → terrain (+ relief) → roads → buildings (shadow + body,
- *   y-sorted) → walkers + raiders → particles → overlays (grid, ghost,
- *   winter veil, day/night)
+ *   y-sorted) → age-up sweep → wildlife → walkers → work-chips →
+ *   raiders → particles → floaters → corridor → ghost →
+ *   overlays (grid, winter veil, day/night, flash)
  *
- * Later steps read what earlier ones drew, so the order is deliberate. All of
- * the lively extras (walkers, roads, raiders, particles) are decorative: they
- * are derived from Game.state but never stored in it, so saves stay pure JSON. */
+ * Later steps read what earlier ones drew, so the order is deliberate. Every
+ * lively extra here (walkers, roads, raiders, particles, wildlife, floaters) is
+ * decorative: derived from Game.state, never stored in it, so saves stay pure
+ * JSON. The walkers run a cosmetic loop — walk the road out → swing a tool with
+ * flying chips → carry the goods home → deliver a floater. */
 (function (Game) {
 
   var R = {};
@@ -15,18 +18,77 @@
 
   var canvas, ctx, dpr = 1;
 
+  var TEGEL = Game.render.TEGEL;
+
+  /* Real-time clock (seconds) driving the decorative animation: footstep bob,
+     tool swings and the chimney smoke phase. Never part of the saved state. */
+  var klok = 0;
+
   /* A short screen shake, set by schok() and decayed on real time. */
   var schud = 0, schudX = 0, schudY = 0;
 
   /* Age-up "construction sweep" that wipes across the town on advancement. */
   var sweep = { actief: false, t: 0, duur: 2.8, gepoft: {} };
 
-  /* Throttles the ambient work smoke so emitters run a few times a second,
-     not every frame. */
-  var rookTimer = 0;
+  /* Throttles the ambient work sparks/dust so emitters run a few times a
+     second, not every frame. */
+  var werkTimer = 0;
 
   /* A brief full-screen colour flash for the big moments (raid hit, age-up). */
   var flits = 0, flitsKleur = '255,255,255';
+
+  /* Per-trade tool shown while a villager works at a resource, and the colour
+     of the chips/splash/sparks that fly when they do. */
+  var GEREEDSCHAP = {
+    houthakker: '🪓', jager: '🏹', visser: '🎣',
+    steenhouwer: '⛏️', mijnwerker: '⛏️', boer: '🌾'
+  };
+  var SPATKLEUR = {
+    hout: '#8a6236', vis: 'rgba(150,205,235,.95)', steen: '#b7b2a6',
+    wild: '#b5563f', ijzer: '#c7d0da', koper: '#d98a3e',
+    edelsteen: '#7fe0ea', vruchtbaar: '#d9b45c'
+  };
+
+  /* Short-lived work chips (the flakes that fly off a swinging tool), in world
+     pixels. Decorative and module-local — separate from the particles.js module
+     which does the smoke/fire/dust for raids, the sweep and mines. */
+  var deeltjes = [];
+
+  function spatDeeltjes(wx, wy, kleur, n) {
+    for (var i = 0; i < n; i++) {
+      var a = -Math.PI / 2 + (Math.random() - 0.5) * 1.6;
+      var kr = 22 + Math.random() * 26;
+      deeltjes.push({
+        x: wx + (Math.random() - 0.5) * 4, y: wy,
+        vx: Math.cos(a) * kr, vy: Math.sin(a) * kr,
+        leven: 0, duur: 0.35 + Math.random() * 0.3, kleur: kleur
+      });
+    }
+    if (deeltjes.length > 220) deeltjes.splice(0, deeltjes.length - 220);
+  }
+
+  function tickDeeltjes(dt) {
+    for (var i = deeltjes.length - 1; i >= 0; i--) {
+      var d = deeltjes[i];
+      d.leven += dt;
+      d.x += d.vx * dt; d.y += d.vy * dt; d.vy += 90 * dt;   /* gravity */
+      if (d.leven >= d.duur) deeltjes.splice(i, 1);
+    }
+  }
+
+  function tekenDeeltjes(cam, p) {
+    if (!deeltjes.length) return;
+    for (var i = 0; i < deeltjes.length; i++) {
+      var d = deeltjes[i];
+      var sp = cam.wereldNaarScherm(d.x, d.y);
+      if (sp.x < -10 || sp.y < -10 || sp.x > cam.breedte + 10 || sp.y > cam.hoogte + 10) continue;
+      ctx.globalAlpha = Math.max(0, 1 - d.leven / d.duur);
+      ctx.fillStyle = d.kleur;
+      var r = Math.max(1.5, p * 0.035);
+      ctx.fillRect(sp.x - r / 2, sp.y - r / 2, r, r);
+    }
+    ctx.globalAlpha = 1;
+  }
 
   R.init = function (el) {
     canvas = el;
@@ -78,8 +140,8 @@
   /* ------------------------------------------------------- wandelaars ---- */
 
   /* Decorative villagers walking their building's road to a resource and back.
-     They carry no simulation weight. Rebuilt by reconciliation (not from
-     scratch) so nobody teleports when the list refreshes. */
+     Rebuilt by reconciliation (not from scratch) so nobody teleports when the
+     list refreshes; each keeps its work-loop state across refreshes. */
   R.verversWandelaars = function (s) {
     var oud = {};
     if (s.wandelaars) {
@@ -103,12 +165,14 @@
       if (!d.banen || g.werkers <= 0) continue;
 
       var doelX = pleinX, doelY = pleinY;
+      var heeftBron = false, node = null, res = null;
       if (d.wint) {
         var t = map.zoekNode(s.kaart, g.x, g.y, d.wint.node, d.wint.straal);
         if (t) {
           var idx = s.kaart.tegels.indexOf(t);
           doelX = idx % s.kaart.b;
           doelY = Math.floor(idx / s.kaart.b);
+          heeftBron = true; node = d.wint.node; res = d.wint.res;
         }
       }
 
@@ -122,32 +186,75 @@
         var sleutel = g.id + ':' + n;
         var bestaand = oud[sleutel];
         if (bestaand) {
+          /* Keep p/fase/work state; refresh what may have moved. */
           bestaand.route = route;
           bestaand.baan = d.banen.baan;
-          bestaand.fase = (g.id * 7 + n * 13) % 100 / 100;
+          bestaand.heeftBron = heeftBron;
+          bestaand.node = node;
+          bestaand.res = res;
           lijst.push(bestaand);
         } else {
           lijst.push({
             sleutel: sleutel,
             route: route,
             baan: d.banen.baan,
-            p: Math.random(), richting: Math.random() < 0.5 ? 1 : -1,
+            variant: g.id * 7 + n * 3,
+            heeftBron: heeftBron, node: node, res: res,
+            p: Math.random(),
             snelheid: 0.08 + Math.random() * 0.06,
-            fase: (g.id * 7 + n * 13) % 100 / 100
+            fase: Math.random() < 0.5 ? 'heen' : 'terug',
+            werkTimer: 0, slag: 0, spatTimer: 0, draagt: false,
+            bob: Math.random() * 6.283
           });
         }
       }
     }
     s.wandelaars = lijst;
+
+    if (Game.render.wildlife) Game.render.wildlife.ververs(s);
   };
 
   R.tickWandelaars = function (s, dt) {
+    klok += dt;
+    tickDeeltjes(dt);
     if (!s.wandelaars) return;
+
     for (var i = 0; i < s.wandelaars.length; i++) {
       var w = s.wandelaars[i];
-      w.p += w.richting * w.snelheid * dt;
-      if (w.p > 1) { w.p = 1; w.richting = -1; }
-      if (w.p < 0) { w.p = 0; w.richting = 1; }
+
+      if (w.fase === 'werk') {
+        w.werkTimer -= dt;
+        w.slag += dt;
+        if (w.heeftBron) {
+          w.spatTimer -= dt;
+          if (w.spatTimer <= 0) {
+            w.spatTimer = 0.32;
+            var eind = w.route[w.route.length - 1];
+            spatDeeltjes(eind.x * TEGEL, eind.y * TEGEL - TEGEL * 0.2,
+              SPATKLEUR[w.node] || '#cfcfcf', 3);
+          }
+        }
+        if (w.werkTimer <= 0) { w.fase = 'terug'; w.draagt = !!w.res; }
+        continue;
+      }
+
+      var richting = w.fase === 'terug' ? -1 : 1;
+      w.p += richting * w.snelheid * dt;
+
+      if (w.p >= 1) {
+        w.p = 1;
+        if (w.heeftBron) { w.fase = 'werk'; w.werkTimer = 0.7 + Math.random() * 0.8; w.slag = 0; }
+        else w.fase = 'terug';
+      } else if (w.p <= 0) {
+        w.p = 0;
+        if (w.draagt && w.res && Game.render.floaters) {
+          var em = (Game.config.resources[w.res] || {}).emoji || '';
+          var begin = w.route[0];
+          Game.render.floaters.spat(begin.x * TEGEL, begin.y * TEGEL - TEGEL * 0.5, '+' + em, '#f3e7c6');
+        }
+        w.draagt = false;
+        w.fase = 'heen';
+      }
     }
   };
 
@@ -165,11 +272,7 @@
       if (gelopen + lengtes[j] >= doel || j === lengtes.length - 1) {
         var lok = (doel - gelopen) / lengtes[j];
         var a = route[j], b = route[j + 1];
-        return {
-          x: a.x + (b.x - a.x) * lok,
-          y: a.y + (b.y - a.y) * lok,
-          dx: b.x - a.x
-        };
+        return { x: a.x + (b.x - a.x) * lok, y: a.y + (b.y - a.y) * lok, dx: b.x - a.x };
       }
       gelopen += lengtes[j];
     }
@@ -183,7 +286,6 @@
     if (!ctx) return;
     var p = cam.px();
 
-    /* Screen shake: offset the whole transform by a decaying jitter. */
     if (schud > 0.05) {
       schudX = (Math.random() - 0.5) * schud;
       schudY = (Math.random() - 0.5) * schud;
@@ -191,12 +293,12 @@
     ctx.setTransform(dpr, 0, 0, dpr, schudX * dpr, schudY * dpr);
     ctx.clearRect(-4, -4, cam.breedte + 8, cam.hoogte + 8);
 
-    /* Beyond the map edge: deep sea. */
     ctx.fillStyle = ['#27506b', '#295473', '#254a64', '#2b4a5e'][s.seizoen];
     ctx.fillRect(-4, -4, cam.breedte + 8, cam.hoogte + 8);
 
     var zicht = cam.zichtbaar(s.kaart);
     var tijd = s.tijd;
+    var nacht = nachtFactor(s);
 
     /* --- terrain (+ relief, handled inside tekenTegel) --- */
     for (var y = zicht.y0; y < zicht.y1; y++) {
@@ -242,7 +344,8 @@
       var w = p * d.grootte, h = p * d.grootte;
 
       if (g.gebouwd) {
-        sprites.tekenGebouw(ctx, d, sp2.x, sp2.y, w, h, { tijd: tijd, tijdperk: s.tijdperk, geschroeid: g.geschroeid });
+        sprites.tekenGebouw(ctx, d, sp2.x, sp2.y, w, h,
+          { tijd: tijd, tijdperk: s.tijdperk, geschroeid: g.geschroeid, nacht: nacht, klok: klok, id: g.id });
         if (g.waarschuwing && p > 16) {
           ctx.font = Math.round(p * 0.34) + 'px serif';
           ctx.textAlign = 'center';
@@ -265,12 +368,15 @@
     /* --- age-up construction sweep, over the buildings --- */
     if (sweep.actief) tekenSweep(s, cam, p);
 
-    /* --- walkers + raiders --- */
+    /* --- wildlife, walkers, work-chips --- */
+    if (p > 15 && Game.render.wildlife) Game.render.wildlife.teken(ctx, cam, p);
     if (p > 15) tekenWandelaars(s, cam, p);
-    if (Game.render.raiders) Game.render.raiders.teken(ctx, cam, s, p);
+    if (p > 15) tekenDeeltjes(cam, p);
 
-    /* --- particles (smoke, fire, dust, sparks) --- */
+    /* --- raiders + particles (smoke/fire/dust) + floaters --- */
+    if (Game.render.raiders) Game.render.raiders.teken(ctx, cam, s, p);
     if (Game.render.particles) Game.render.particles.teken(ctx, cam);
+    if (Game.render.floaters) Game.render.floaters.teken(ctx, cam);
 
     /* --- defence corridor while a raid is announced --- */
     if (Game.render.raiders && Game.render.raiders.tekenCorridor) {
@@ -280,8 +386,11 @@
     /* --- placement ghost --- */
     if (ui.plaatsType && ui.muisTegel) tekenSpook(s, cam, ui, p);
 
-    /* --- overlays: day/night + winter veil + event flash --- */
-    tekenDagNacht(s, cam, p);
+    /* --- overlays: day/night dusk + winter veil + event flash --- */
+    if (nacht > 0.04) {
+      ctx.fillStyle = 'rgba(20,26,58,' + (nacht * 0.34).toFixed(3) + ')';
+      ctx.fillRect(0, 0, cam.breedte, cam.hoogte);
+    }
     if (s.seizoen === 3) {
       ctx.fillStyle = 'rgba(200,220,240,.10)';
       ctx.fillRect(0, 0, cam.breedte, cam.hoogte);
@@ -295,8 +404,16 @@
     }
   };
 
+  /* Night level (0 at midday → 1 at midnight) from the in-game clock, shared by
+     the dusk wash and the per-building window glow in sprites.sfeer. */
+  function nachtFactor(s) {
+    var dagLengte = Game.core.state.DAG;
+    var f = (s.tijd % dagLengte) / dagLengte;
+    return 0.5 - 0.5 * Math.cos(f * Math.PI * 2);
+  }
+
   /* Real-time bits that are not the fixed simulation: particles, raiders,
-     screen shake, the age-up sweep, ambient work smoke and scorch decay. */
+     screen shake, the age-up sweep, ambient work sparks and scorch decay. */
   R.tickEffecten = function (s, dt) {
     if (Game.render.particles) Game.render.particles.tick(dt);
     if (Game.render.raiders) Game.render.raiders.tick(s, dt);
@@ -304,16 +421,15 @@
     if (flits > 0) flits = Math.max(0, flits - dt * 2.2);
 
     tickSweep(s, dt);
-    tickWerkrook(s, dt);
+    tickWerk(s, dt);
     vervaagSchroei(s, dt);
   };
 
-  /* Advance the age-up wave and puff dust off each building as it passes. */
   function tickSweep(s, dt) {
     if (!sweep.actief) return;
     sweep.t += dt;
     var front = sweep.t / sweep.duur;
-    var TEGEL = Game.render.TEGEL, breedte = s.kaart.b;
+    var breedte = s.kaart.b;
     for (var i = 0; i < s.gebouwen.length; i++) {
       var g = s.gebouwen[i];
       if (!g.gebouwd) continue;
@@ -329,22 +445,20 @@
     if (sweep.t >= sweep.duur) sweep.actief = false;
   }
 
-  /* Ambient smoke/dust off active production buildings — bakery, smithy,
-     quarry — a few puffs a second, purely cosmetic. */
-  function tickWerkrook(s, dt) {
+  /* Industrial activity cues on working buildings — sparks at a smithy, dust at
+     a mine. The homely chimney smoke on houses/bakeries is handled by
+     sprites.sfeer, so we deliberately do not double it here. */
+  function tickWerk(s, dt) {
     if (!Game.render.particles) return;
-    rookTimer -= dt;
-    if (rookTimer > 0) return;
-    rookTimer = 0.55;
-    var TEGEL = Game.render.TEGEL;
+    werkTimer -= dt;
+    if (werkTimer > 0) return;
+    werkTimer = 0.55;
     for (var i = 0; i < s.gebouwen.length; i++) {
       var g = s.gebouwen[i];
       if (!g.gebouwd || g.uit || g.werkers <= 0 || g.waarschuwing) continue;
       var d = Game.core.state.def(g);
-      var cx = (g.x + d.grootte * 0.66) * TEGEL, cy = (g.y + d.grootte * 0.2) * TEGEL;
-      if (d.maakt && (d.id === 'bakkerij' || d.id === 'smederij' || d.id === 'wapensmid')) {
-        Game.render.particles.rook(cx, cy, 1);
-        if (d.id !== 'bakkerij') Game.render.particles.vonken(cx, cy, 1);
+      if (d.id === 'smederij' || d.id === 'wapensmid') {
+        Game.render.particles.vonken((g.x + d.grootte * 0.66) * TEGEL, (g.y + d.grootte * 0.2) * TEGEL, 1);
       } else if (d.wint && (d.wint.node === 'steen' || d.wint.node === 'ijzer' ||
                  d.wint.node === 'koper' || d.wint.node === 'edelsteen')) {
         Game.render.particles.stof((g.x + d.grootte / 2) * TEGEL, (g.y + d.grootte * 0.7) * TEGEL, 1);
@@ -352,8 +466,6 @@
     }
   }
 
-  /* Fade the raid scorch on damaged buildings; a plain state field so it
-     survives saves as JSON. */
   function vervaagSchroei(s, dt) {
     for (var i = 0; i < s.gebouwen.length; i++) {
       var g = s.gebouwen[i];
@@ -364,18 +476,16 @@
     }
   }
 
-  /* Scaffolding overlay on the buildings the sweep front is passing over. */
   function tekenSweep(s, cam, p) {
-    if (!sweep.actief) return;
     var front = sweep.t / sweep.duur;
-    var breedte = s.kaart.b, TEGEL = Game.render.TEGEL;
+    var breedte = s.kaart.b;
     for (var i = 0; i < s.gebouwen.length; i++) {
       var g = s.gebouwen[i];
       if (!g.gebouwd) continue;
       var d = Game.core.state.def(g);
       var fx = (g.x + d.grootte / 2) / breedte;
       var afst = front - fx;
-      if (afst < 0 || afst > 0.16) continue;         /* only the active band */
+      if (afst < 0 || afst > 0.16) continue;
       var sp = cam.wereldNaarScherm(g.x * TEGEL, g.y * TEGEL);
       var w = p * d.grootte;
       var alpha = 0.55 * (1 - afst / 0.16);
@@ -390,84 +500,73 @@
     }
   }
 
-  /* A soft day/night wash driven by the clock already in s.tijd. Kept subtle
-     so the map never becomes hard to read; a separate layer from the fixed
-     top-left relief light. */
-  function tekenDagNacht(s, cam, p) {
-    var dagLengte = Game.core.state.DAG;
-    var f = (s.tijd % dagLengte) / dagLengte;          /* 0..1 through the day */
-    /* Coldest a little after midnight (f≈0), warm at dusk (f≈0.75). */
-    var nacht = 0.5 - 0.5 * Math.cos(f * Math.PI * 2); /* 0 at midday, 1 at midnight */
-    if (nacht < 0.04) return;
-    ctx.save();
-    ctx.fillStyle = 'rgba(20,26,58,' + (nacht * 0.34).toFixed(3) + ')';
-    ctx.fillRect(0, 0, cam.breedte, cam.hoogte);
-
-    /* Warm window glow on houses once it is properly dark. */
-    if (nacht > 0.45 && p > 18) {
-      ctx.globalCompositeOperation = 'lighter';
-      var zicht = cam.zichtbaar(s.kaart);
-      for (var i = 0; i < s.gebouwen.length; i++) {
-        var g = s.gebouwen[i];
-        if (!g.gebouwd) continue;
-        if (g.x < zicht.x0 - 2 || g.x > zicht.x1 + 2 || g.y < zicht.y0 - 2 || g.y > zicht.y1 + 2) continue;
-        var d = Game.core.state.def(g);
-        if (!d.woonruimte && !d.tevredenheid && g.type !== 'herberg') continue;
-        var sp = cam.wereldNaarScherm((g.x + d.grootte / 2) * Game.render.TEGEL, (g.y + d.grootte * 0.6) * Game.render.TEGEL);
-        var straal = p * 0.22 * (nacht);
-        var grad = ctx.createRadialGradient(sp.x, sp.y, 0, sp.x, sp.y, straal);
-        grad.addColorStop(0, 'rgba(255,200,110,' + (0.5 * nacht).toFixed(3) + ')');
-        grad.addColorStop(1, 'rgba(255,200,110,0)');
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(sp.x, sp.y, straal, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-    ctx.restore();
-  }
-
   function tekenWandelaars(s, cam, p) {
     if (!s.wandelaars) return;
     var atlas = Game.render.atlas;
     for (var i = 0; i < s.wandelaars.length; i++) {
       var w = s.wandelaars[i];
       var pos = langsRoute(w.route, w.p);
-      var wx = pos.x * Game.render.TEGEL, wy = pos.y * Game.render.TEGEL;
+      var wx = pos.x * TEGEL, wy = pos.y * TEGEL;
       var sp = cam.wereldNaarScherm(wx, wy);
       if (sp.x < -20 || sp.y < -20 || sp.x > cam.breedte + 20 || sp.y > cam.hoogte + 20) continue;
 
-      /* Cheap walk cadence: a little vertical bob, mirrored on heading. Capped
-         against s.snelheid so fast-forward doesn't make them vibrate. */
-      var f = Math.min(2.2, s.snelheid || 1);
-      var wieg = Math.sin(s.tijd * 7 * f + w.fase * 6.28) * p * 0.03;
-      var kijk = (pos.dx * w.richting) >= 0 ? 1 : -1;
+      /* Face the way they walk, and give a footstep bob while moving. */
+      var dir = w.fase === 'terug' ? -1 : 1;
+      var flip = (pos.dx * dir) < 0 ? -1 : 1;
+      var stap = w.fase === 'werk' ? 0 : Math.abs(Math.sin(klok * 6 + w.bob)) * p * 0.05;
+      var vy = sp.y - stap;
 
       ctx.fillStyle = 'rgba(0,0,0,.25)';
       ctx.beginPath();
       ctx.ellipse(sp.x, sp.y + p * 0.10, p * 0.09, p * 0.04, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      var img = atlas && atlas.werker(w.baan);
+      var img = atlas && atlas.werker(w.baan, w.variant);
       if (img) {
         var us = p * 0.62;
-        ctx.save();
-        ctx.translate(sp.x, sp.y + wieg);
-        ctx.scale(kijk, 1);
-        ctx.drawImage(img, -us / 2, -us * 0.78, us, us);
-        ctx.restore();
-        continue;
+        if (flip < 0) {
+          ctx.save();
+          ctx.translate(sp.x, vy);
+          ctx.scale(-1, 1);
+          ctx.drawImage(img, -us / 2, -us * 0.78, us, us);
+          ctx.restore();
+        } else {
+          ctx.drawImage(img, sp.x - us / 2, vy - us * 0.78, us, us);
+        }
+      } else {
+        var baan = Game.config.jobs[w.baan] || Game.config.jobs.werkloos;
+        ctx.fillStyle = baan.kleur;
+        ctx.beginPath();
+        ctx.arc(sp.x, vy, p * 0.075, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#f0e0c0';
+        ctx.beginPath();
+        ctx.arc(sp.x, vy - p * 0.09, p * 0.05, 0, Math.PI * 2);
+        ctx.fill();
       }
 
-      var baan = Game.config.jobs[w.baan] || Game.config.jobs.werkloos;
-      ctx.fillStyle = baan.kleur;
-      ctx.beginPath();
-      ctx.arc(sp.x, sp.y + wieg, p * 0.075, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#f0e0c0';
-      ctx.beginPath();
-      ctx.arc(sp.x, sp.y - p * 0.09 + wieg, p * 0.05, 0, Math.PI * 2);
-      ctx.fill();
+      /* Tool swing while working at the resource. */
+      if (w.fase === 'werk' && GEREEDSCHAP[w.baan]) {
+        ctx.save();
+        ctx.translate(sp.x + flip * p * 0.15, vy - p * 0.2);
+        ctx.rotate(Math.sin(w.slag * 9) * 0.7 * flip);
+        ctx.font = Math.round(p * 0.3) + 'px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(GEREEDSCHAP[w.baan], 0, 0);
+        ctx.restore();
+      }
+
+      /* The goods carried home on the way back. */
+      if (w.draagt && w.res) {
+        var em2 = (Game.config.resources[w.res] || {}).emoji;
+        if (em2) {
+          ctx.font = Math.round(p * 0.26) + 'px serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(em2, sp.x, vy - p * 0.62);
+        }
+      }
     }
   }
 
