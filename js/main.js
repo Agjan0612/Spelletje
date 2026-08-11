@@ -34,6 +34,7 @@
     Game.ui.panel.init(spel);
     Game.ui.quests.init(spel);
     Game.ui.overlay.init(spel);
+    if (Game.render.minimap) Game.render.minimap.init(spel);
 
     koppelInvoer(canvas);
     window.addEventListener('resize', pasMaatAan);
@@ -65,7 +66,8 @@
     spel.plaatsType = null;
     spel.cam.zoom = 1.3;
     spel.cam.centreerOpTegel(s.start ? s.start.x : s.kaart.b / 2, s.start ? s.start.y : s.kaart.h / 2);
-    Game.render.renderer.verversWandelaars(s);
+    if (Game.render.particles) Game.render.particles.reset();
+    Game.render.renderer.verversWereld(s);
     Game.ui.log.teken(s);
     Game.ui.hud.ververs(s);
     Game.ui.buildmenu.ververs(s);
@@ -133,8 +135,9 @@
       if (stappen >= MAX_STAPPEN) s.accu = 0;
     }
 
-    /* --- wandelaars en tekenen lopen op echte tijd --- */
+    /* --- wandelaars, effecten en tekenen lopen op echte tijd --- */
     Game.render.renderer.tickWandelaars(s, echteDt * Math.max(1, s.snelheid));
+    Game.render.renderer.tickEffecten(s, echteDt * Math.max(1, s.snelheid));
 
     Game.render.renderer.teken(s, spel.cam, {
       plaatsType: spel.plaatsType,
@@ -151,6 +154,7 @@
       Game.ui.quests.ververs(s);
       Game.ui.panel.ververs(s);
       Game.ui.buildmenu.ververs(s);
+      if (Game.render.minimap) Game.render.minimap.ververs(s);
     }
 
     wandelTimer += echteDt;
@@ -302,7 +306,7 @@
       if (!uitkomst.ok) {
         Game.ui.toast('⚠️ ' + uitkomst.reden, 1600);
       } else {
-        Game.render.renderer.verversWandelaars(s);
+        Game.render.renderer.verversGebouwen(s);
         Game.ui.buildmenu.ververs(s);
         /* Keep the building selected so you can place a row of houses. */
         if (!Game.core.state.kanBetalen(s, Game.config.gebouw(spel.plaatsType).kosten)) {

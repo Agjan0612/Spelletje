@@ -143,8 +143,8 @@
     {
       id: 'wachttoren', naam: 'Wachttoren', emoji: '🗼', tijdperk: 2, grootte: 1,
       kosten: { hout: 60, steen: 80 }, bouwtijd: 18, muur: '#a49a8c', dak: '#7a3b2c',
-      verdediging: 18,
-      beschrijving: 'Uitkijkpost tegen rovers. Elke toren voegt 18 verdediging toe.'
+      verdediging: 18, dekking: { straal: 6 },
+      beschrijving: 'Uitkijkpost tegen rovers. Voegt 18 verdediging toe — het meest waard dicht bij waar de rovers binnenvallen.'
     },
 
     /* ================= Tijdperk 3 — Handelsstad ================= */
@@ -173,8 +173,8 @@
     {
       id: 'stadsmuur', naam: 'Stadsmuur', emoji: '🧱', tijdperk: 3, grootte: 1,
       kosten: { steen: 45 }, bouwtijd: 6, muur: '#9aa0a6', dak: '#7e848a',
-      verdediging: 6,
-      beschrijving: 'Een muursegment. Goedkoop, en samen vormen ze een stevige verdediging.'
+      verdediging: 6, dekking: { straal: 3 },
+      beschrijving: 'Een muursegment. Beschermt vooral het stuk waar het staat — zet ze op de weg die rovers nemen.'
     },
     {
       id: 'herberg', naam: 'Herberg', emoji: '🍺', tijdperk: 3, grootte: 1,
