@@ -86,17 +86,27 @@
       }
     }
 
-    /* Camera viewport rectangle. */
+    /* Camera viewport outline. In iso the visible area is a rotated quad, so we
+       trace the four screen corners un-projected into tile space rather than a
+       single rectangle. */
     var cam = spel.cam;
-    var lb = cam.schermNaarWereld(0, 0);
-    var ro = cam.schermNaarWereld(cam.breedte, cam.hoogte);
     var TEGEL = Game.render.TEGEL;
+    var hoeken = [
+      cam.schermNaarWereld(0, 0),
+      cam.schermNaarWereld(cam.breedte, 0),
+      cam.schermNaarWereld(cam.breedte, cam.hoogte),
+      cam.schermNaarWereld(0, cam.hoogte)
+    ];
     ctx.strokeStyle = 'rgba(255,255,255,.85)';
     ctx.lineWidth = 1;
-    ctx.strokeRect(
-      offX + (lb.x / TEGEL) * schaal, offY + (lb.y / TEGEL) * schaal,
-      ((ro.x - lb.x) / TEGEL) * schaal, ((ro.y - lb.y) / TEGEL) * schaal
-    );
+    ctx.beginPath();
+    for (var h = 0; h < hoeken.length; h++) {
+      var px = offX + (hoeken[h].x / TEGEL) * schaal;
+      var py = offY + (hoeken[h].y / TEGEL) * schaal;
+      if (h === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.stroke();
   };
 
   M.teken = function () {};   /* kept for API symmetry */
