@@ -137,26 +137,45 @@
 
   /* -------------------------------------------------------------- terrein */
 
-  S.tekenTegel = function (ctx, tegel, sx, sy, p, seizoen, tijd, kaart, x, y) {
+  /* Flat ground: the tile diamond plus everything that lies in the tile plane
+     (coastline, water sparkle, field furrows). Raised features — trees, rocks,
+     mountains, the deer — are drawn separately by tekenKenmerk so the renderer
+     can depth-sort them against buildings and walkers. */
+  S.tekenGrond = function (ctx, tegel, sx, sy, p, seizoen, tijd, kaart, x, y) {
     var d = Game.render.diamant(sx, sy, p);
     var idx = kaart ? y * kaart.b + x : 0;
-    vulDiamant(ctx, d, eindKleur(S.terreinKleur(tegel, seizoen), tegel.v, schaduwFactor(kaart, idx)));
+    var kleur = eindKleur(S.terreinKleur(tegel, seizoen), tegel.v, schaduwFactor(kaart, idx));
+    vulDiamant(ctx, d, kleur);
+    /* Hairline-seam guard: a 1px stroke in the same colour closes the sub-pixel
+       cracks between neighbouring diamonds without changing the look. */
+    Game.render.padDiamant(ctx, d);
+    ctx.strokeStyle = kleur; ctx.lineWidth = 1; ctx.stroke();
 
-    if (p < 12) {
-      if (tegel.t === 'water' && kaart) kust(ctx, d, kaart, x, y);
+    if (tegel.t === 'water' && kaart) {
+      if (p >= 12) water(ctx, d, tegel, p, tijd, kaart, x, y); else kust(ctx, d, kaart, x, y);
       return;
     }
+    if (p >= 12 && tegel.t === 'vruchtbaar') akker(ctx, d, tegel, p, seizoen);
+  };
 
+  /* Whether a tile carries a raised feature worth its own depth-sorted draw. */
+  S.heeftKenmerk = function (tegel) {
+    return tegel.t === 'bos' || tegel.t === 'rots' || tegel.t === 'berg' ||
+           (tegel.t === 'gras' && tegel.n === 'wild' && tegel.amt > 0);
+  };
+
+  S.tekenKenmerk = function (ctx, tegel, sx, sy, p, seizoen) {
+    if (p < 12) return;
+    var d = Game.render.diamant(sx, sy, p);
     switch (tegel.t) {
-      case 'water': water(ctx, d, tegel, p, tijd, kaart, x, y); break;
       case 'bos': bomen(ctx, d, tegel, p, seizoen); break;
       case 'rots': rotsen(ctx, d, tegel, p); break;
-      case 'berg': berg(ctx, d, tegel, p, seizoen); break;
-      case 'vruchtbaar': akker(ctx, d, tegel, p, seizoen); break;
+      case 'berg':
+        berg(ctx, d, tegel, p, seizoen);
+        if (tegel.n && ADERKLEUR[tegel.n]) ader(ctx, d, tegel, p);
+        break;
       case 'gras': if (tegel.n === 'wild') wild(ctx, d, tegel, p); break;
     }
-
-    if (tegel.t === 'berg' && tegel.n && ADERKLEUR[tegel.n]) ader(ctx, d, tegel, p);
   };
 
   /* Which diamond edge a tile shares with each 4-neighbour. */
@@ -269,22 +288,26 @@
     }
   }
 
-  /* An iso mountain: a shaded pyramid rising out of the tile diamond. */
+  /* An iso mountain: a shaded pyramid rising out of the tile diamond. Height
+     varies with the tile's stable random `v`, and only the taller peaks (or any
+     peak in winter) wear a snow cap, so a range reads as a mix rather than a
+     field of identical spikes. */
   function berg(ctx, d, t, p, seizoen) {
-    var H = p * (0.7 + t.v * 0.35);
-    var apex = { x: d.cx + (t.v - 0.5) * p * 0.1, y: d.cy - H };
-    /* Two visible flanks; the near (bottom) corner splits them. */
+    var H = p * (0.5 + t.v * 0.75);
+    var apex = { x: d.cx + (t.v - 0.5) * p * 0.14, y: d.cy - H };
+    /* Two front flanks (near, bottom corner splits them) then the two back
+       flanks a touch darker for silhouette against neighbours. */
     tri(ctx, d.left, d.bottom, apex, '#6a645a');
     tri(ctx, d.bottom, d.right, apex, '#847d70');
-    /* Back flanks, a touch darker, for silhouette against neighbours. */
     tri(ctx, d.top, d.left, apex, '#565049');
     tri(ctx, d.top, d.right, apex, '#726b60');
 
-    var sneeuw = 0.3 + (seizoen === 3 ? 0.18 : 0) + t.v * 0.06;
+    var sneeuw = (seizoen === 3 ? 0.24 : 0) + (t.v > 0.5 ? (t.v - 0.5) * 0.9 : 0);
+    if (sneeuw < 0.08) return;
     var snL = lerp(apex, d.left, sneeuw), snR = lerp(apex, d.right, sneeuw);
     var snB = lerp(apex, d.bottom, sneeuw);
-    tri(ctx, apex, snL, snB, '#e7ecef');
-    tri(ctx, apex, snB, snR, '#f3f6f8');
+    tri(ctx, apex, snL, snB, '#dfe6ea');
+    tri(ctx, apex, snB, snR, '#eef3f6');
   }
 
   function ader(ctx, d, t, p) {
@@ -341,12 +364,12 @@
      house default. `stijl`: schuin (hip roof) | punt (steep spire) |
      plat (flat top) | geen (open top). */
   var ISO = {
-    _default:    { muurH: 0.55, stijl: 'schuin', dakH: 0.5, muur: '#c9b491', dak: '#7c4b2e' },
+    _default:    { muurH: 0.55, stijl: 'schuin', dakH: 0.46, muur: '#c9b491', dak: '#7c4b2e' },
 
-    dorpsplein:  { muurH: 0.4,  stijl: 'schuin', dakH: 0.42, vlag: true },
-    huisje:      { muurH: 0.5,  stijl: 'schuin', dakH: 0.5 },
-    herenhuis:   { muurH: 0.62, stijl: 'schuin', dakH: 0.5 },
-    boerderij:   { muurH: 0.46, stijl: 'schuin', dakH: 0.46, muur: '#cdb98d', dak: '#8a5a34' },
+    dorpsplein:  { muurH: 0.42, stijl: 'schuin', dakH: 0.4, vlag: true },
+    huisje:      { muurH: 0.52, stijl: 'schuin', dakH: 0.48 },
+    herenhuis:   { muurH: 0.64, stijl: 'schuin', dakH: 0.48 },
+    boerderij:   { muurH: 0.4,  stijl: 'schuin', dakH: 0.34, muur: '#cdb98d', dak: '#8a5a34' },
     herberg:     { muurH: 0.52, stijl: 'schuin', dakH: 0.5, uithang: true },
 
     stadhuis:    { muurH: 0.72, stijl: 'schuin', dakH: 0.55, muur: '#d8cba6', dak: '#7a5236', vlag: true },
@@ -418,12 +441,17 @@
     ctx.ellipse(foot.cx + foot.hw * 0.12, foot.cy + foot.hh * 0.28, foot.hw * 1.02, foot.hh * 1.02, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    var H = p * cfg.muurH * (0.78 + 0.22 * grootte);
+    var H = p * cfg.muurH * (0.8 + 0.2 * grootte);
     var top = isoMuren(ctx, foot, H, cfg.muur);
+
+    /* Door + shuttered windows on the visible wall faces. */
+    if (!NOGEVEL[def.id] && p * grootte >= 30) gevel(ctx, foot, top, cfg);
 
     if (cfg.kantelen) kantelen(ctx, top, p, cfg.muur);
 
-    var dakH = p * cfg.dakH * (0.82 + 0.18 * grootte);
+    /* Roofs stay proportionate as footprints grow (a big hall gets a broad,
+       not a towering, roof). */
+    var dakH = p * cfg.dakH * (0.85 + 0.08 * grootte);
     if (cfg.stijl === 'schuin' || cfg.stijl === 'punt') dakSchuin(ctx, top, dakH, cfg.dak);
     else if (cfg.stijl === 'plat') vulDiamant(ctx, top, verf(cfg.muur, 0.98));
     else vulDiamant(ctx, top, verf(cfg.muur, 0.9));   /* 'geen': open wall top */
@@ -453,13 +481,53 @@
     return top;
   }
 
-  /* Hip / spire roof rising from a top-face diamond to an apex. */
+  /* Hip / spire roof rising from a top-face diamond to an apex, with a lit
+     ridge line so the two front faces read as a proper roof. */
   function dakSchuin(ctx, t, dakH, dak) {
     var apex = { x: t.cx, y: t.cy - dakH };
     tri(ctx, t.top, t.left, apex, verf(dak, 0.66));   /* back-left  (far)  */
     tri(ctx, t.top, t.right, apex, verf(dak, 0.82));  /* back-right */
     tri(ctx, t.left, t.bottom, apex, verf(dak, 0.92)); /* front-left */
     tri(ctx, t.bottom, t.right, apex, verf(dak, 1.08));/* front-right (lit) */
+    ctx.strokeStyle = verf(dak, 1.2);
+    ctx.lineWidth = Math.max(1, dakH * 0.03);
+    ctx.beginPath();
+    ctx.moveTo(t.bottom.x, t.bottom.y); ctx.lineTo(apex.x, apex.y);
+    ctx.stroke();
+  }
+
+  /* Buildings whose walls stay plain (fortifications, towers, mills, mines). */
+  var NOGEVEL = {
+    stadsmuur: 1, wachttoren: 1, molen: 1, waterput: 1, kasteel: 1,
+    steengroeve: 1, kopermijn: 1, ijzermijn: 1, edelsteenmijn: 1
+  };
+
+  function gevelPunt(bl, br, tl, tr, u, v) {
+    return lerp(lerp(bl, br, u), lerp(tl, tr, u), v);
+  }
+
+  /* Door on the lit face + shuttered windows on both visible faces. */
+  function gevel(ctx, foot, top, cfg) {
+    gevelVlak(ctx, foot.bottom, foot.right, top.bottom, top.right, cfg, true);
+    gevelVlak(ctx, foot.left, foot.bottom, top.left, top.bottom, cfg, false);
+  }
+
+  function gevelVlak(ctx, bl, br, tl, tr, cfg, lit) {
+    if (lit) {
+      quad(ctx,
+        gevelPunt(bl, br, tl, tr, 0.44, 0.02), gevelPunt(bl, br, tl, tr, 0.6, 0.02),
+        gevelPunt(bl, br, tl, tr, 0.6, 0.5),  gevelPunt(bl, br, tl, tr, 0.44, 0.5),
+        verf(cfg.dak, 0.55));
+    }
+    var raam = lit ? 'rgba(42,30,18,.9)' : 'rgba(30,22,14,.92)';
+    var us = lit ? [0.2, 0.82] : [0.32, 0.68];
+    for (var i = 0; i < us.length; i++) {
+      var u = us[i];
+      quad(ctx,
+        gevelPunt(bl, br, tl, tr, u - 0.07, 0.56), gevelPunt(bl, br, tl, tr, u + 0.07, 0.56),
+        gevelPunt(bl, br, tl, tr, u + 0.07, 0.82), gevelPunt(bl, br, tl, tr, u - 0.07, 0.82),
+        raam);
+    }
   }
 
   /* Crenellated parapet along the two near top edges. */
