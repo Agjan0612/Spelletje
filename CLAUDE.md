@@ -62,4 +62,4 @@ The activity systems are list-driven in the same spirit: a new random event is o
 
 ## Branches
 
-Develop on `claude/medieval-city-builder-game-89zcsx`. `main` exists as a copy at the same commit so GitHub Pages can serve it; keep them in sync when publishing.
+GitHub Pages serves the game from **`main`**, so `main` is only ever a copy of the latest published state — never develop directly on it. Feature work happens on `claude/*` branches. When a feature is ready to publish, bring `main` up to that branch (a fast-forward when the branch already contains `main`, otherwise merge `main` in first and resolve) so the two match. If a feature branch was cut from an older point, merge current `main` into it before publishing so nothing already on `main` is lost.
