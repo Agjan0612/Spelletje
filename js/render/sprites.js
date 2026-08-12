@@ -1,7 +1,12 @@
-/* All drawing of terrain and buildings. Shapes are the baseline; where the
-   image atlas (js/render/atlas.js) has a sprite loaded it is drawn instead
-   (buildings, trees, rocks), otherwise these shapes are the fallback so the
-   game still runs straight from a folder even without the assets. */
+/* All drawing of terrain and buildings, in an isometric (2:1 diamond) view.
+   The camera (js/render/camera.js) does the projection; this module draws the
+   shapes that sit on that grid.
+
+   Terrain tiles are drawn as diamonds. Buildings are drawn as procedural
+   isometric volumes (walls + roof) rather than from the image atlas: the Kenney
+   sprites are top-down and would clash with the tilted ground, so in iso they
+   are bypassed here. Trees and rocks stay as upright billboards from the atlas
+   (with a hand-drawn fallback) so the game still runs without the assets. */
 (function (Game) {
 
   var S = {};
@@ -63,540 +68,525 @@
     return (kaart && schaduwCache.arr && schaduwCache.seed === kaart.seed) ? schaduwCache.arr[i] : 1;
   }
 
+  /* -------------------------------------------------------- colour helpers */
+
+  function ontleed(kleur) {
+    var m = kleur.match(/^#(\w\w)(\w\w)(\w\w)$/);
+    if (m) return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
+    m = kleur.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+    if (m) return [+m[1], +m[2], +m[3]];
+    return [200, 200, 200];
+  }
+
+  /* Multiply a colour by a brightness factor, returning an rgb() string. */
+  function verf(kleur, f) {
+    var c = ontleed(kleur);
+    return 'rgb(' + Game.util.clamp(Math.round(c[0] * f), 0, 255) + ',' +
+                    Game.util.clamp(Math.round(c[1] * f), 0, 255) + ',' +
+                    Game.util.clamp(Math.round(c[2] * f), 0, 255) + ')';
+  }
+
   /* Final tile colour: base hex, per-tile brightness `v`, and the hillshade. */
   function eindKleur(hex, v, shade) {
-    var m = hex.match(/^#(\w\w)(\w\w)(\w\w)$/);
-    if (!m) return hex;
-    var f = (0.88 + v * 0.24) * shade;
-    var r = Game.util.clamp(Math.round(parseInt(m[1], 16) * f), 0, 255);
-    var g = Game.util.clamp(Math.round(parseInt(m[2], 16) * f), 0, 255);
-    var b = Game.util.clamp(Math.round(parseInt(m[3], 16) * f), 0, 255);
-    return 'rgb(' + r + ',' + g + ',' + b + ')';
+    return verf(hex, (0.88 + v * 0.24) * shade);
   }
 
   /* Slight per-tile brightness so a field of grass is not a flat colour. */
   function schakering(kleur, v) {
-    var m = kleur.match(/^#(\w\w)(\w\w)(\w\w)$/);
-    if (!m) return kleur;
-    var f = 0.88 + v * 0.24;
-    var r = Game.util.clamp(Math.round(parseInt(m[1], 16) * f), 0, 255);
-    var g = Game.util.clamp(Math.round(parseInt(m[2], 16) * f), 0, 255);
-    var b = Game.util.clamp(Math.round(parseInt(m[3], 16) * f), 0, 255);
-    return 'rgb(' + r + ',' + g + ',' + b + ')';
+    return verf(kleur, 0.88 + v * 0.24);
   }
   S.schakering = schakering;
+
+  /* ------------------------------------------------------- iso primitives */
+
+  function lerp(a, b, t) { return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }; }
+  function omhoog(pt, H) { return { x: pt.x, y: pt.y - H }; }
+
+  function diamantVan(cx, cy, hw, hh) {
+    return {
+      top:    { x: cx,      y: cy - hh },
+      right:  { x: cx + hw, y: cy },
+      bottom: { x: cx,      y: cy + hh },
+      left:   { x: cx - hw, y: cy },
+      cx: cx, cy: cy, hw: hw, hh: hh
+    };
+  }
+
+  function vulDiamant(ctx, d, kleur) {
+    Game.render.padDiamant(ctx, d);
+    ctx.fillStyle = kleur;
+    ctx.fill();
+  }
+
+  function quad(ctx, a, b, c, d, kleur) {
+    ctx.fillStyle = kleur;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+    ctx.lineTo(c.x, c.y); ctx.lineTo(d.x, d.y);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function tri(ctx, a, b, c, kleur) {
+    ctx.fillStyle = kleur;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(c.x, c.y);
+    ctx.closePath();
+    ctx.fill();
+  }
 
   /* -------------------------------------------------------------- terrein */
 
   S.tekenTegel = function (ctx, tegel, sx, sy, p, seizoen, tijd, kaart, x, y) {
+    var d = Game.render.diamant(sx, sy, p);
     var idx = kaart ? y * kaart.b + x : 0;
-    ctx.fillStyle = eindKleur(S.terreinKleur(tegel, seizoen), tegel.v, schaduwFactor(kaart, idx));
-    ctx.fillRect(sx, sy, p + 1, p + 1);
-
-    /* Cliff shadow: darken the top/left edge where a much higher neighbour
-       casts onto this tile (light comes from the top-left). */
-    if (kaart && p >= 10 && tegel.t !== 'water') cliffSchaduw(ctx, kaart, x, y, sx, sy, p, tegel);
+    vulDiamant(ctx, d, eindKleur(S.terreinKleur(tegel, seizoen), tegel.v, schaduwFactor(kaart, idx)));
 
     if (p < 12) {
-      /* Even zoomed out, keep the shallow rim so coastlines stay readable. */
-      if (tegel.t === 'water' && kaart) kust(ctx, tegel, sx, sy, p, kaart, x, y);
+      if (tegel.t === 'water' && kaart) kust(ctx, d, kaart, x, y);
       return;
     }
 
     switch (tegel.t) {
-      case 'water': water(ctx, tegel, sx, sy, p, tijd, kaart, x, y); break;
-      case 'bos': bomen(ctx, tegel, sx, sy, p, seizoen); break;
-      case 'rots': rotsen(ctx, tegel, sx, sy, p); break;
-      case 'berg': berg(ctx, tegel, sx, sy, p, seizoen); break;
-      case 'vruchtbaar': akker(ctx, tegel, sx, sy, p, seizoen); break;
-      case 'gras': if (tegel.n === 'wild') wild(ctx, tegel, sx, sy, p); break;
+      case 'water': water(ctx, d, tegel, p, tijd, kaart, x, y); break;
+      case 'bos': bomen(ctx, d, tegel, p, seizoen); break;
+      case 'rots': rotsen(ctx, d, tegel, p); break;
+      case 'berg': berg(ctx, d, tegel, p, seizoen); break;
+      case 'vruchtbaar': akker(ctx, d, tegel, p, seizoen); break;
+      case 'gras': if (tegel.n === 'wild') wild(ctx, d, tegel, p); break;
     }
 
-    if (tegel.t === 'berg' && tegel.n && ADERKLEUR[tegel.n]) {
-      ader(ctx, tegel, sx, sy, p);
-    }
+    if (tegel.t === 'berg' && tegel.n && ADERKLEUR[tegel.n]) ader(ctx, d, tegel, p);
   };
 
-  function cliffSchaduw(ctx, kaart, x, y, sx, sy, p, tegel) {
-    var hc = tegel.h || 0;
-    var boven = tegelH(kaart, x, y - 1, hc);
-    var links = tegelH(kaart, x - 1, y, hc);
-    var dB = boven - hc, dL = links - hc;
-    if (dB < 0.11 && dL < 0.11) return;
-    if (dB >= 0.11) {
-      ctx.fillStyle = 'rgba(18,22,30,' + Math.min(0.34, dB * 1.1).toFixed(3) + ')';
-      ctx.fillRect(sx, sy, p + 1, p * 0.42);
-    }
-    if (dL >= 0.11) {
-      ctx.fillStyle = 'rgba(18,22,30,' + Math.min(0.34, dL * 1.1).toFixed(3) + ')';
-      ctx.fillRect(sx, sy, p * 0.42, p + 1);
-    }
-  }
+  /* Which diamond edge a tile shares with each 4-neighbour. */
+  var BUUREDGE = [
+    { dx: -1, dy: 0, a: 'top',   b: 'left'   },  /* west  */
+    { dx: 0, dy: -1, a: 'top',   b: 'right'  },  /* north */
+    { dx: 1, dy: 0,  a: 'right', b: 'bottom' },  /* east  */
+    { dx: 0, dy: 1,  a: 'left',  b: 'bottom' }   /* south */
+  ];
 
-  /* Lighter shallow band on the edges of a water tile that face land. */
-  function kust(ctx, t, x, y, p, kaart, tx, ty) {
-    var buren = [[0, -1], [0, 1], [-1, 0], [1, 0]];
-    ctx.fillStyle = 'rgba(150,200,205,.28)';
-    for (var i = 0; i < buren.length; i++) {
-      var b = Game.core.map.tegel(kaart, tx + buren[i][0], ty + buren[i][1]);
+  /* Lighter shallow rim on the water-tile edges that face land. */
+  function kust(ctx, d, kaart, tx, ty) {
+    ctx.strokeStyle = 'rgba(150,200,205,.5)';
+    ctx.lineWidth = Math.max(1, d.hw * 0.14);
+    ctx.beginPath();
+    for (var i = 0; i < BUUREDGE.length; i++) {
+      var b = Game.core.map.tegel(kaart, tx + BUUREDGE[i].dx, ty + BUUREDGE[i].dy);
       if (!b || b.t === 'water') continue;
-      var dx = buren[i][0], dy = buren[i][1];
-      var bw = dx === 0 ? p + 1 : p * 0.22;
-      var bh = dy === 0 ? p + 1 : p * 0.22;
-      var ox = dx > 0 ? p * 0.78 : 0;
-      var oy = dy > 0 ? p * 0.78 : 0;
-      ctx.fillRect(x + ox, y + oy, bw, bh);
+      var a = d[BUUREDGE[i].a], c = d[BUUREDGE[i].b];
+      ctx.moveTo(a.x, a.y); ctx.lineTo(c.x, c.y);
     }
-  }
-
-  function water(ctx, t, x, y, p, tijd, kaart, tx, ty) {
-    /* Shallows first, so waves read on top of them. */
-    if (kaart) kust(ctx, t, x, y, p, kaart, tx, ty);
-
-    var golf = Math.sin(tijd * 1.3 + t.v * 9) * p * 0.06;
-    var golf2 = Math.sin(tijd * 0.9 + t.v * 5 + 1.7) * p * 0.05;
-
-    ctx.strokeStyle = 'rgba(255,255,255,.16)';
-    ctx.lineWidth = Math.max(1, p * 0.045);
-    ctx.beginPath();
-    ctx.moveTo(x + p * 0.16, y + p * 0.34 + golf);
-    ctx.lineTo(x + p * 0.46, y + p * 0.34 + golf);
-    ctx.moveTo(x + p * 0.54, y + p * 0.58 - golf2);
-    ctx.lineTo(x + p * 0.86, y + p * 0.58 - golf2);
-    ctx.stroke();
-
-    /* A second, fainter band with a drifting highlight. */
-    ctx.strokeStyle = 'rgba(210,235,240,.10)';
-    ctx.lineWidth = Math.max(1, p * 0.03);
-    ctx.beginPath();
-    ctx.moveTo(x + p * 0.22, y + p * 0.76 + golf2);
-    ctx.lineTo(x + p * 0.6, y + p * 0.76 + golf2);
     ctx.stroke();
   }
 
-  function bomen(ctx, t, x, y, p, seizoen) {
+  function water(ctx, d, t, p, tijd, kaart, tx, ty) {
+    if (kaart) kust(ctx, d, kaart, tx, ty);
+    var golf = Math.sin(tijd * 1.3 + t.v * 9) * p * 0.05;
+    var golf2 = Math.sin(tijd * 0.9 + t.v * 5 + 1.7) * p * 0.045;
+
+    ctx.strokeStyle = 'rgba(255,255,255,.14)';
+    ctx.lineWidth = Math.max(1, p * 0.04);
+    ctx.beginPath();
+    ctx.moveTo(d.cx - d.hw * 0.34, d.cy - d.hh * 0.2 + golf);
+    ctx.lineTo(d.cx + d.hw * 0.04, d.cy - d.hh * 0.2 + golf);
+    ctx.moveTo(d.cx + d.hw * 0.06, d.cy + d.hh * 0.3 - golf2);
+    ctx.lineTo(d.cx + d.hw * 0.42, d.cy + d.hh * 0.3 - golf2);
+    ctx.stroke();
+  }
+
+  /* An upright billboard (sprite or fallback triangle tree) at a point. */
+  function bomen(ctx, d, t, p, seizoen) {
     var deel = t.max > 0 ? Game.util.clamp(t.amt / t.max, 0, 1) : 0;
     var aantal = Math.max(1, Math.round(1 + deel * 2));
     var bladKleur = ['#2f5c2a', '#2b5526', '#7a5a1e', '#4a5a4a'][seizoen];
-    var stam = '#4a3320';
-
     var atlas = Game.render.atlas;
-    for (var i = 0; i < aantal; i++) {
-      var ox = x + p * (0.24 + ((i * 37 + t.v * 100) % 55) / 100);
-      var oy = y + p * (0.28 + ((i * 61 + t.v * 70) % 45) / 100);
 
-      /* Ground shadow so the canopy reads as standing above the grass. */
+    for (var i = 0; i < aantal; i++) {
+      var ox = d.cx + p * (((i * 37 + t.v * 100) % 46) / 100 - 0.23);
+      var oy = d.cy + p * (((i * 61 + t.v * 70) % 20) / 100 - 0.06);
+
       ctx.fillStyle = 'rgba(0,0,0,.16)';
       ctx.beginPath();
-      ctx.ellipse(ox + p * 0.04, oy + p * 0.12, p * 0.12, p * 0.05, 0, 0, Math.PI * 2);
+      ctx.ellipse(ox, oy + p * 0.03, p * 0.11, p * 0.05, 0, 0, Math.PI * 2);
       ctx.fill();
 
       var img = atlas && atlas.boom(t.v, i);
       if (img) {
-        var st = p * (0.62 + deel * 0.24);
-        ctx.drawImage(img, ox - st / 2, oy - st * 0.72, st, st);
+        var st = p * (0.6 + deel * 0.24);
+        ctx.drawImage(img, ox - st / 2, oy - st * 0.82, st, st);
         continue;
       }
 
-      var r = p * (0.15 + deel * 0.07);
-      ctx.fillStyle = stam;
-      ctx.fillRect(ox - p * 0.025, oy, p * 0.05, p * 0.16);
-
+      var r = p * (0.14 + deel * 0.07);
+      ctx.fillStyle = '#4a3320';
+      ctx.fillRect(ox - p * 0.025, oy - p * 0.02, p * 0.05, p * 0.18);
       ctx.fillStyle = bladKleur;
       ctx.beginPath();
-      ctx.moveTo(ox, oy - r * 1.5);
-      ctx.lineTo(ox + r, oy + r * 0.35);
-      ctx.lineTo(ox - r, oy + r * 0.35);
+      ctx.moveTo(ox, oy - r * 1.9);
+      ctx.lineTo(ox + r, oy - p * 0.02);
+      ctx.lineTo(ox - r, oy - p * 0.02);
       ctx.closePath();
       ctx.fill();
     }
 
-    /* A cleared patch shows as stumps. */
     if (deel < 0.25) {
-      ctx.fillStyle = 'rgba(70,50,30,.55)';
+      ctx.fillStyle = 'rgba(70,50,30,.5)';
       ctx.beginPath();
-      ctx.arc(x + p * 0.72, y + p * 0.74, p * 0.06, 0, Math.PI * 2);
+      ctx.arc(d.cx + p * 0.2, d.cy + p * 0.16, p * 0.06, 0, Math.PI * 2);
       ctx.fill();
     }
   }
 
-  function rotsen(ctx, t, x, y, p) {
+  function rotsen(ctx, d, t, p) {
     var atlas = Game.render.atlas;
     for (var i = 0; i < 3; i++) {
-      var ox = x + p * (0.2 + ((i * 41 + t.v * 90) % 60) / 100);
-      var oy = y + p * (0.25 + ((i * 67 + t.v * 60) % 50) / 100);
+      var ox = d.cx + p * (((i * 41 + t.v * 90) % 50) / 100 - 0.25);
+      var oy = d.cy + p * (((i * 67 + t.v * 60) % 26) / 100 - 0.1);
 
       ctx.fillStyle = 'rgba(0,0,0,.15)';
       ctx.beginPath();
-      ctx.ellipse(ox + p * 0.03, oy + p * 0.1, p * 0.11, p * 0.045, 0, 0, Math.PI * 2);
+      ctx.ellipse(ox, oy + p * 0.05, p * 0.1, p * 0.045, 0, 0, Math.PI * 2);
       ctx.fill();
 
       var img = atlas && atlas.rots(t.v, i);
       if (img) {
         var rs = p * (0.34 + ((i * 13 + t.v * 30) % 10) / 100);
-        ctx.drawImage(img, ox - rs / 2, oy - rs * 0.6, rs, rs);
+        ctx.drawImage(img, ox - rs / 2, oy - rs * 0.62, rs, rs);
         continue;
       }
 
-      ctx.fillStyle = '#9a968c';
-
       var r = p * (0.1 + ((i * 13 + t.v * 30) % 8) / 100);
+      ctx.fillStyle = '#9a968c';
       ctx.beginPath();
-      ctx.moveTo(ox - r, oy + r * 0.7);
+      ctx.moveTo(ox - r, oy + r * 0.5);
       ctx.lineTo(ox - r * 0.4, oy - r);
       ctx.lineTo(ox + r * 0.6, oy - r * 0.8);
-      ctx.lineTo(ox + r, oy + r * 0.7);
+      ctx.lineTo(ox + r, oy + r * 0.5);
       ctx.closePath();
       ctx.fill();
     }
   }
 
-  function berg(ctx, t, x, y, p, seizoen) {
-    var top = x + p * (0.44 + t.v * 0.12);       /* the peak wanders a little */
-    /* Shaded (right) flank first, then the lit (left) flank on top. */
-    ctx.fillStyle = '#5d574e';
-    ctx.beginPath();
-    ctx.moveTo(top, y + p * 0.1);
-    ctx.lineTo(x + p * 0.96, y + p * 0.92);
-    ctx.lineTo(x + p * 0.5, y + p * 0.92);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = '#807a6f';
-    ctx.beginPath();
-    ctx.moveTo(top, y + p * 0.1);
-    ctx.lineTo(x + p * 0.5, y + p * 0.92);
-    ctx.lineTo(x + p * 0.04, y + p * 0.92);
-    ctx.closePath();
-    ctx.fill();
+  /* An iso mountain: a shaded pyramid rising out of the tile diamond. */
+  function berg(ctx, d, t, p, seizoen) {
+    var H = p * (0.7 + t.v * 0.35);
+    var apex = { x: d.cx + (t.v - 0.5) * p * 0.1, y: d.cy - H };
+    /* Two visible flanks; the near (bottom) corner splits them. */
+    tri(ctx, d.left, d.bottom, apex, '#6a645a');
+    tri(ctx, d.bottom, d.right, apex, '#847d70');
+    /* Back flanks, a touch darker, for silhouette against neighbours. */
+    tri(ctx, d.top, d.left, apex, '#565049');
+    tri(ctx, d.top, d.right, apex, '#726b60');
 
-    /* Snow cap, larger in winter, with a shaded side to match the flanks. */
-    var sneeuw = 0.24 + (seizoen === 3 ? 0.16 : 0) + t.v * 0.06;
-    ctx.fillStyle = '#eef2f5';
-    ctx.beginPath();
-    ctx.moveTo(top, y + p * 0.1);
-    ctx.lineTo(top + p * sneeuw * 0.7, y + p * (0.1 + sneeuw));
-    ctx.lineTo(top - p * sneeuw * 0.7, y + p * (0.1 + sneeuw));
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = 'rgba(180,195,210,.6)';
-    ctx.beginPath();
-    ctx.moveTo(top, y + p * 0.1);
-    ctx.lineTo(top + p * sneeuw * 0.7, y + p * (0.1 + sneeuw));
-    ctx.lineTo(top, y + p * (0.1 + sneeuw));
-    ctx.closePath();
-    ctx.fill();
+    var sneeuw = 0.3 + (seizoen === 3 ? 0.18 : 0) + t.v * 0.06;
+    var snL = lerp(apex, d.left, sneeuw), snR = lerp(apex, d.right, sneeuw);
+    var snB = lerp(apex, d.bottom, sneeuw);
+    tri(ctx, apex, snL, snB, '#e7ecef');
+    tri(ctx, apex, snB, snR, '#f3f6f8');
   }
 
-  function ader(ctx, t, x, y, p) {
+  function ader(ctx, d, t, p) {
     var leeg = t.max > 0 ? Game.util.clamp(t.amt / t.max, 0, 1) : 0;
     if (leeg <= 0.02) return;
     ctx.fillStyle = ADERKLEUR[t.n];
     ctx.globalAlpha = 0.5 + leeg * 0.5;
     for (var i = 0; i < 3; i++) {
-      var ox = x + p * (0.3 + ((i * 29 + t.v * 80) % 45) / 100);
-      var oy = y + p * (0.45 + ((i * 53 + t.v * 50) % 40) / 100);
+      var ox = d.cx + p * (((i * 29 + t.v * 80) % 30) / 100 - 0.15);
+      var oy = d.cy + p * (((i * 53 + t.v * 50) % 24) / 100 - 0.04);
       ctx.beginPath();
-      ctx.arc(ox, oy, p * 0.055, 0, Math.PI * 2);
+      ctx.arc(ox, oy, p * 0.05, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
   }
 
-  function akker(ctx, t, x, y, p, seizoen) {
+  /* Field furrows running along the tile's world-x rows. */
+  function akker(ctx, d, t, p, seizoen) {
     if (seizoen === 3) return;
     ctx.strokeStyle = ['rgba(150,180,90,.5)', 'rgba(210,190,80,.6)', 'rgba(220,190,70,.7)', ''][seizoen];
-    ctx.lineWidth = Math.max(1, p * 0.045);
+    ctx.lineWidth = Math.max(1, p * 0.04);
     ctx.beginPath();
     for (var i = 1; i < 4; i++) {
-      ctx.moveTo(x + p * 0.12, y + p * (i / 4));
-      ctx.lineTo(x + p * 0.88, y + p * (i / 4));
+      var f = i / 4;
+      var a = lerp(d.top, d.left, f), b = lerp(d.right, d.bottom, f);
+      ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
     }
     ctx.stroke();
   }
 
-  function wild(ctx, t, x, y, p) {
+  function wild(ctx, d, t, p) {
     if (t.amt <= 0) return;
-    ctx.font = Math.round(p * 0.5) + 'px serif';
+    ctx.font = Math.round(p * 0.46) + 'px serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('🦌', x + p * 0.5, y + p * 0.55);
+    ctx.fillText('🦌', d.cx, d.cy - p * 0.14);
   }
 
   /* -------------------------------------------------------------- gebouwen */
 
-  /* Per-age palette for the hand-drawn houses/halls, so a village visibly
-     matures: daub → timber → stone → half-timber, thatch → tile, and a
-     chimney from the stone age on. Only touches the shape fallback; sprites
-     keep their own look (see the atlas note in the roadmap). */
+  /* Per-age palette for the tiered houses/halls, so a village visibly matures:
+     daub → timber → stone → half-timber, thatch → tile. */
   var TIER_PALET = {
-    1: { muur: '#d8c39a', dak: '#7c4b2e', schoorsteen: false },
-    2: { muur: '#c9b487', dak: '#8a5a3a', schoorsteen: false },
-    3: { muur: '#c6c2b6', dak: '#6a6258', schoorsteen: true },
-    4: { muur: '#e6dcc0', dak: '#7a4030', schoorsteen: true, vakwerk: true }
+    1: { muur: '#d8c39a', dak: '#7c4b2e' },
+    2: { muur: '#c9b487', dak: '#8a5a3a' },
+    3: { muur: '#c6c2b6', dak: '#6a6258' },
+    4: { muur: '#e6dcc0', dak: '#7a4030' }
   };
-
   var TIER_SHAPES = { dorpsplein: 1, huisje: 1, herenhuis: 1, herberg: 1, marktplaats: 1 };
 
-  function tierDef(def, tier) {
-    if (!tier || tier <= 1 || !TIER_SHAPES[def.id]) return def;
-    var pal = TIER_PALET[Game.util.clamp(tier, 1, 4)];
-    return {
-      id: def.id, naam: def.naam, emoji: def.emoji, grootte: def.grootte,
-      muur: pal.muur, dak: pal.dak, _schoorsteen: pal.schoorsteen, _vakwerk: pal.vakwerk
+  /* Per-building iso shape: wall height & roof style/height (as fractions of a
+     tile), plus optional flourishes and colours. Anything not listed uses the
+     house default. `stijl`: schuin (hip roof) | punt (steep spire) |
+     plat (flat top) | geen (open top). */
+  var ISO = {
+    _default:    { muurH: 0.55, stijl: 'schuin', dakH: 0.5, muur: '#c9b491', dak: '#7c4b2e' },
+
+    dorpsplein:  { muurH: 0.4,  stijl: 'schuin', dakH: 0.42, vlag: true },
+    huisje:      { muurH: 0.5,  stijl: 'schuin', dakH: 0.5 },
+    herenhuis:   { muurH: 0.62, stijl: 'schuin', dakH: 0.5 },
+    boerderij:   { muurH: 0.46, stijl: 'schuin', dakH: 0.46, muur: '#cdb98d', dak: '#8a5a34' },
+    herberg:     { muurH: 0.52, stijl: 'schuin', dakH: 0.5, uithang: true },
+
+    stadhuis:    { muurH: 0.72, stijl: 'schuin', dakH: 0.55, muur: '#d8cba6', dak: '#7a5236', vlag: true },
+    handelshuis: { muurH: 0.66, stijl: 'schuin', dakH: 0.5, muur: '#d3c39c', dak: '#7a5236', vlag: true },
+    universiteit:{ muurH: 0.72, stijl: 'schuin', dakH: 0.52, muur: '#d8cba6', dak: '#5f5852', vlag: true },
+    gildehuis:   { muurH: 0.64, stijl: 'schuin', dakH: 0.5, muur: '#d3c39c', dak: '#6a5240' },
+
+    marktplaats: { muurH: 0.3,  stijl: 'plat',   dakH: 0.12, muur: '#c7b083', dak: '#9c6a3a', luifel: true },
+    voorraadschuur:{ muurH: 0.42, stijl: 'schuin', dakH: 0.44, muur: '#b99a6a', dak: '#6e4a2c' },
+    pakhuis:     { muurH: 0.5,  stijl: 'schuin', dakH: 0.46, muur: '#b99a6a', dak: '#5f4530' },
+    waterput:    { muurH: 0.3,  stijl: 'schuin', dakH: 0.4,  smal: 0.5, muur: '#a9a094', dak: '#6a4a30' },
+
+    kapel:       { muurH: 0.62, stijl: 'punt',   dakH: 0.95, muur: '#e2dac4', dak: '#6a6258', kruis: true },
+    kerk:        { muurH: 0.74, stijl: 'punt',   dakH: 1.2,  muur: '#e2dac4', dak: '#616058', kruis: true },
+    kathedraal:  { muurH: 0.9,  stijl: 'punt',   dakH: 1.5,  muur: '#e6dfca', dak: '#5a5a54', kruis: true },
+
+    wachttoren:  { muurH: 1.15, stijl: 'punt',   dakH: 0.7,  smal: 0.5, muur: '#a49a8c', dak: '#7a3b2c' },
+    kazerne:     { muurH: 0.6,  stijl: 'schuin', dakH: 0.44, muur: '#b0a692', dak: '#5f4a3a' },
+    smederij:    { muurH: 0.5,  stijl: 'schuin', dakH: 0.44, muur: '#b8a483', dak: '#5a4636' },
+    wapensmid:   { muurH: 0.56, stijl: 'schuin', dakH: 0.46, muur: '#b0a08a', dak: '#5a4636' },
+
+    kasteel:     { muurH: 1.05, stijl: 'plat',   dakH: 0.1,  muur: '#b8b0a2', dak: '#5a3a30', kantelen: true, torens: true },
+    stadsmuur:   { muurH: 0.55, stijl: 'geen',   dakH: 0,    muur: '#9aa0a6', kantelen: true },
+    molen:       { muurH: 0.72, stijl: 'schuin', dakH: 0.44, smal: 0.62, muur: '#d5c7a4', dak: '#7c4b2e', wieken: true },
+
+    steengroeve: { muurH: 0.34, stijl: 'schuin', dakH: 0.4,  muur: '#b0a894', dak: '#6a5a44' },
+    kopermijn:   { muurH: 0.34, stijl: 'schuin', dakH: 0.4,  muur: '#b0a894', dak: '#6a5a44' },
+    ijzermijn:   { muurH: 0.34, stijl: 'schuin', dakH: 0.4,  muur: '#b0a894', dak: '#6a5a44' },
+    edelsteenmijn:{ muurH: 0.34, stijl: 'schuin', dakH: 0.4, muur: '#b0a894', dak: '#6a5a44' },
+    houthakkershut:{ muurH: 0.44, stijl: 'schuin', dakH: 0.46, muur: '#b99a6a', dak: '#5f4530' },
+    jachthut:    { muurH: 0.42, stijl: 'schuin', dakH: 0.46, muur: '#b99a6a', dak: '#5f4530' },
+    vissershut:  { muurH: 0.42, stijl: 'schuin', dakH: 0.46, muur: '#b99a6a', dak: '#5f4530' },
+    bakkerij:    { muurH: 0.5,  stijl: 'schuin', dakH: 0.46, muur: '#cdb98d', dak: '#8a5a34' },
+    juwelier:    { muurH: 0.56, stijl: 'schuin', dakH: 0.5, muur: '#d3c39c', dak: '#6a5240' }
+  };
+
+  function isoCfg(def, tier) {
+    var basis = ISO[def.id] || ISO._default;
+    var cfg = {
+      muurH: basis.muurH != null ? basis.muurH : ISO._default.muurH,
+      stijl: basis.stijl || ISO._default.stijl,
+      dakH: basis.dakH != null ? basis.dakH : ISO._default.dakH,
+      muur: basis.muur || ISO._default.muur,
+      dak: basis.dak || ISO._default.dak,
+      smal: basis.smal || 0,
+      vlag: basis.vlag, kruis: basis.kruis, kantelen: basis.kantelen,
+      torens: basis.torens, wieken: basis.wieken, luifel: basis.luifel,
+      uithang: basis.uithang
     };
+    /* Tiered houses recolour with the age palette. */
+    if (tier && tier > 1 && TIER_SHAPES[def.id]) {
+      var pal = TIER_PALET[Game.util.clamp(tier, 1, 4)];
+      cfg.muur = pal.muur; cfg.dak = pal.dak;
+    }
+    return cfg;
   }
 
-  /* Draws a building filling the given pixel box. */
-  S.tekenGebouw = function (ctx, def, x, y, w, h, opties) {
+  /* Draws a building. (sx, sy) is the projected *top corner* of its footprint,
+     which spans `grootte` tiles; p is pixels-per-tile. */
+  S.tekenGebouw = function (ctx, def, sx, sy, p, grootte, opties) {
     opties = opties || {};
-    var schaduw = 'rgba(0,0,0,.28)';
+    var cfg = isoCfg(def, opties.tijdperk);
+    var foot = Game.render.diamant(sx, sy, p * grootte);
+    if (cfg.smal) foot = diamantVan(foot.cx, foot.cy, foot.hw * (1 - cfg.smal * 0.5), foot.hh * (1 - cfg.smal * 0.5));
 
-    ctx.fillStyle = schaduw;
+    /* Ground shadow, offset toward the light-away (lower-right) side. */
+    ctx.fillStyle = 'rgba(0,0,0,.22)';
     ctx.beginPath();
-    ctx.ellipse(x + w / 2, y + h * 0.93, w * 0.42, h * 0.12, 0, 0, Math.PI * 2);
+    ctx.ellipse(foot.cx + foot.hw * 0.12, foot.cy + foot.hh * 0.28, foot.hw * 1.02, foot.hh * 1.02, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    /* Pretty sprite if the atlas has one loaded; otherwise fall through to the
-       hand-drawn shapes below (which also cover the assets-missing case). */
-    var img = Game.render.atlas && Game.render.atlas.gebouw(def.id);
-    if (img) {
-      var teken = w * 1.12;                 /* lift so the roof clears the tile */
-      ctx.drawImage(img, x + (w - teken) / 2, y + h - teken, teken, teken);
-      if (opties.geschroeid) schroei(ctx, x, y, w, h, opties.geschroeid);
-      return;
-    }
+    var H = p * cfg.muurH * (0.78 + 0.22 * grootte);
+    var top = isoMuren(ctx, foot, H, cfg.muur);
 
-    var vdef = tierDef(def, opties.tijdperk);
+    if (cfg.kantelen) kantelen(ctx, top, p, cfg.muur);
 
-    switch (def.id) {
-      case 'kasteel': kasteel(ctx, def, x, y, w, h); break;
-      case 'kathedraal':
-      case 'kerk':
-      case 'kapel': kerk(ctx, def, x, y, w, h); break;
-      case 'molen': molen(ctx, def, x, y, w, h, opties.tijd || 0); break;
-      case 'wachttoren': toren(ctx, def, x, y, w, h); break;
-      case 'stadsmuur': muur(ctx, def, x, y, w, h); break;
-      case 'universiteit':
-      case 'stadhuis':
-      case 'dorpsplein': hal(ctx, vdef, x, y, w, h); break;
-      default: huis(ctx, vdef, x, y, w, h); break;
-    }
+    var dakH = p * cfg.dakH * (0.82 + 0.18 * grootte);
+    if (cfg.stijl === 'schuin' || cfg.stijl === 'punt') dakSchuin(ctx, top, dakH, cfg.dak);
+    else if (cfg.stijl === 'plat') vulDiamant(ctx, top, verf(cfg.muur, 0.98));
+    else vulDiamant(ctx, top, verf(cfg.muur, 0.9));   /* 'geen': open wall top */
 
-    /* Chimney (with a plume hint) and half-timber struts for the higher tiers. */
-    if (vdef._schoorsteen && w > 20) {
-      ctx.fillStyle = '#5a4636';
-      ctx.fillRect(x + w * 0.66, y + h * 0.14, w * 0.09, h * 0.2);
-    }
-    if (vdef._vakwerk && w > 24) {
-      ctx.strokeStyle = 'rgba(70,48,30,.5)';
-      ctx.lineWidth = Math.max(1, w * 0.02);
-      ctx.beginPath();
-      ctx.moveTo(x + w * 0.12, y + h * 0.66); ctx.lineTo(x + w * 0.5, y + h * 0.45);
-      ctx.moveTo(x + w * 0.88, y + h * 0.66); ctx.lineTo(x + w * 0.5, y + h * 0.45);
-      ctx.stroke();
-    }
-    if (opties.geschroeid) schroei(ctx, x, y, w, h, opties.geschroeid);
+    if (cfg.torens) kasteelTorens(ctx, foot, H, dakH, cfg);
+    if (cfg.kruis) kruisTop(ctx, top, dakH, p);
+    if (cfg.vlag) vlag(ctx, top, dakH, p);
+    if (cfg.wieken) wieken(ctx, foot, H, p, opties.tijd || 0, cfg.dak);
+    if (cfg.uithang) uithangbord(ctx, foot, H, p);
+
+    if (opties.geschroeid) schroei(ctx, foot, H, dakH, opties.geschroeid);
 
     /* Icon badge so every building stays recognisable at a glance. */
-    if (w >= 26 && def.id !== 'stadsmuur') {
-      ctx.font = Math.round(w * 0.34) + 'px serif';
+    if (p * grootte >= 26 && def.id !== 'stadsmuur' && !cfg.wieken) {
+      ctx.font = Math.round(p * grootte * 0.3) + 'px serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(def.emoji, x + w * 0.5, y + h * 0.34);
+      ctx.fillText(def.emoji, top.cx, top.cy - (cfg.stijl === 'plat' ? p * 0.1 : dakH * 0.42));
     }
   };
 
-  /* A smoky scorch wash on a building the raiders damaged, fading as its
-     g.geschroeid timer runs out (fase 6). */
-  function schroei(ctx, x, y, w, h, timer) {
-    var t = Game.util.clamp(timer / 26, 0, 1);
-    ctx.fillStyle = 'rgba(30,24,20,' + (t * 0.5).toFixed(3) + ')';
-    ctx.fillRect(x + w * 0.08, y + h * 0.2, w * 0.84, h * 0.72);
+  /* Left + right visible walls; returns the raised top-face diamond. */
+  function isoMuren(ctx, foot, H, muur) {
+    var top = diamantVan(foot.cx, foot.cy - H, foot.hw, foot.hh);
+    quad(ctx, foot.left, foot.bottom, top.bottom, top.left, verf(muur, 0.68));    /* left face  */
+    quad(ctx, foot.bottom, foot.right, top.right, top.bottom, verf(muur, 0.86));  /* right face */
+    return top;
   }
 
-  function huis(ctx, def, x, y, w, h) {
-    var muurH = h * 0.45;
-    ctx.fillStyle = def.muur || '#d8c39a';
-    ctx.fillRect(x + w * 0.12, y + h * 0.45, w * 0.76, muurH);
-    ctx.strokeStyle = 'rgba(0,0,0,.3)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x + w * 0.12, y + h * 0.45, w * 0.76, muurH);
+  /* Hip / spire roof rising from a top-face diamond to an apex. */
+  function dakSchuin(ctx, t, dakH, dak) {
+    var apex = { x: t.cx, y: t.cy - dakH };
+    tri(ctx, t.top, t.left, apex, verf(dak, 0.66));   /* back-left  (far)  */
+    tri(ctx, t.top, t.right, apex, verf(dak, 0.82));  /* back-right */
+    tri(ctx, t.left, t.bottom, apex, verf(dak, 0.92)); /* front-left */
+    tri(ctx, t.bottom, t.right, apex, verf(dak, 1.08));/* front-right (lit) */
+  }
 
-    ctx.fillStyle = def.dak || '#7c4b2e';
-    ctx.beginPath();
-    ctx.moveTo(x + w * 0.5, y + h * 0.08);
-    ctx.lineTo(x + w * 0.96, y + h * 0.5);
-    ctx.lineTo(x + w * 0.04, y + h * 0.5);
-    ctx.closePath();
-    ctx.fill();
-
-    if (w > 28) {
-      ctx.fillStyle = 'rgba(50,30,15,.65)';
-      ctx.fillRect(x + w * 0.44, y + h * 0.62, w * 0.13, h * 0.28);
+  /* Crenellated parapet along the two near top edges. */
+  function kantelen(ctx, t, p, muur) {
+    var n = 4, h = p * 0.16;
+    for (var s = 0; s < 2; s++) {
+      var a = s === 0 ? t.left : t.bottom;
+      var b = s === 0 ? t.bottom : t.right;
+      for (var i = 0; i < n; i += 2) {
+        var q0 = lerp(a, b, i / n), q1 = lerp(a, b, (i + 1) / n);
+        quad(ctx, q0, q1, omhoog(q1, h), omhoog(q0, h), verf(muur, s === 0 ? 0.72 : 0.9));
+      }
     }
   }
 
-  function hal(ctx, def, x, y, w, h) {
-    ctx.fillStyle = def.muur || '#c8b48c';
-    ctx.fillRect(x + w * 0.08, y + h * 0.4, w * 0.84, h * 0.5);
-    ctx.fillStyle = def.dak || '#8a5a3a';
-    ctx.beginPath();
-    ctx.moveTo(x + w * 0.02, y + h * 0.44);
-    ctx.lineTo(x + w * 0.5, y + h * 0.1);
-    ctx.lineTo(x + w * 0.98, y + h * 0.44);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = 'rgba(60,40,20,.6)';
-    for (var i = 0; i < 3; i++) {
-      ctx.fillRect(x + w * (0.2 + i * 0.23), y + h * 0.58, w * 0.11, h * 0.2);
-    }
-    ctx.fillStyle = '#d7a94b';
-    ctx.fillRect(x + w * 0.47, y + h * 0.02, w * 0.03, h * 0.12);
-  }
-
-  function kerk(ctx, def, x, y, w, h) {
-    ctx.fillStyle = def.muur || '#e2dac4';
-    ctx.fillRect(x + w * 0.2, y + h * 0.42, w * 0.62, h * 0.48);
-    ctx.fillStyle = def.dak || '#6a6258';
-    ctx.beginPath();
-    ctx.moveTo(x + w * 0.16, y + h * 0.45);
-    ctx.lineTo(x + w * 0.51, y + h * 0.2);
-    ctx.lineTo(x + w * 0.86, y + h * 0.45);
-    ctx.closePath();
-    ctx.fill();
-
-    /* Bell tower. */
-    ctx.fillStyle = def.muur || '#e2dac4';
-    ctx.fillRect(x + w * 0.06, y + h * 0.24, w * 0.18, h * 0.66);
-    ctx.fillStyle = def.dak || '#6a6258';
-    ctx.beginPath();
-    ctx.moveTo(x + w * 0.02, y + h * 0.26);
-    ctx.lineTo(x + w * 0.15, y + h * 0.02);
-    ctx.lineTo(x + w * 0.28, y + h * 0.26);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.strokeStyle = '#d7a94b';
-    ctx.lineWidth = Math.max(1, w * 0.025);
-    ctx.beginPath();
-    ctx.moveTo(x + w * 0.15, y - h * 0.02);
-    ctx.lineTo(x + w * 0.15, y + h * 0.1);
-    ctx.moveTo(x + w * 0.1, y + h * 0.04);
-    ctx.lineTo(x + w * 0.2, y + h * 0.04);
-    ctx.stroke();
-  }
-
-  function kasteel(ctx, def, x, y, w, h) {
-    ctx.fillStyle = def.muur || '#b8b0a2';
-    ctx.fillRect(x + w * 0.1, y + h * 0.35, w * 0.8, h * 0.55);
-    /* Kantelen */
-    ctx.fillStyle = def.muur || '#b8b0a2';
-    for (var i = 0; i < 5; i++) {
-      ctx.fillRect(x + w * (0.1 + i * 0.17), y + h * 0.26, w * 0.1, h * 0.1);
-    }
-    /* Torens */
-    [0.04, 0.79].forEach(function (fx) {
-      ctx.fillStyle = def.muur || '#b8b0a2';
-      ctx.fillRect(x + w * fx, y + h * 0.2, w * 0.17, h * 0.7);
-      ctx.fillStyle = def.dak || '#5a3a30';
-      ctx.beginPath();
-      ctx.moveTo(x + w * (fx + 0.085), y + h * 0.02);
-      ctx.lineTo(x + w * (fx + 0.19), y + h * 0.22);
-      ctx.lineTo(x + w * (fx - 0.01), y + h * 0.22);
-      ctx.closePath();
-      ctx.fill();
+  function kasteelTorens(ctx, foot, H, dakH, cfg) {
+    var th = H * 1.18, r = foot.hw * 0.26;
+    [foot.left, foot.top, foot.right].forEach(function (c, i) {
+      var base = diamantVan(c.x, c.y, r, r * 0.5);
+      var top = isoMuren(ctx, base, th, cfg.muur);
+      dakSchuin(ctx, top, dakH * 1.1, cfg.dak);
     });
-    ctx.fillStyle = 'rgba(50,35,20,.7)';
-    ctx.fillRect(x + w * 0.43, y + h * 0.6, w * 0.14, h * 0.3);
   }
 
-  function toren(ctx, def, x, y, w, h) {
-    ctx.fillStyle = def.muur || '#a49a8c';
-    ctx.fillRect(x + w * 0.28, y + h * 0.24, w * 0.44, h * 0.66);
-    ctx.fillStyle = def.dak || '#7a3b2c';
+  function kruisTop(ctx, t, dakH, p) {
+    var apex = t.cy - dakH;
+    ctx.strokeStyle = '#d7a94b';
+    ctx.lineWidth = Math.max(1.4, p * 0.045);
     ctx.beginPath();
-    ctx.moveTo(x + w * 0.5, y + h * 0.02);
-    ctx.lineTo(x + w * 0.82, y + h * 0.28);
-    ctx.lineTo(x + w * 0.18, y + h * 0.28);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = 'rgba(40,25,15,.6)';
-    ctx.fillRect(x + w * 0.44, y + h * 0.45, w * 0.12, h * 0.16);
-  }
-
-  function muur(ctx, def, x, y, w, h) {
-    ctx.fillStyle = def.muur || '#9aa0a6';
-    ctx.fillRect(x + w * 0.05, y + h * 0.35, w * 0.9, h * 0.5);
-    ctx.fillStyle = def.dak || '#7e848a';
-    for (var i = 0; i < 3; i++) {
-      ctx.fillRect(x + w * (0.06 + i * 0.32), y + h * 0.22, w * 0.2, h * 0.16);
-    }
-    ctx.strokeStyle = 'rgba(0,0,0,.25)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(x + w * 0.05, y + h * 0.6);
-    ctx.lineTo(x + w * 0.95, y + h * 0.6);
+    ctx.moveTo(t.cx, apex - p * 0.02); ctx.lineTo(t.cx, apex - p * 0.28);
+    ctx.moveTo(t.cx - p * 0.09, apex - p * 0.2); ctx.lineTo(t.cx + p * 0.09, apex - p * 0.2);
     ctx.stroke();
   }
 
-  function molen(ctx, def, x, y, w, h, tijd) {
-    ctx.fillStyle = def.muur || '#d5c7a4';
+  function vlag(ctx, t, dakH, p) {
+    var apex = t.cy - dakH;
+    ctx.strokeStyle = '#6a5030';
+    ctx.lineWidth = Math.max(1, p * 0.03);
     ctx.beginPath();
-    ctx.moveTo(x + w * 0.34, y + h * 0.3);
-    ctx.lineTo(x + w * 0.66, y + h * 0.3);
-    ctx.lineTo(x + w * 0.76, y + h * 0.9);
-    ctx.lineTo(x + w * 0.24, y + h * 0.9);
+    ctx.moveTo(t.cx, apex); ctx.lineTo(t.cx, apex - p * 0.34);
+    ctx.stroke();
+    ctx.fillStyle = '#c85a4a';
+    ctx.beginPath();
+    ctx.moveTo(t.cx, apex - p * 0.34);
+    ctx.lineTo(t.cx + p * 0.2, apex - p * 0.28);
+    ctx.lineTo(t.cx, apex - p * 0.22);
     ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = def.dak || '#7c4b2e';
-    ctx.beginPath();
-    ctx.moveTo(x + w * 0.5, y + h * 0.08);
-    ctx.lineTo(x + w * 0.72, y + h * 0.32);
-    ctx.lineTo(x + w * 0.28, y + h * 0.32);
-    ctx.closePath();
-    ctx.fill();
+  }
 
-    /* Turning sails. */
-    var cx = x + w * 0.5, cy = y + h * 0.34, r = w * 0.36;
+  /* Turning windmill sails on the front (lower-right) face. */
+  function wieken(ctx, foot, H, p, tijd, dak) {
+    var cx = foot.cx + foot.hw * 0.22, cy = foot.cy - H * 0.72, r = p * 0.42;
     ctx.strokeStyle = '#5c4326';
-    ctx.lineWidth = Math.max(1.5, w * 0.05);
+    ctx.lineWidth = Math.max(1.5, p * 0.05);
     for (var i = 0; i < 4; i++) {
       var a = tijd * 0.9 + i * Math.PI / 2;
       ctx.beginPath();
       ctx.moveTo(cx, cy);
-      ctx.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+      ctx.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.62);
       ctx.stroke();
     }
   }
 
-  /* Construction site: scaffolding plus a progress bar. */
-  S.tekenBouwplaats = function (ctx, def, x, y, w, h, deel) {
-    ctx.fillStyle = 'rgba(120,95,60,.35)';
-    ctx.fillRect(x + w * 0.1, y + h * 0.3, w * 0.8, h * 0.6);
-
-    ctx.strokeStyle = '#a07b46';
-    ctx.lineWidth = Math.max(1, w * 0.04);
+  function uithangbord(ctx, foot, H, p) {
+    var x = foot.right.x + p * 0.02, y = foot.right.y - H * 0.6;
+    ctx.strokeStyle = '#5a4126';
+    ctx.lineWidth = Math.max(1, p * 0.03);
     ctx.beginPath();
-    ctx.moveTo(x + w * 0.14, y + h * 0.9); ctx.lineTo(x + w * 0.14, y + h * 0.25);
-    ctx.moveTo(x + w * 0.86, y + h * 0.9); ctx.lineTo(x + w * 0.86, y + h * 0.25);
-    ctx.moveTo(x + w * 0.1, y + h * 0.45); ctx.lineTo(x + w * 0.9, y + h * 0.38);
-    ctx.moveTo(x + w * 0.1, y + h * 0.7); ctx.lineTo(x + w * 0.9, y + h * 0.66);
+    ctx.moveTo(x, y); ctx.lineTo(x, y + p * 0.22);
+    ctx.stroke();
+    ctx.fillStyle = '#8a5a34';
+    ctx.fillRect(x - p * 0.07, y + p * 0.08, p * 0.14, p * 0.12);
+  }
+
+  /* A smoky scorch wash on a building the raiders damaged (fase 6). */
+  function schroei(ctx, foot, H, dakH, timer) {
+    var t = Game.util.clamp(timer / 26, 0, 1);
+    ctx.save();
+    ctx.globalAlpha = t * 0.55;
+    ctx.fillStyle = 'rgba(30,24,20,1)';
+    ctx.beginPath();
+    ctx.ellipse(foot.cx, foot.cy - H * 0.5, foot.hw * 0.9, (H + dakH) * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  /* Construction site: a low iso stub grown by progress, plus scaffolding and a
+     floating progress bar. */
+  S.tekenBouwplaats = function (ctx, def, sx, sy, p, grootte, deel) {
+    var foot = Game.render.diamant(sx, sy, p * grootte);
+    deel = Game.util.clamp(deel, 0, 1);
+
+    ctx.fillStyle = 'rgba(0,0,0,.2)';
+    ctx.beginPath();
+    ctx.ellipse(foot.cx, foot.cy + foot.hh * 0.25, foot.hw * 0.98, foot.hh * 0.98, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    var H = p * grootte * 0.4 * deel + 1;
+    var top = isoMuren(ctx, foot, H, '#b89a6a');
+    vulDiamant(ctx, top, 'rgba(150,120,80,.85)');
+
+    /* Scaffolding poles at the footprint corners. */
+    var poleH = p * grootte * 0.5;
+    ctx.strokeStyle = '#a07b46';
+    ctx.lineWidth = Math.max(1, p * 0.04);
+    ctx.beginPath();
+    [foot.left, foot.right, foot.top, foot.bottom].forEach(function (c) {
+      ctx.moveTo(c.x, c.y); ctx.lineTo(c.x, c.y - poleH);
+    });
     ctx.stroke();
 
-    if (w >= 22) {
-      ctx.font = Math.round(w * 0.3) + 'px serif';
+    if (p * grootte >= 24) {
+      ctx.font = Math.round(p * grootte * 0.28) + 'px serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.globalAlpha = 0.75;
-      ctx.fillText(def.emoji, x + w * 0.5, y + h * 0.55);
+      ctx.globalAlpha = 0.8;
+      ctx.fillText(def.emoji, foot.cx, foot.cy - H - p * 0.1);
       ctx.globalAlpha = 1;
     }
 
-    var bx = x + w * 0.12, by = y + h * 0.02, bw = w * 0.76, bh = Math.max(3, h * 0.08);
+    /* Progress bar floating above the site. */
+    var bw = foot.hw * 1.1, bx = foot.cx - bw / 2, by = foot.cy - poleH - p * 0.2, bh = Math.max(3, p * 0.09);
     ctx.fillStyle = 'rgba(0,0,0,.55)';
     ctx.fillRect(bx, by, bw, bh);
     ctx.fillStyle = '#d7a94b';
-    ctx.fillRect(bx, by, bw * Game.util.clamp(deel, 0, 1), bh);
+    ctx.fillRect(bx, by, bw * deel, bh);
   };
 
   Game.render.sprites = S;

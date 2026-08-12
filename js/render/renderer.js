@@ -198,12 +198,18 @@
     var zicht = cam.zichtbaar(s.kaart);
     var tijd = s.tijd;
 
-    /* --- terrain (+ relief, handled inside tekenTegel) --- */
-    for (var y = zicht.y0; y < zicht.y1; y++) {
-      for (var x = zicht.x0; x < zicht.x1; x++) {
+    /* --- terrain (+ relief, handled inside tekenTegel) ---
+       Walked back-to-front along the iso anti-diagonals (increasing x+y) so a
+       tile's trees/mountain sit correctly over the tiles behind them. */
+    var TEGEL = Game.render.TEGEL;
+    for (var som = zicht.x0 + zicht.y0; som <= (zicht.x1 - 1) + (zicht.y1 - 1); som++) {
+      var xa = Math.max(zicht.x0, som - (zicht.y1 - 1));
+      var xb = Math.min(zicht.x1 - 1, som - zicht.y0);
+      for (var x = xa; x <= xb; x++) {
+        var y = som - x;
         var tegel = map.tegel(s.kaart, x, y);
         if (!tegel) continue;
-        var sp = cam.wereldNaarScherm(x * Game.render.TEGEL, y * Game.render.TEGEL);
+        var sp = cam.wereldNaarScherm(x * TEGEL, y * TEGEL);
         sprites.tekenTegel(ctx, tegel, sp.x, sp.y, p, s.seizoen, tijd, s.kaart, x, y);
       }
     }
@@ -230,34 +236,39 @@
       markeerBronnen(s, cam, ui, p);
     }
 
-    /* --- buildings (top to bottom so they overlap cleanly) --- */
-    var gesorteerd = s.gebouwen.slice().sort(function (a, b) { return a.y - b.y; });
+    /* --- buildings (back-to-front by iso depth x+y so they overlap cleanly) - */
+    var gesorteerd = s.gebouwen.slice().sort(function (a, b) {
+      var da = a.x + a.y, db = b.x + b.y;
+      return da === db ? a.y - b.y : da - db;
+    });
     for (var i = 0; i < gesorteerd.length; i++) {
       var g = gesorteerd[i];
       var d = Game.core.state.def(g);
       if (g.x + d.grootte < zicht.x0 || g.x > zicht.x1) continue;
       if (g.y + d.grootte < zicht.y0 || g.y > zicht.y1) continue;
 
-      var sp2 = cam.wereldNaarScherm(g.x * Game.render.TEGEL, g.y * Game.render.TEGEL);
-      var w = p * d.grootte, h = p * d.grootte;
+      var sp2 = cam.wereldNaarScherm(g.x * TEGEL, g.y * TEGEL);
 
       if (g.gebouwd) {
-        sprites.tekenGebouw(ctx, d, sp2.x, sp2.y, w, h, { tijd: tijd, tijdperk: s.tijdperk, geschroeid: g.geschroeid });
+        sprites.tekenGebouw(ctx, d, sp2.x, sp2.y, p, d.grootte, { tijd: tijd, tijdperk: s.tijdperk, geschroeid: g.geschroeid });
         if (g.waarschuwing && p > 16) {
+          var fc = Game.render.diamant(sp2.x, sp2.y, p * d.grootte);
           ctx.font = Math.round(p * 0.34) + 'px serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText('⚠️', sp2.x + w * 0.82, sp2.y + h * 0.16);
+          ctx.fillText('⚠️', fc.cx, fc.cy - p * (0.6 + d.grootte * 0.5));
         }
       } else {
-        sprites.tekenBouwplaats(ctx, d, sp2.x, sp2.y, w, h, g.voortgang / d.bouwtijd);
+        sprites.tekenBouwplaats(ctx, d, sp2.x, sp2.y, p, d.grootte, g.voortgang / d.bouwtijd);
       }
 
       if (ui.geselecteerd === g.id) {
+        var sd = Game.render.diamant(sp2.x, sp2.y, p * d.grootte);
         ctx.strokeStyle = '#f0cd7f';
         ctx.lineWidth = 2.5;
         ctx.setLineDash([6, 4]);
-        ctx.strokeRect(sp2.x + 1, sp2.y + 1, w - 2, h - 2);
+        Game.render.padDiamant(ctx, sd);
+        ctx.stroke();
         ctx.setLineDash([]);
       }
     }
@@ -377,15 +388,21 @@
       var afst = front - fx;
       if (afst < 0 || afst > 0.16) continue;         /* only the active band */
       var sp = cam.wereldNaarScherm(g.x * TEGEL, g.y * TEGEL);
-      var w = p * d.grootte;
+      var foot = Game.render.diamant(sp.x, sp.y, p * d.grootte);
+      var Hh = p * d.grootte * 0.6;
       var alpha = 0.55 * (1 - afst / 0.16);
       ctx.strokeStyle = 'rgba(190,150,90,' + alpha.toFixed(3) + ')';
-      ctx.lineWidth = Math.max(1, w * 0.04);
+      ctx.lineWidth = Math.max(1, p * 0.05);
       ctx.beginPath();
-      ctx.moveTo(sp.x + w * 0.12, sp.y + w * 0.95); ctx.lineTo(sp.x + w * 0.12, sp.y + w * 0.1);
-      ctx.moveTo(sp.x + w * 0.88, sp.y + w * 0.95); ctx.lineTo(sp.x + w * 0.88, sp.y + w * 0.1);
-      ctx.moveTo(sp.x + w * 0.05, sp.y + w * 0.4); ctx.lineTo(sp.x + w * 0.95, sp.y + w * 0.34);
-      ctx.moveTo(sp.x + w * 0.05, sp.y + w * 0.68); ctx.lineTo(sp.x + w * 0.95, sp.y + w * 0.62);
+      /* poles at the footprint corners */
+      [foot.left, foot.right, foot.top, foot.bottom].forEach(function (c) {
+        ctx.moveTo(c.x, c.y); ctx.lineTo(c.x, c.y - Hh);
+      });
+      /* a scaffolding ring at mid height */
+      var m = Hh * 0.55;
+      ctx.moveTo(foot.left.x, foot.left.y - m); ctx.lineTo(foot.top.x, foot.top.y - m);
+      ctx.lineTo(foot.right.x, foot.right.y - m); ctx.lineTo(foot.bottom.x, foot.bottom.y - m);
+      ctx.closePath();
       ctx.stroke();
     }
   }
@@ -484,47 +501,51 @@
         var t = map.tegel(s.kaart, x, y);
         if (!t || t.n !== node || t.amt <= 0) continue;
         var sp = cam.wereldNaarScherm(x * Game.render.TEGEL, y * Game.render.TEGEL);
-        ctx.fillRect(sp.x, sp.y, p, p);
+        Game.render.padDiamant(ctx, Game.render.diamant(sp.x, sp.y, p));
+        ctx.fill();
       }
     }
   }
 
   function tekenSpook(s, cam, ui, p) {
+    var TEGEL = Game.render.TEGEL;
     var d = Game.config.gebouw(ui.plaatsType);
     var tx = ui.muisTegel.x, ty = ui.muisTegel.y;
     var check = Game.core.construction.controleer(s, ui.plaatsType, tx, ty);
-    var sp = cam.wereldNaarScherm(tx * Game.render.TEGEL, ty * Game.render.TEGEL);
-    var w = p * d.grootte;
+    var sp = cam.wereldNaarScherm(tx * TEGEL, ty * TEGEL);
+    var foot = Game.render.diamant(sp.x, sp.y, p * d.grootte);
 
-    ctx.globalAlpha = 0.75;
-    sprites.tekenGebouw(ctx, d, sp.x, sp.y, w, w, { tijd: s.tijd, tijdperk: s.tijdperk });
-    ctx.globalAlpha = 1;
-
+    /* Footprint patch, tinted by whether it can be placed here. */
+    Game.render.padDiamant(ctx, foot);
+    ctx.fillStyle = check.ok ? 'rgba(143,220,106,.2)' : 'rgba(224,96,74,.24)';
+    ctx.fill();
     ctx.strokeStyle = check.ok ? '#8fdc6a' : '#e0604a';
-    ctx.fillStyle = check.ok ? 'rgba(143,220,106,.18)' : 'rgba(224,96,74,.22)';
     ctx.lineWidth = 2;
-    ctx.fillRect(sp.x, sp.y, w, w);
-    ctx.strokeRect(sp.x + 1, sp.y + 1, w - 2, w - 2);
+    ctx.stroke();
+
+    /* Translucent preview of the building itself. */
+    ctx.globalAlpha = 0.6;
+    sprites.tekenGebouw(ctx, d, sp.x, sp.y, p, d.grootte, { tijd: s.tijd, tijdperk: s.tijdperk });
+    ctx.globalAlpha = 1;
 
     if (d.plaats && d.plaats.nabij) {
       var straal = d.plaats.nabij.straal;
+      var rsp = cam.wereldNaarScherm((tx - straal) * TEGEL, (ty - straal) * TEGEL);
       ctx.strokeStyle = check.ok ? 'rgba(143,220,106,.5)' : 'rgba(224,96,74,.5)';
       ctx.setLineDash([5, 5]);
-      ctx.strokeRect(
-        sp.x - straal * p, sp.y - straal * p,
-        w + straal * p * 2, w + straal * p * 2
-      );
+      Game.render.padDiamant(ctx, Game.render.diamant(rsp.x, rsp.y, p * (d.grootte + straal * 2)));
+      ctx.stroke();
       ctx.setLineDash([]);
     }
 
-    /* Defence buildings show their coverage radius while placing. */
+    /* Defence buildings show their coverage radius (an iso ground ellipse). */
     if (d.dekking && d.dekking.straal) {
       var dr = d.dekking.straal;
       ctx.strokeStyle = 'rgba(120,180,240,.55)';
       ctx.fillStyle = 'rgba(120,180,240,.10)';
       ctx.setLineDash([4, 4]);
       ctx.beginPath();
-      ctx.arc(sp.x + w / 2, sp.y + w / 2, dr * p, 0, Math.PI * 2);
+      ctx.ellipse(foot.cx, foot.cy, dr * p, dr * p * 0.5, 0, 0, Math.PI * 2);
       ctx.fill(); ctx.stroke();
       ctx.setLineDash([]);
     }
