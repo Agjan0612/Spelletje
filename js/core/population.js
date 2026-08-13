@@ -129,10 +129,13 @@
     var honger = s.voedselTekort > 1e-6 ? -22 : 0;
     var moreel = s.moreel || 0;
 
+    /* A close-knit, compactly built town lifts everyone's spirits a little. */
+    var samen = (s.samenhorigheid || 0) * 8;
+
     return {
       basis: 20, voedsel: voedsel, variatie: variatie, wonen: wonen,
-      diensten: diensten, honger: honger, moreel: moreel,
-      doel: Game.util.clamp(20 + voedsel + variatie + wonen + diensten + honger + moreel, 0, 100)
+      diensten: diensten, samen: samen, honger: honger, moreel: moreel,
+      doel: Game.util.clamp(20 + voedsel + variatie + wonen + diensten + samen + honger + moreel, 0, 100)
     };
   };
 

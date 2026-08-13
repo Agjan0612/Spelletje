@@ -158,6 +158,7 @@
     if (d.verdPerWerker) regels.push(['Verdediging', '+' + d.verdPerWerker + ' per werker']);
     if (d.productieBonus) regels.push(['Bonus', '+' + Math.round(d.productieBonus * 100) + '% op alle productie']);
     if (d.boerderijBonus) regels.push(['Bonus', '+' + Math.round(d.boerderijBonus * 100) + '% graan voor boerderijen binnen ' + d.boerderijStraal + ' tegels']);
+    if (d.visserijBonus) regels.push(['Bonus', '+' + Math.round(d.visserijBonus * 100) + '% vis voor vissershutten binnen ' + d.visserijStraal + ' tegels']);
     if (d.onderhoud) {
       var onder = [];
       for (var orr in d.onderhoud) {

@@ -181,6 +181,7 @@
     Game.core.construction.tick(s, dt);
     Game.core.economy.tick(s, dt);
     Game.core.population.tick(s, dt);
+    Game.core.events.tick(s, dt);
     Game.core.raids.tick(s, dt);
     Game.ui.quests.controleer(s);
     Game.core.ages.controleerOverwinning(s);

@@ -106,7 +106,13 @@
         '<li><b>De winter.</b> Boerderijen leveren dan niets en er wordt méér gegeten. ' +
         'Vissershutten en mijnen werken gewoon door.</li>' +
         '<li><b>Rovers.</b> Vanaf tijdperk 2 komen bandieten langs. Je krijgt altijd ' +
-        '45 seconden waarschuwing. Wachttorens, muren, soldaten en een kasteel houden ze buiten.</li>' +
+        '45 seconden waarschuwing. Wachttorens, muren en poorten houden ze op afstand.</li>' +
+        '<li><b>Je leger.</b> Soldaten (oefenveld, kazerne, kasteel) vormen samen een leger. ' +
+        'Is dat sterk genoeg, dan versla je een roversbende beslissend — of beveel je een ' +
+        '<b>uitval</b> tijdens de waarschuwing om ze in het veld te verpletteren.</li>' +
+        '<li><b>Samen sterk.</b> Bouw dicht om het dorpsplein en vier af en toe een ' +
+        '<b>feest</b> — een hecht dorp is een gelukkig dorp. Een <b>haven</b> aan zee ' +
+        'brengt handel en meer vis binnen.</li>' +
         '</ul>' +
         '<h4>Werkloze dorpelingen zijn je bouwers</h4>' +
         '<p>Iedereen die geen baan heeft, helpt mee aan alles wat in aanbouw is. Zet je álle ' +
@@ -122,6 +128,26 @@
   O.menu = function () {
     O.open('☰ Menu', function (el) {
       el.innerHTML = '<p>Je spel wordt elke 20 seconden automatisch opgeslagen in deze browser.</p>';
+
+      /* Naming the town makes it feel like yours. */
+      el.appendChild(Game.util.el('h4', '', 'Naam van je dorp'));
+      var naamRij = Game.util.el('div', 'knoprij');
+      var naamIn = Game.util.el('input');
+      naamIn.type = 'text';
+      naamIn.value = spel.state.dorpsnaam || '';
+      naamIn.maxLength = 24;
+      naamIn.style.flex = '1';
+      var naamKnop = Game.util.el('button', 'primair', 'Naam wijzigen');
+      naamKnop.addEventListener('click', function () {
+        var nieuw = (naamIn.value || '').trim().slice(0, 24);
+        if (!nieuw) { Game.ui.toast('⚠️ Geef een naam op'); return; }
+        spel.state.dorpsnaam = nieuw;
+        Game.ui.hud.ververs(spel.state);
+        Game.ui.toast('🏰 Je dorp heet nu ' + nieuw);
+      });
+      naamRij.appendChild(naamIn);
+      naamRij.appendChild(naamKnop);
+      el.appendChild(naamRij);
 
       var kop = Game.util.el('h4', '', 'Save kopiëren of terugzetten');
       el.appendChild(kop);

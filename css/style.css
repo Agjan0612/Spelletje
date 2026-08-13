@@ -143,6 +143,11 @@ button {
   z-index: 10;
 }
 
+.advies {
+  font-size: 12px; line-height: 1.35; margin: 0 0 8px; padding: 7px 9px;
+  background: rgba(196, 160, 90, .14); border-left: 3px solid var(--goud);
+  border-radius: 5px; color: var(--perkament);
+}
 #age-reqs, #quest-list { list-style: none; margin: 0; padding: 0; font-size: 12.5px; }
 #age-reqs li, #quest-list li {
   display: flex; gap: 6px; align-items: flex-start;
@@ -243,6 +248,13 @@ button {
   z-index: 14; animation: klop 1s ease-in-out infinite; text-align: center;
 }
 #raid-warning .klein { display: block; font-size: 11.5px; font-weight: 400; opacity: .85; }
+#raid-sally {
+  display: block; margin: 7px auto 0; padding: 5px 14px; cursor: pointer;
+  font-size: 12.5px; font-weight: 700; color: #fbe7d6;
+  background: rgba(40, 16, 12, .6); border: 1.5px solid #e5b06a; border-radius: 6px;
+}
+#raid-sally:hover { background: rgba(70, 28, 20, .8); }
+#raid-sally.armed { background: #b5892f; border-color: #ffe4a8; color: #1c130a; }
 @keyframes klop { 0%, 100% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) scale(1.04); } }
 
 /* Toast */

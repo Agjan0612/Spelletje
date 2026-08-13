@@ -6,12 +6,20 @@
   var spel = null;
   var ZICHTBAAR = 4;
 
+  var adviesEl = null;
+
   Q.init = function (hetSpel) {
     spel = hetSpel;
     lijstEl = document.getElementById('quest-list');
     eisenEl = document.getElementById('age-reqs');
     naamEl = document.getElementById('age-next-name');
     knopEl = document.getElementById('btn-advance');
+
+    /* The village elder's advice: one line, always the single most useful
+       next step, injected at the top of the objectives card. */
+    adviesEl = Game.util.el('div', 'advies');
+    var box = document.getElementById('questbox');
+    box.insertBefore(adviesEl, lijstEl);
 
     knopEl.addEventListener('click', function () {
       Game.core.ages.bevorder(spel.state);
@@ -41,8 +49,53 @@
     }
   };
 
+  /* Picks the single most relevant piece of advice for right now. Ordered by
+     urgency, so a hungry town hears about food before anything else. */
+  Q.advies = function (s) {
+    if (Game.core.population.voedselDagen(s) < 2 && s.bevolking.totaal > 3) {
+      return '🍽️ Je mensen dreigen honger te lijden. Zet meer dorpelingen op jacht, visserij of de akkers, of bouw er een bij.';
+    }
+
+    var raid = Game.core.raids.statusTekst && Game.core.raids.statusTekst(s);
+    if (raid && raid.verdediging < raid.kracht) {
+      if (raid.leger >= raid.kracht * 0.85) {
+        return '⚔️ Rovers op komst! Je muren zijn te zwak, maar je leger is sterk — beveel een uitval op het dorpsplein of via de balk.';
+      }
+      return '⚔️ Rovers op komst en je verdediging is te zwak! Bouw snel een wachttoren of muur op hun route.';
+    }
+
+    if (s.tijdperk >= 2 && s.verdediging <= 0) {
+      return '🛡️ Vanaf tijdperk 2 komen er rovers. Bouw een wachttoren of oefenveld voordat het zover is.';
+    }
+
+    if (s.bevolking.ruimte - s.bevolking.totaal <= 0) {
+      return '🏠 Er is geen woonruimte vrij. Bouw huisjes zodat nieuwe dorpelingen zich kunnen vestigen.';
+    }
+
+    if (s.bevolking.werkloos <= 0 && s.bevolking.totaal > 2) {
+      return '🧰 Iedereen heeft een baan — houd een paar dorpelingen vrij, want zij bouwen alles.';
+    }
+
+    if (s.tevredenheid < 45) {
+      return '😟 Je dorp is ontevreden. Bouw een waterput, kapel of herberg, of vier een feest op het dorpsplein.';
+    }
+
+    if (Game.core.ages.kanBevorderen(s)) {
+      return '⚑ Je hebt alles voor het volgende tijdperk! Klik op "Bevorder tijdperk".';
+    }
+
+    var eisen = Game.core.ages.eisen(s);
+    if (eisen) {
+      var mist = eisen.lijst.filter(function (r) { return !r.klaar; })[0];
+      if (mist) return '🎯 Op weg naar ' + eisen.tijdperk.naam + ': werk aan ' + mist.tekst.replace(/^[^ ]+ /, '') + '.';
+    }
+    return '🏰 Mooi bezig! Blijf je stad uitbouwen en houd voedsel en tevredenheid op peil.';
+  };
+
   Q.ververs = function (s) {
     if (!lijstEl) return;
+
+    if (adviesEl) adviesEl.textContent = Q.advies(s);
 
     /* --- doelen --- */
     lijstEl.innerHTML = '';

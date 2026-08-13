@@ -18,6 +18,15 @@
     els.seizoenIco = document.querySelector('#stat-season .ico');
     els.raid = document.getElementById('raid-warning');
 
+    /* Delegated so the sortie toggle keeps working through the ~1×/sec
+       rebuilds of the countdown. */
+    els.raid.addEventListener('click', function (ev) {
+      if (!ev.target.closest('#raid-sally')) return;
+      if (!spel.state) return;
+      Game.core.raids.zetUitval(spel.state);
+      H.ververs(spel.state);
+    });
+
     bouwResourceRij();
 
     var knoppen = document.querySelectorAll('#speeds .spd');
@@ -99,9 +108,15 @@
       var verd = raid.verdediging < raid.totaal
         ? raid.verdediging + ' <span style="opacity:.7">(van ' + raid.totaal + ')</span>'
         : raid.verdediging;
-      els.raid.innerHTML = '⚔️ Rovers vallen aan over ' + raid.seconden + 's' +
+      var html = '⚔️ Rovers vallen aan over ' + raid.seconden + 's' +
         '<span class="klein">Hun kracht: ~' + raid.kracht +
-        ' · verdediging op hun route: ' + verd + '</span>';
+        ' · verdediging op hun route: ' + verd +
+        (raid.leger > 0 ? ' · leger: ' + raid.leger : '') + '</span>';
+      if (raid.kanUitval) {
+        html += '<button id="raid-sally" class="' + (raid.uitval ? 'armed' : '') + '">' +
+          (raid.uitval ? '⚔️ Uitval bevolen — trek terug' : '⚔️ Uitval bevelen (val aan)') + '</button>';
+      }
+      els.raid.innerHTML = html;
     } else {
       els.raid.classList.add('hidden');
     }
@@ -121,6 +136,7 @@
       'Afwisseling in eten ' + n(d.variatie) + '\n' +
       'Woonruimte ' + n(d.wonen) + '\n' +
       'Voorzieningen ' + n(d.diensten) + '\n' +
+      'Samenhorigheid ' + n(d.samen) + '\n' +
       (d.honger ? 'HONGER ' + n(d.honger) + '\n' : '') +
       (d.moreel ? 'Moreel ' + n(d.moreel) : '');
   }

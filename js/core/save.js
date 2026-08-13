@@ -70,6 +70,15 @@
     s.bevolking = s.bevolking || { totaal: 5 };
     s.bonus = s.bonus || { productie: 1, mijnbouw: 1 };
     s.raid = s.raid || { fase: 'rust', timer: 200, kracht: 0, nummer: 0 };
+    s.leger = s.leger || { overwinningen: 0, uitval: false };
+    if (typeof s.leger.overwinningen !== 'number') s.leger.overwinningen = 0;
+    s.leger.uitval = !!s.leger.uitval;
+    s.feest = s.feest || { cooldown: 0, aantal: 0 };
+    if (typeof s.feest.cooldown !== 'number') s.feest.cooldown = 0;
+    if (typeof s.feest.aantal !== 'number') s.feest.aantal = 0;
+    s.koopman = s.koopman || { timer: 150 };
+    if (typeof s.koopman.timer !== 'number') s.koopman.timer = 150;
+    if (typeof s.moreel !== 'number') s.moreel = 0;
     s.questsGedaan = s.questsGedaan || {};
     s.log = s.log || [];
     s.wandelaars = [];

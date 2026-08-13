@@ -14,6 +14,7 @@
     smid:        { naam: 'Smid',        emoji: '🔨',   kleur: '#8794a3' },
     wapensmid:   { naam: 'Wapensmid',   emoji: '⚔️',   kleur: '#b04a3a' },
     handelaar:   { naam: 'Handelaar',   emoji: '🪙',   kleur: '#e0c05a' },
+    schipper:    { naam: 'Schipper',    emoji: '⛵',   kleur: '#3f7a8c' },
     waard:       { naam: 'Waard',       emoji: '🍺',   kleur: '#c98a4a' },
     priester:    { naam: 'Priester',    emoji: '✝️',   kleur: '#e8e0cc' },
     juwelier:    { naam: 'Juwelier',    emoji: '💍',   kleur: '#63c6d6' },

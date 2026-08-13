@@ -11,7 +11,15 @@
 
   R.WAARSCHUWING = 45;   /* seconds of warning before they arrive */
 
+  /* Make sure the army bookkeeping exists, also for saves from before it. */
+  R.zorgLeger = function (s) {
+    if (!s.leger) s.leger = { overwinningen: 0, uitval: false };
+    if (typeof s.leger.overwinningen !== 'number') s.leger.overwinningen = 0;
+    if (typeof s.leger.uitval !== 'boolean') s.leger.uitval = false;
+  };
+
   R.tick = function (s, dt) {
+    R.zorgLeger(s);
     if (s.tijdperk < 2) return;          /* bandits ignore a hamlet */
     var r = s.raid;
 
@@ -25,6 +33,7 @@
         r.vanaf = kiesInval(s);   /* flat approach point — used by the raid
                                      visuals (fase 3) and positional defence (fase 4) */
         r.uitslag = null;
+        s.leger.uitval = false;   /* the player arms a new sortie each raid */
         Game.ui.log.schrijf(s, '⚔️ Rovers gesignaleerd! Ze vallen over ' + R.WAARSCHUWING + ' seconden aan.', 'slecht');
         Game.ui.toast('⚔️ Rovers op komst!');
         if (Game.ui.audio) Game.ui.audio.hoorn();
@@ -35,15 +44,34 @@
     if (r.fase === 'waarschuwing') {
       r.timer -= dt;
       if (r.timer <= 0) {
+        r.routBonus = 0;
         beslecht(s);
         r.fase = 'rust';
-        r.timer = volgendeRust(s);
+        r.timer = volgendeRust(s) + (r.routBonus || 0);
+        s.leger.uitval = false;
       }
     }
   };
 
+  /* Toggles the sortie: your field army marches out to meet the raiders
+     instead of holding the walls. Only while a raid is inbound and you have
+     an army to send. */
+  R.zetUitval = function (s, aan) {
+    R.zorgLeger(s);
+    if (s.raid.fase !== 'waarschuwing') return false;
+    if (R.legerKracht(s) <= 0) return false;
+    s.leger.uitval = aan == null ? !s.leger.uitval : !!aan;
+    return true;
+  };
+  R.uitvalMogelijk = function (s) {
+    return s.tijdperk >= 2 && s.raid.fase === 'waarschuwing' && R.legerKracht(s) > 0;
+  };
+
   function volgendeRust(s) {
     var basis = 340 - s.tijdperk * 30;
+    /* Every decisive victory makes the bandits think twice: they regroup for
+       longer. Capped so raids never fizzle out entirely. */
+    basis += Math.min(140, (s.leger ? s.leger.overwinningen : 0) * 12);
     return basis + Math.random() * 90;
   }
   R.volgendeRust = volgendeRust;
@@ -98,7 +126,7 @@
      and coverage counts within radius + half the corridor width — so a
      sensibly walled town is barely affected while a lopsided one is.
      Without a known approach it falls back to the plain total. */
-  R.effectieveVerdediging = function (s) {
+  R.verdedigingSplit = function (s) {
     var cor = (s.tijdperk >= 2 && s.raid && s.raid.vanaf) ? R.corridor(s) : null;
     var garnizoen = 0, positioneel = 0;
 
@@ -121,7 +149,29 @@
         }
       }
     }
-    return Math.round(garnizoen + positioneel);
+    return { garnizoen: garnizoen, positioneel: positioneel };
+  };
+
+  R.effectieveVerdediging = function (s) {
+    var sp = R.verdedigingSplit(s);
+    return Math.round(sp.garnizoen + sp.positioneel);
+  };
+
+  /* The mobile field army — soldiers with their weapons plus the keep. This is
+     the strength that can sally out and rout a raiding band, as opposed to
+     walls and towers, which only guard the ground they stand on. */
+  R.legerKracht = function (s) {
+    return Math.round(R.verdedigingSplit(s).garnizoen);
+  };
+
+  R.legerStatus = function (s) {
+    R.zorgLeger(s);
+    return {
+      kracht: R.legerKracht(s),
+      soldaten: s.bevolking.soldaten || 0,
+      uitval: s.leger.uitval,
+      overwinningen: s.leger.overwinningen
+    };
   };
 
   /* Scales with how much there is to plunder right now — the size of your
@@ -136,13 +186,53 @@
       + gebouwd * 1.2
       + (s.tijdperk - 1) * 35
       + s.raid.nummer * 8;
-    return Math.round(kracht * (0.85 + Math.random() * 0.3));
+    /* Bandits grow wary of a town that keeps crushing them. */
+    kracht -= Math.min(35, (s.leger ? s.leger.overwinningen : 0) * 6);
+    return Math.round(Math.max(15, kracht) * (0.85 + Math.random() * 0.3));
+  }
+
+  /* A decisive victory: the raiding band is broken, not just turned away.
+     Spoils are seized as coins, morale soars and the next raid is delayed. */
+  function rout(s, kracht, viaUitval) {
+    R.zorgLeger(s);
+    s.leger.overwinningen++;
+    s.raid.uitslag = 'vernietigd';
+    var buit = Math.round(kracht * (viaUitval ? 0.7 : 0.45));
+    Game.core.state.voegToe(s, 'munten', buit);
+    s.moreel = (s.moreel || 0) + (viaUitval ? 14 : 9);
+    s.raid.routBonus = viaUitval ? 150 : 90;
+    var hoe = viaUitval
+      ? '⚔️ Uitval geslaagd! Je leger reed de rovers omver'
+      : '🛡️ Je leger heeft de roversbende volledig verslagen';
+    Game.ui.log.schrijf(s, hoe + ' en maakte ' + buit + ' munten buit. (' +
+      R.legerKracht(s) + ' tegen ' + kracht + ')', 'goed');
+    Game.ui.toast('🏆 Roversbende vernietigd!');
+    if (Game.ui.audio && Game.ui.audio.zege) Game.ui.audio.zege();
+    if (viaUitval && Math.random() < 0.35) verliesSoldaat(s);
   }
 
   function beslecht(s) {
-    var verdediging = R.effectieveVerdediging(s);
+    R.zorgLeger(s);
+    var split = R.verdedigingSplit(s);
+    var leger = Math.round(split.garnizoen);
+    var verdediging = Math.round(split.garnizoen + split.positioneel);
     var kracht = s.raid.kracht;
     var verhouding = verdediging / Math.max(1, kracht);
+
+    /* Sortie: the player sent the army out to meet them in the field. */
+    if (s.leger.uitval && leger > 0) {
+      if (leger >= kracht * 0.85) { rout(s, kracht, true); return; }
+      /* Too weak for the open field: the sortie is mauled and falls back. */
+      Game.ui.log.schrijf(s, '⚔️ De uitval was te gewaagd — je leger werd teruggedreven en verloor mannen.', 'slecht');
+      verliesSoldaat(s);
+      if (Math.random() < 0.5) verliesSoldaat(s);
+      verdediging = R.effectieveVerdediging(s);
+      leger = R.legerKracht(s);
+      verhouding = verdediging / Math.max(1, kracht);
+    }
+
+    /* A commanding garrison breaks the band outright, even on the defensive. */
+    if (leger > 0 && verdediging >= kracht * 1.5) { rout(s, kracht, false); return; }
 
     if (verhouding >= 1) {
       s.raid.uitslag = 'verjaagd';
@@ -191,12 +281,13 @@
   }
 
   function verliesSoldaat(s) {
-    var kazernes = s.gebouwen.filter(function (g) {
+    /* Any building that fields soldiers — barracks, training yard or keep. */
+    var kwartieren = s.gebouwen.filter(function (g) {
       var d = Game.core.state.def(g);
       return g.gebouwd && d.banen && d.banen.baan === 'soldaat' && g.werkers > 0;
     });
-    if (!kazernes.length) return;
-    kazernes[0].werkers--;
+    if (!kwartieren.length) return;
+    kwartieren[0].werkers--;
     s.bevolking.totaal = Math.max(0, s.bevolking.totaal - 1);
     Game.core.state.herbereken(s);
     Game.ui.log.schrijf(s, '🪦 Een soldaat sneuvelde in het gevecht.', 'slecht');
@@ -224,11 +315,15 @@
 
   R.statusTekst = function (s) {
     if (s.tijdperk < 2 || s.raid.fase !== 'waarschuwing') return null;
+    R.zorgLeger(s);
     return {
       seconden: Math.ceil(s.raid.timer),
       kracht: s.raid.kracht,
       verdediging: R.effectieveVerdediging(s),
-      totaal: s.verdediging
+      totaal: s.verdediging,
+      leger: R.legerKracht(s),
+      uitval: s.leger.uitval,
+      kanUitval: R.legerKracht(s) > 0
     };
   };
 

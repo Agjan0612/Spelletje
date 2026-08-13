@@ -41,13 +41,30 @@ Je verzamelt zes grondstoffen uit het land — 🥩 vlees, 🪵 hout, 🪨 steen
 | Tijdperk | Wat je krijgt |
 |---|---|
 | 1 · **Nederzetting** | Boerderij, huisjes, houthakker, jacht, visserij, steengroeve, waterput |
-| 2 · **Dorp** | Molen, bakkerij, marktplaats, kapel, koper- en ijzermijn, wachttoren |
-| 3 · **Handelsstad** | Smederij, wapensmid, kazerne, muren, kerk, herberg, edelsteenmijn, gildehuis |
+| 2 · **Dorp** | Molen, bakkerij, marktplaats, kapel, koper- en ijzermijn, wachttoren, **haven**, **oefenveld** |
+| 3 · **Handelsstad** | Smederij, wapensmid, kazerne, muren, **stadspoort**, kerk, herberg, edelsteenmijn, gildehuis |
 | 4 · **Middeleeuwse stad** | Stadhuis, herenhuizen, juwelier, handelshuis, universiteit, kathedraal, kasteel |
 
-Rechtsboven staat precies wat je nog nodig hebt voor het volgende tijdperk. Je stad is
+Rechtsboven staat precies wat je nog nodig hebt voor het volgende tijdperk. Een
+**adviseur** in de doelenkolom wijst je steeds op de handigste volgende stap. Je stad is
 "af" zodra je 100 inwoners hebt, 70% tevredenheid, en de kathedraal, het kasteel, de
 universiteit en het stadhuis staan. Daarna kun je gewoon doorbouwen.
+
+### Je dorp als geheel
+
+- **Een leger dat rovers verslaat.** Soldaten uit het oefenveld, de kazerne en het kasteel
+  vormen samen een leger. Is dat sterk genoeg, dan versla je een roversbende beslissend
+  (met buit en een moreelboost) in plaats van ze alleen tegen te houden. Tijdens de
+  waarschuwing kun je een **uitval** bevelen om ze in het open veld te verpletteren —
+  meer risico, meer beloning. Elke verslagen bende maakt de volgende rovers voorzichtiger.
+- **Een haven aan zee.** Drijft handel over water (munten) en laat vissershutten in de
+  buurt meer vangen.
+- **Samenhorigheid.** Bouw dicht om het dorpsplein in plaats van verspreid over de kaart:
+  een hecht dorp is een gelukkiger dorp.
+- **Feesten.** Vier op het dorpsplein een feest (kost graan en munten) voor een golf van
+  goed humeur door de hele gemeenschap.
+- **Een reizende koopman** komt af en toe langs: hij koopt je overschotten op of laat een
+  klein geschenk achter.
 
 ---
 
