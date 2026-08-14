@@ -73,12 +73,11 @@
     s.leger = s.leger || { overwinningen: 0, uitval: false };
     if (typeof s.leger.overwinningen !== 'number') s.leger.overwinningen = 0;
     s.leger.uitval = !!s.leger.uitval;
-    s.feest = s.feest || { cooldown: 0, aantal: 0 };
-    if (typeof s.feest.cooldown !== 'number') s.feest.cooldown = 0;
-    if (typeof s.feest.aantal !== 'number') s.feest.aantal = 0;
-    s.koopman = s.koopman || { timer: 150 };
-    if (typeof s.koopman.timer !== 'number') s.koopman.timer = 150;
-    if (typeof s.moreel !== 'number') s.moreel = 0;
+    s.feest = s.feest || { cooldown: 0 };
+    s.handel = s.handel || { fase: 'rust', timer: 260, aanbod: null };
+    s.opdracht = s.opdracht || { actief: false, cooldown: 50 };
+    if (typeof s.gebeurtenisTimer !== 'number') s.gebeurtenisTimer = 200;
+    s.dorpelingen = Array.isArray(s.dorpelingen) ? s.dorpelingen : [];
     s.questsGedaan = s.questsGedaan || {};
     s.log = s.log || [];
     s.wandelaars = [];

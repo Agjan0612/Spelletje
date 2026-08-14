@@ -55,10 +55,18 @@
 
       raid: { fase: 'rust', timer: 90, kracht: 0, nummer: 0 },
       leger: { overwinningen: 0, uitval: false },
-      feest: { cooldown: 0, aantal: 0 },
-      koopman: { timer: 150 },
       samenhorigheid: 0,
-      moreel: 0,
+
+      /* Age-2+ activities: festivals, the travelling merchant, the lord's
+         orders and random events. All plain data so the save stays JSON. */
+      feest: { cooldown: 0 },
+      handel: { fase: 'rust', timer: 260, aanbod: null },
+      opdracht: { actief: false, cooldown: 50 },
+      gebeurtenisTimer: 200,
+
+      /* The village register: named inhabitants, kept in step with the
+         headcount by core/dorpelingen.js. Flavour only, never authoritative. */
+      dorpelingen: [],
 
       questsGedaan: {},
       log: [],

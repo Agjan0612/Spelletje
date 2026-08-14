@@ -61,10 +61,11 @@ universiteit en het stadhuis staan. Daarna kun je gewoon doorbouwen.
   buurt meer vangen.
 - **Samenhorigheid.** Bouw dicht om het dorpsplein in plaats van verspreid over de kaart:
   een hecht dorp is een gelukkiger dorp.
-- **Feesten.** Vier op het dorpsplein een feest (kost graan en munten) voor een golf van
-  goed humeur door de hele gemeenschap.
-- **Een reizende koopman** komt af en toe langs: hij koopt je overschotten op of laat een
-  klein geschenk achter.
+- **Feesten.** Via de kaart **"Het dorp"** (rechts) vier je een feest — kost graan en
+  munten en tilt het humeur van de hele gemeenschap tijdelijk op.
+- **Een reizende koopman** komt af en toe langs met ruilaanbiedingen, en de **heer** stuurt
+  af en toe een leveropdracht met een beloning. Beide regel je op diezelfde "Het dorp"-kaart.
+- **Het Dorpsboek** houdt je inwoners bij met naam en beroep, zodat je dorp echt bevolkt voelt.
 
 ---
 

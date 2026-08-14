@@ -172,11 +172,41 @@
         Game.ui.toast('📥 Save geladen');
         O.sluit();
       } },
+      { tekst: '📖 Dorpsboek', actie: function () { O.dorpsboek(); } },
       { tekst: '❓ Uitleg', actie: function () { O.help(false); } },
       { tekst: '🌱 Nieuw spel', actie: function () {
         O.bevestigNieuw();
       } },
       { tekst: '← Verder spelen', actie: function () { O.sluit(); } }
+    ]);
+  };
+
+  /* -------------------------------------------------------- dorpsboek -- */
+
+  O.dorpsboek = function () {
+    var s = spel.state;
+    O.open('📖 Het dorpsboek van ' + s.dorpsnaam, function (el) {
+      var boek = Game.core.dorpelingen.boek(s);
+      if (!boek.length) {
+        el.innerHTML = '<p>Er woont nog niemand in je dorp.</p>';
+        return;
+      }
+      var kop = Game.util.el('p', '', boek.length +
+        ' inwoners noemen ' + s.dorpsnaam + ' hun thuis:');
+      el.appendChild(kop);
+
+      var ul = Game.util.el('ul');
+      ul.className = 'dorpsboek';
+      boek.forEach(function (m) {
+        var li = Game.util.el('li');
+        li.appendChild(Game.util.el('span', 'naam', m.naam));
+        li.appendChild(Game.util.el('span', 'baan', m.baan));
+        li.appendChild(Game.util.el('span', 'sinds', 'sinds jaar ' + m.sinds));
+        ul.appendChild(li);
+      });
+      el.appendChild(ul);
+    }, [
+      { tekst: '← Terug naar het menu', primair: true, actie: function () { O.menu(); } }
     ]);
   };
 
@@ -187,6 +217,30 @@
         O.sluit();
       } },
       { tekst: 'Nee, terug', actie: function () { O.menu(); } }
+    ]);
+  };
+
+  /* ------------------------------------------------------- koopman -- */
+
+  O.koopman = function (s) {
+    var a = s.handel && s.handel.aanbod;
+    if (!a) { Game.ui.toast('🐴 De koopman is al vertrokken'); return; }
+    var H = Game.core.handel;
+    O.open('🐴 De reizende koopman', function (el) {
+      el.innerHTML =
+        '<p>Een koopman met een zwaarbeladen kar biedt je een ruil aan:</p>' +
+        '<p style="text-align:center;font-size:18px;margin:14px 0">' +
+        '<b>' + H.deelTekst(a.geef) + '</b>' +
+        ' &nbsp;→&nbsp; ' +
+        '<b>' + H.deelTekst(a.krijg) + '</b></p>' +
+        '<p>Hij trekt zo weer verder. Ruilen?</p>';
+    }, [
+      { tekst: '🤝 Ruilen', primair: true, actie: function () {
+        var r = Game.core.handel.accepteer(s);
+        if (!r.ok) { Game.ui.toast('⚠️ ' + r.reden); return; }
+        O.sluit();
+      } },
+      { tekst: 'Nee, bedankt', actie: function () { O.sluit(); } }
     ]);
   };
 

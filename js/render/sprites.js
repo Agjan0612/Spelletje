@@ -474,7 +474,51 @@
       ctx.textBaseline = 'middle';
       ctx.fillText(def.emoji, top.cx, top.cy - (cfg.stijl === 'plat' ? p * 0.1 : dakH * 0.42));
     }
+
+    /* Chimney smoke + evening window glow (skipped for the placement ghost). */
+    sfeer(ctx, foot, top, H, def, opties);
   };
+
+  /* Buildings whose chimneys smoke and whose windows glow in the evening. */
+  var WARM = {
+    huisje: 1, bakkerij: 1, smederij: 1, wapensmid: 1, herberg: 1,
+    herenhuis: 1, dorpsplein: 1, stadhuis: 1
+  };
+
+  /* Homely atmosphere, driven by the real-time clock / night value passed in
+     `opties` by renderer.js. Purely decorative; the ghost passes no klok so it
+     stays smoke-free. */
+  function sfeer(ctx, foot, top, H, def, o) {
+    if (o.klok == null || !WARM[def.id]) return;
+    var klok = o.klok, faze = (o.id || 0) * 1.7, breed = foot.hw;
+
+    /* A few smoke puffs looping up off the roof. */
+    var cx = top.cx + breed * 0.22, cy = top.cy - H * 0.1;
+    for (var i = 0; i < 3; i++) {
+      var t = ((klok * 0.35 + faze + i * 0.55) % 1.65) / 1.65;
+      ctx.globalAlpha = (1 - t) * 0.24;
+      ctx.fillStyle = '#c9ccd2';
+      ctx.beginPath();
+      ctx.arc(cx + Math.sin(t * 4 + faze) * breed * 0.12, cy - t * breed * 1.4, breed * (0.08 + t * 0.14), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    /* Warm glow from the windows once dusk sets in. */
+    var nacht = o.nacht || 0;
+    if (nacht > 0.12) {
+      var gx = foot.cx, gy = foot.cy - H * 0.42, gr = breed * 0.95;
+      var g = ctx.createRadialGradient(gx, gy, 1, gx, gy, gr);
+      g.addColorStop(0, 'rgba(255,212,128,.8)');
+      g.addColorStop(1, 'rgba(255,212,128,0)');
+      ctx.globalAlpha = Math.min(0.5, nacht * 0.6);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(gx, gy, gr, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  }
 
   /* Left + right visible walls; returns the raised top-face diamond. */
   function isoMuren(ctx, foot, H, muur) {

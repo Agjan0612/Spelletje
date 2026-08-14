@@ -168,26 +168,13 @@
   };
 
   /* The town square doubles as the seat of village life: how close-knit the
-     town is, the festival button, and the state of your army. */
+     town is and the state of your army. (Festivals live in the "Het dorp"
+     card in the right-hand column.) */
   function dorpsleven(s) {
-    el.appendChild(Game.util.el('div', 'kop', '🎉 Dorpsleven'));
+    el.appendChild(Game.util.el('div', 'kop', '🤝 Dorpsleven'));
     el.appendChild(regel('Samenhorigheid', Math.round((s.samenhorigheid || 0) * 100) + '%'));
-
-    var check = Game.core.events.kanFeest(s);
-    var kosten = Game.core.events.FEEST_KOSTEN;
-    var kostenTekst = [];
-    for (var r in kosten) kostenTekst.push(Game.config.resources[r].emoji + kosten[r]);
-    var feestRij = Game.util.el('div', 'knoprij');
-    var feest = Game.util.el('button', 'primair', '🎉 Feest vieren  ' + kostenTekst.join(' '));
-    feest.disabled = !check.ok;
-    if (!check.ok) feest.title = check.reden;
-    feest.addEventListener('click', function () {
-      var uit = Game.core.events.feest(s);
-      if (!uit.ok) Game.ui.toast('⚠️ ' + uit.reden);
-      P.ververs(s, true);
-    });
-    feestRij.appendChild(feest);
-    el.appendChild(feestRij);
+    el.appendChild(Game.util.el('div', 'beschrijving',
+      'Bouw dicht om het plein voor meer samenhorigheid. Feesten organiseer je via "Het dorp" rechts.'));
 
     if (s.tijdperk >= 2) {
       var leger = Game.core.raids.legerStatus(s);
