@@ -1,5 +1,10 @@
 # 🎣 Bouwplan — de speler hooked krijgen
 
+> **Status: gebouwd.** Alle twaalf ideeën plus de bonus zijn geïmplementeerd op
+> branch `claude/game-engagement-ideas-5g57qg`. De simulatiekern valideert headless
+> naar tijdperk 3–4 zonder honger, en het spel laadt schoon in Chromium (devcheck
+> groen, geen JS-fouten). Dit document blijft staan als ontwerpverantwoording.
+
 De derde laag van het plan. Er liggen al twee documenten en die blijven staan:
 
 - **`ROADMAP.md`** — de *visuele* laag: de wereld zichtbaar laten leven.

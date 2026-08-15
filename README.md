@@ -98,6 +98,29 @@ dan gaat bouwen ineens heel traag. Houd er dus altijd een paar vrij.
 
 ---
 
+## Wat het net wat leuker maakt
+
+Naast bouwen en overleven zitten er een paar dingen in die je aan het spelen houden:
+
+- **⭐ Faam.** Eén cijfer bovenin dat je hele stad samenvat — inwoners, gebouwen,
+  tijdperken, overleefde winters, verjaagde rovers. Je hoogste score wordt bewaard,
+  dus er is altijd een record om te verbreken.
+- **🗺️ Streken.** Elke kaart heeft eigen landeigenschappen (vruchtbare delta, rijke
+  aders, barre winters…). Elk potje speelt daardoor anders.
+- **🎲 Zaden & uitdaging van de dag.** Elk zaad geeft dezelfde kaart. Deel je zaad
+  (via ☰ Menu of de postkaart) en een vriend speelt exact jouw wereld — of neem het
+  op tegen elkaar op de *uitdaging van de dag*.
+- **📜 Dorpsbeleid.** Verzamel *invloed* en kondig blijvende edicten af, elk met een
+  echte afweging. Open het **📖 Stadsboek** rechtsboven.
+- **🐴 Reizende koopman.** Af en toe zet een karavaan zijn kraam op. De prijzen volgen
+  vraag en aanbod: overschot dumpen levert weinig op, schaarste inkopen kost veel.
+- **🏅 Mijlpalen.** Verzamelbare prestaties die je Faam opleveren en zich vullen over
+  al je spellen heen. Ook in het Stadsboek.
+- **👤 Notabelen.** De baljuw, de pastoor, de smid — je stad krijgt een paar gezichten
+  met een naam en een humeur dat meebeweegt met hoe het gaat.
+- **🔊 Geluid & sfeer.** Kleine geluidjes bij plaatsen, bouwen en groeien, een fanfare
+  bij een nieuw tijdperk, en een kalenderstrip die je de winter ziet aankomen.
+
 ## Opslaan
 
 Het spel slaat zichzelf elke 20 seconden op in je browser. Sluit je het tabblad, dan

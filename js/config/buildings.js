@@ -224,7 +224,7 @@
       id: 'stadhuis', naam: 'Stadhuis', emoji: '🏛️', tijdperk: 4, grootte: 2,
       kosten: { hout: 220, steen: 320, gereedschap: 40, koper: 40 }, bouwtijd: 45, max: 1,
       muur: '#e6dcc0', dak: '#7a4030',
-      opslag: 800, tevredenheid: 10, productieBonus: 0.05,
+      opslag: 800, tevredenheid: 10, productieBonus: 0.05, wonder: true,
       beschrijving: 'Zetel van het stadsbestuur. Meer opslag, meer trots, en een efficiënter bestuur.'
     },
     {
@@ -248,7 +248,7 @@
       muur: '#e6dcc0', dak: '#4a4360',
       banen: { aantal: 4, baan: 'geleerde' },
       onderhoud: { munten: 0.15 },
-      productieBonus: 0.15, tevredenheid: 6,
+      productieBonus: 0.15, tevredenheid: 6, wonder: true,
       beschrijving: 'Geleerden verbeteren elk ambacht: +15% op alle productie in je stad.'
     },
     {
@@ -256,7 +256,7 @@
       kosten: { hout: 320, steen: 620, koper: 100, edelsteen: 50, gereedschap: 50 }, bouwtijd: 80, max: 1,
       muur: '#efe6cc', dak: '#5a6a72',
       banen: { aantal: 3, baan: 'priester' },
-      tevredenheid: 28,
+      tevredenheid: 28, wonder: true,
       beschrijving: 'Het pronkstuk van je stad. Torens tot in de wolken en glas in lood.'
     },
     {
@@ -264,7 +264,7 @@
       kosten: { hout: 400, steen: 820, ijzer: 200, gereedschap: 80 }, bouwtijd: 90, max: 1,
       muur: '#b8b0a2', dak: '#5a3a30',
       banen: { aantal: 8, baan: 'soldaat' },
-      verdediging: 90, verdPerWerker: 18, tevredenheid: 6, opslag: 400,
+      verdediging: 90, verdPerWerker: 18, tevredenheid: 6, opslag: 400, wonder: true,
       beschrijving: 'Een machtige burcht. Rovers wagen zich niet graag aan een stad met een kasteel.'
     }
   ];

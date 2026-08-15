@@ -18,6 +18,12 @@
     els.seizoen = document.querySelector('#stat-season .val');
     els.seizoenIco = document.querySelector('#stat-season .ico');
     els.raid = document.getElementById('raid-warning');
+    els.calendar = document.getElementById('calendar');
+    els.handel = document.getElementById('btn-handel');
+
+    var boek = document.getElementById('btn-boek');
+    if (boek) boek.addEventListener('click', function () { Game.ui.overlay.stadsboek(); });
+    if (els.handel) els.handel.addEventListener('click', function () { Game.ui.overlay.handel(); });
 
     bouwResourceRij();
 
@@ -109,6 +115,13 @@
     els.seizoen.textContent = Game.core.seasons.naam(s);
     els.seizoenIco.textContent = Game.core.seasons.emoji(s);
 
+    if (els.calendar) els.calendar.innerHTML = kalenderHTML(s);
+    if (els.handel) {
+      var koopmanEr = Game.core.handel && Game.core.handel.actief(s);
+      els.handel.classList.toggle('hidden', !koopmanEr);
+      if (koopmanEr) els.handel.title = 'De koopman is er — nog ' + Game.core.handel.seconden(s) + 's';
+    }
+
     /* Raid countdown. */
     var raid = Game.core.raids.statusTekst(s);
     if (raid) {
@@ -143,6 +156,41 @@
       (d.honger ? 'HONGER ' + n(d.honger) + '\n' : '') +
       (d.beleid ? 'Beleid ' + n(d.beleid) + '\n' : '') +
       (d.moreel ? 'Moreel ' + n(d.moreel) : '');
+  }
+
+  /* Calendar strip: the four seasons with the current one lit, plus what's
+     coming — the winter to brace for, or the merchant to catch. This is the
+     "anticipation" layer: you play toward the next beat instead of being
+     surprised by it. */
+  function kalenderHTML(s) {
+    var emojis = Game.core.state.SEIZOEN_EMOJI;
+    var namen = Game.core.state.SEIZOENEN;
+    var perSeizoen = Game.core.state.DAGEN_PER_SEIZOEN;
+    var dagInSeizoen = s.dag % perSeizoen;
+
+    var pips = '';
+    for (var i = 0; i < 4; i++) {
+      pips += '<span class="pip' + (i === s.seizoen ? ' nu' : '') +
+        (i === 3 ? ' winter' : '') + '" title="' + namen[i] + '">' + emojis[i] + '</span>';
+    }
+    var frac = Math.round((dagInSeizoen / perSeizoen) * 100);
+
+    var volgende;
+    if (Game.core.handel && Game.core.handel.actief(s)) {
+      volgende = '🐴 koopman vertrekt over ' + Game.core.handel.seconden(s) + 's';
+    } else if (s.raid && s.raid.fase === 'waarschuwing') {
+      volgende = '⚔️ rovers over ' + Math.ceil(s.raid.timer) + 's';
+    } else if (s.seizoen < 3) {
+      var n = (3 - s.seizoen) * perSeizoen - dagInSeizoen;
+      volgende = '❄️ winter over ' + n + ' ' + (n === 1 ? 'dag' : 'dagen');
+    } else {
+      var n2 = perSeizoen - dagInSeizoen;
+      volgende = '🌱 lente over ' + n2 + ' ' + (n2 === 1 ? 'dag' : 'dagen');
+    }
+
+    return '<div class="cal-pips">' + pips + '</div>' +
+      '<div class="cal-bar"><i style="width:' + frac + '%"></i></div>' +
+      '<div class="cal-next">' + volgende + '</div>';
   }
 
   function faamUitleg(s) {

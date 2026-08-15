@@ -354,3 +354,118 @@ button {
   #panel { width: 232px; }
   #logbox { width: 232px; }
 }
+
+/* ==========================================================================
+   Engagement-laag: faam, kalender, koopman, stadsboek, postkaart
+   ========================================================================== */
+
+/* Faam-stat springt er iets uit als het hart van je voortgang. */
+.stat.faam { background: rgba(120, 92, 30, .38); border-color: var(--goud); }
+.stat.faam .ico { filter: drop-shadow(0 0 3px rgba(240, 205, 127, .6)); }
+
+/* Kalenderstrip — bovenin, wat er speelt en wat er aankomt. */
+#calendar {
+  position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+  z-index: 12; display: flex; align-items: center; gap: 8px;
+  background: rgba(26, 18, 11, .82); border: 1px solid var(--rand);
+  border-radius: 20px; padding: 4px 12px; font-size: 12px; pointer-events: none;
+  box-shadow: var(--schaduw);
+}
+#calendar .cal-pips { display: flex; gap: 2px; }
+#calendar .pip { opacity: .38; font-size: 14px; filter: grayscale(.6); transition: all .2s; }
+#calendar .pip.nu { opacity: 1; filter: none; transform: scale(1.25); }
+#calendar .pip.winter.nu { text-shadow: 0 0 6px var(--lucht); }
+#calendar .cal-bar { width: 46px; height: 5px; background: rgba(0,0,0,.4); border-radius: 3px; overflow: hidden; }
+#calendar .cal-bar i { display: block; height: 100%; background: var(--goud); transition: width .3s; }
+#calendar .cal-next { color: var(--perkament); font-weight: 700; white-space: nowrap; }
+
+/* Raid-waarschuwing net onder de kalender, zodat ze niet botsen. */
+#raid-warning { top: 58px; }
+
+/* Koopman-knop verschijnt als de karavaan er is. */
+#btn-handel {
+  position: absolute; top: 8px; left: 12px; z-index: 13;
+  width: 46px; height: 46px; font-size: 22px; border-radius: 50%;
+  background: var(--goud); color: #2b1d12; border: 2px solid var(--goud-licht);
+  box-shadow: var(--schaduw); cursor: pointer; animation: bob 1.4s ease-in-out infinite;
+}
+#btn-handel:hover { background: var(--goud-licht); }
+@keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+
+/* Stadsboek in de overlay. */
+.boek-tabs { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 12px; }
+.boek-tabs button {
+  padding: 6px 12px; font-size: 12.5px; font-weight: 700;
+  background: var(--hout); color: var(--perkament); border: 1px solid var(--rand);
+  border-radius: 6px; cursor: pointer;
+}
+.boek-tabs button:hover { background: var(--hout-licht); }
+.boek-tabs button.actief { background: var(--goud); color: #2b1d12; border-color: var(--goud-licht); }
+.boek-body { max-height: 58vh; overflow-y: auto; padding-right: 4px; }
+.boek-invloed { font-size: 14px; font-weight: 700; color: var(--goud-licht); }
+
+/* Edicten. */
+.edict {
+  background: rgba(0,0,0,.28); border: 1px solid var(--rand); border-radius: 7px;
+  padding: 8px 10px; margin: 6px 0;
+}
+.edict.aan { border-color: var(--mos); background: rgba(108, 138, 74, .18); }
+.edict.vergrendeld { opacity: .5; }
+.edict-kop { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+.edict-kost { margin-left: auto; color: var(--goud-licht); font-weight: 700; }
+.edict-tekst { font-size: 12px; opacity: .9; margin: 4px 0 7px; }
+.edict button {
+  padding: 4px 12px; font-size: 12px; font-weight: 700; cursor: pointer;
+  background: var(--goud); color: #2b1d12; border: none; border-radius: 5px;
+}
+.edict button:disabled { background: var(--hout-licht); color: var(--perkament-dof); cursor: default; }
+
+/* Prijzenkast. */
+.mijlpaal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.mijlpaal {
+  background: rgba(0,0,0,.3); border: 1px solid var(--rand); border-radius: 7px;
+  padding: 8px; text-align: center; opacity: .55;
+}
+.mijlpaal.behaald { opacity: 1; border-color: var(--goud); background: rgba(120, 92, 30, .2); }
+.mijlpaal.ditspel { box-shadow: 0 0 0 2px var(--goud-licht) inset; }
+.mijlpaal .m-emoji { font-size: 26px; }
+.mijlpaal .m-titel { font-weight: 700; font-size: 12.5px; color: var(--goud-licht); margin: 2px 0; }
+.mijlpaal .m-tekst { font-size: 11px; opacity: .85; line-height: 1.35; }
+.mijlpaal .m-faam { font-size: 11px; color: var(--goud); margin-top: 3px; }
+
+/* Notabelen. */
+.notabelen { display: flex; flex-direction: column; gap: 7px; }
+.notabele {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(0,0,0,.28); border: 1px solid var(--rand); border-radius: 7px; padding: 7px 10px;
+}
+.notabele .n-emoji { font-size: 26px; }
+.notabele .n-naam { font-weight: 700; color: var(--perkament); }
+.notabele .n-titel { font-size: 11.5px; color: var(--goud); text-transform: uppercase; letter-spacing: .5px; }
+.notabele .n-humeur { font-size: 12.5px; opacity: .9; font-style: italic; }
+
+/* Streekkaarten. */
+.streek-kaart { border: 1px solid var(--rand); border-radius: 7px; padding: 8px 10px; margin: 6px 0; background: rgba(0,0,0,.25); }
+.streek-kaart.goed { border-left: 4px solid var(--mos); }
+.streek-kaart.slecht { border-left: 4px solid var(--bloed); }
+.streek-kaart .s-kop { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+.streek-kaart .badge { margin-left: auto; font-size: 10.5px; padding: 1px 7px; border-radius: 10px; text-transform: uppercase; letter-spacing: .5px; }
+.streek-kaart .badge.goed { background: var(--mos); color: #10160a; }
+.streek-kaart .badge.slecht { background: var(--bloed); color: #fff; }
+.streek-kaart .s-tekst { font-size: 12px; opacity: .9; margin-top: 3px; }
+
+/* Handelsoverlay. */
+.handel-lijst { display: flex; flex-direction: column; gap: 7px; margin-top: 6px; }
+.deal { display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,.28); border: 1px solid var(--rand); border-radius: 7px; padding: 8px 10px; }
+.deal.gedaan { opacity: .5; }
+.deal .deal-tekst { flex: 1; font-size: 13.5px; }
+.deal button { padding: 4px 14px; font-size: 12px; font-weight: 700; background: var(--goud); color: #2b1d12; border: none; border-radius: 5px; cursor: pointer; }
+.deal button:disabled { background: var(--hout-licht); color: var(--perkament-dof); cursor: default; }
+
+/* Zaad-kiezen + records + postkaart. */
+.zaad-rij { display: flex; gap: 8px; margin: 8px 0; }
+.zaad-rij input { flex: 1; padding: 8px 10px; font-size: 14px; background: rgba(0,0,0,.35); border: 1px solid var(--goud); border-radius: 6px; color: var(--perkament); }
+#overlay-body .klein { font-size: 11.5px; opacity: .8; }
+.welkom-record { text-align: center; color: var(--goud-licht); font-size: 15px; }
+.zege-faam { text-align: center; font-size: 22px; color: var(--goud-licht); margin: 10px 0; font-weight: 700; }
+.zege-faam .nieuw-record { color: var(--mos); font-size: 15px; }
