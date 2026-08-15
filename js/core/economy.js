@@ -54,6 +54,10 @@
       if (d.wint) {
         var w = d.wint;
         var tempo = w.tempo * g.werkers * mult * s.bonus.mijnbouw;
+        /* The land itself favours some trades over others (streken). */
+        var streekCat = w.node === 'hout' ? 'hout'
+          : (w.node === 'wild' || w.node === 'vis') ? 'jacht' : 'mijn';
+        tempo *= Game.config.streekMult(s, streekCat);
         if (d.seizoensgevoelig) tempo *= seizoen.factor(s, 'jacht');
 
         var wil = tempo * dt;
@@ -80,7 +84,7 @@
       if (d.maakt) {
         var factor = g.werkers * mult;
         if (d.seizoensgevoelig) factor *= seizoen.factor(s, 'akker');
-        if (g.type === 'boerderij') factor *= molenBonus(s, g);
+        if (g.type === 'boerderij') factor *= molenBonus(s, g) * Game.config.streekMult(s, 'akker');
 
         if (factor > 0) {
           /* Scale the recipe down to what the inputs allow. */

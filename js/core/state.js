@@ -32,6 +32,9 @@
       tijdperk: 1,
       gewonnen: false,
 
+      /* Land blessings/curses rolled from the seed — same seed, same land. */
+      streken: Game.config.rolStreken ? Game.config.rolStreken(seed) : [],
+
       snelheid: 1,
 
       kaart: kaart,
@@ -48,12 +51,25 @@
       tevredenheid: 60,
       hongerTimer: 0,
 
+      /* Mastery streaks — plain counters, fed into Faam and celebrated. */
+      wintersOverleefd: 0,
+      hongervrijeWinters: 0,
+      raidsVerjaagd: 0,
+      roversStreak: 0,
+      mijlpalenGedaan: {},
+      mijlpaalFaam: 0,
+
+      /* Town edicts and the slow influence currency that pays for them. */
+      invloed: 0,
+      beleid: {},
+
       /* Cached per-second flows, refreshed each tick for the HUD. */
       stroom: {},
       bonus: { productie: 1, mijnbouw: 1 },
       verdediging: 0,
 
       raid: { fase: 'rust', timer: 90, kracht: 0, nummer: 0 },
+      handel: { fase: 'rust', timer: 200, aanbod: null },
 
       questsGedaan: {},
       log: [],
@@ -162,6 +178,9 @@
         if (d.verdPerWerker && !g.uit) verdediging += d.verdPerWerker * g.werkers;
       }
     }
+
+    /* Town edicts can lift or dampen production across the board. */
+    if (Game.core.beleid) prodBonus *= Game.core.beleid.mult(s, 'productie');
 
     s.bevolking.ruimte = ruimte;
     s.capaciteit = opslag;

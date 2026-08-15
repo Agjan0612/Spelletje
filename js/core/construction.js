@@ -142,6 +142,7 @@
         g.gebouwd = true;
         Game.core.state.herbereken(s);
         Game.ui.log.schrijf(s, d.emoji + ' ' + d.naam + ' is klaar!', 'goed');
+        if (Game.ui.audio && Game.ui.audio.ching) Game.ui.audio.ching();
         Game.core.population.autoBemannen(s, g);
       }
     }

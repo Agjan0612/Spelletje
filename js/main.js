@@ -68,6 +68,9 @@
     spel.cam.zoom = 1.3;
     spel.cam.centreerOpTegel(s.start ? s.start.x : s.kaart.b / 2, s.start ? s.start.y : s.kaart.h / 2);
     if (Game.render.particles) Game.render.particles.reset();
+    /* Start the Faam counter at the real value so it doesn't tick down from a
+       previous game's score. */
+    if (Game.ui.hud && Game.core.faam) Game.ui.hud.faamGetoond = Game.core.faam.bereken(s);
     Game.render.renderer.verversWereld(s);
     Game.ui.log.teken(s);
     Game.ui.hud.ververs(s);
@@ -76,9 +79,13 @@
     Game.ui.panel.ververs(s);
   };
 
-  spel.nieuwSpel = function () {
-    var s = Game.core.state.nieuw(undefined, verzinNaam());
+  spel.nieuwSpel = function (seed) {
+    var s = Game.core.state.nieuw(seed, verzinNaam());
     Game.ui.log.schrijf(s, '🌅 ' + s.dorpsnaam + ' is gesticht. Succes!', 'goed');
+    var label = Game.config.streekLabel ? Game.config.streekLabel(s) : '';
+    if (label) {
+      Game.ui.log.schrijf(s, '🗺️ Deze streek: ' + label + '.');
+    }
     spel.zetState(s);
     spel.actief = true;
     saveTimer = 0;
@@ -169,6 +176,7 @@
       if (saveTimer >= AUTOSAVE) {
         saveTimer = 0;
         Game.core.save.opslaan(s);
+        if (Game.core.faam) Game.core.faam.bewaarRecord(s);
       }
     }
 
@@ -182,7 +190,10 @@
     Game.core.economy.tick(s, dt);
     Game.core.population.tick(s, dt);
     Game.core.raids.tick(s, dt);
+    if (Game.core.handel) Game.core.handel.tick(s, dt);
+    if (Game.core.beleid) Game.core.beleid.tick(s, dt);
     Game.ui.quests.controleer(s);
+    if (Game.core.mijlpalen) Game.core.mijlpalen.controleer(s);
     Game.core.ages.controleerOverwinning(s);
   }
 
@@ -307,6 +318,7 @@
       if (!uitkomst.ok) {
         Game.ui.toast('⚠️ ' + uitkomst.reden, 1600);
       } else {
+        if (Game.ui.audio && Game.ui.audio.tik) Game.ui.audio.tik();
         Game.render.renderer.verversGebouwen(s);
         Game.ui.buildmenu.ververs(s);
         /* Keep the building selected so you can place a row of houses. */

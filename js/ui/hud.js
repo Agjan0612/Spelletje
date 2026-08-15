@@ -10,6 +10,7 @@
     els.tijdperk = document.getElementById('agename');
     els.primair = document.getElementById('res-primary');
     els.secundair = document.getElementById('res-secondary');
+    els.faam = document.querySelector('#stat-faam .val');
     els.pop = document.querySelector('#stat-pop .val');
     els.happy = document.querySelector('#stat-happy .val');
     els.happyIco = document.querySelector('#stat-happy .ico');
@@ -46,10 +47,28 @@
     });
   }
 
+  /* The Faam counter visibly ticks up toward its true value instead of
+     snapping, which is what makes a rising number feel rewarding. */
+  H.faamGetoond = 0;
+
   H.ververs = function (s) {
     els.naam.textContent = s.dorpsnaam;
     var tp = Game.config.age(s.tijdperk);
     els.tijdperk.textContent = 'Tijdperk ' + s.tijdperk + ' — ' + tp.naam;
+
+    if (els.faam && Game.core.faam) {
+      var doel = Game.core.faam.bereken(s);
+      var verschil = doel - H.faamGetoond;
+      if (Math.abs(verschil) < 1) H.faamGetoond = doel;
+      else H.faamGetoond += verschil * 0.28 + (verschil > 0 ? 1 : -1);
+      els.faam.textContent = Game.util.fmt(Math.round(H.faamGetoond));
+      document.getElementById('stat-faam').title = faamUitleg(s);
+      /* A soft tick when the shown value is still climbing toward a higher goal. */
+      if (Game.ui.audio && Game.ui.audio.tik && doel - H.faamGetoond > 3 && s.snelheid > 0) {
+        H.faamTikTeller = (H.faamTikTeller || 0) + 1;
+        if (H.faamTikTeller % 3 === 0) Game.ui.audio.tik(0.05);
+      }
+    }
 
     Game.config.resourceOrder.forEach(function (id) {
       var e = resEls[id];
@@ -122,7 +141,27 @@
       'Woonruimte ' + n(d.wonen) + '\n' +
       'Voorzieningen ' + n(d.diensten) + '\n' +
       (d.honger ? 'HONGER ' + n(d.honger) + '\n' : '') +
+      (d.beleid ? 'Beleid ' + n(d.beleid) + '\n' : '') +
       (d.moreel ? 'Moreel ' + n(d.moreel) : '');
+  }
+
+  function faamUitleg(s) {
+    var d = Game.core.faam.detail(s);
+    function r(x) { return (x >= 0 ? '+' : '') + Math.round(x); }
+    var record = Game.core.faam.record();
+    var regels = [
+      'Faam ' + Game.core.faam.bereken(s) + (record ? '   (record ' + record + ')' : ''),
+      'Inwoners ' + r(d.inwoners),
+      'Gebouwen ' + r(d.gebouwen),
+      'Tijdperk ' + r(d.tijdperk),
+      'Welvaart ' + r(d.welvaart),
+      'Tevredenheid ' + r(d.tevredenheid)
+    ];
+    if (d.winters) regels.push('Overleefde winters ' + r(d.winters));
+    if (d.rovers) regels.push('Rovers verjaagd ' + r(d.rovers));
+    if (d.mijlpalen) regels.push('Mijlpalen ' + r(d.mijlpalen));
+    if (d.voltooid) regels.push('Voltooide stad ' + r(d.voltooid));
+    return regels.join('\n');
   }
 
   Game.ui.hud = H;

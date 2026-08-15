@@ -75,6 +75,12 @@
     s.wandelaars = [];
     s.tevredenheid = typeof s.tevredenheid === 'number' ? s.tevredenheid : 60;
     s.snelheid = s.snelheid || 1;
+    s.streken = s.streken || [];
+    s.mijlpalenGedaan = s.mijlpalenGedaan || {};
+    if (typeof s.mijlpaalFaam !== 'number') s.mijlpaalFaam = 0;
+    if (typeof s.invloed !== 'number') s.invloed = 0;
+    s.beleid = s.beleid || {};
+    s.handel = s.handel || { fase: 'rust', timer: 200, aanbod: null };
 
     /* Relief layer: saves from before it lack per-tile height. Recompute it
        from the seed so old towns get relief too, without breaking pure JSON. */

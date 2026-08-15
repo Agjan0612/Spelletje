@@ -160,6 +160,80 @@
     tonen.forEach(function (f, i) { setTimeout(function () { A.klok(f); }, i * 260); });
   };
 
+  /* ------------------------------------------------------------ small cues --
+   * The moment-to-moment "juice": tiny synth blips on the little actions.
+   * Every one is cheap, guarded and wrapped in try/catch so sound can never
+   * break the game, and they all respect the same on/off preference. */
+
+  /* Soft wooden click — placing a building, a Faam tick. */
+  A.tik = function (vol) {
+    if (!A.aan || !zorgVoorContext()) return;
+    try {
+      var t = ctx.currentTime;
+      stem('triangle', 240, t, 0.09, vol || 0.18);
+      stem('sine', 480, t, 0.06, (vol || 0.18) * 0.5);
+    } catch (e) { /* ignore */ }
+  };
+
+  /* Bright two-note rise — a building site finishes. */
+  A.ching = function () {
+    if (!A.aan || !zorgVoorContext()) return;
+    try {
+      var t = ctx.currentTime;
+      stem('sine', 660, t, 0.16, 0.22);
+      stem('sine', 990, t + 0.08, 0.22, 0.20);
+    } catch (e) { /* ignore */ }
+  };
+
+  /* Metallic double blip — coins, a trade. */
+  A.munt = function () {
+    if (!A.aan || !zorgVoorContext()) return;
+    try {
+      var t = ctx.currentTime;
+      stem('square', 1180, t, 0.10, 0.10);
+      stem('square', 1560, t + 0.06, 0.13, 0.09);
+    } catch (e) { /* ignore */ }
+  };
+
+  /* Soft low-to-high pop — a new villager settles. */
+  A.plop = function () {
+    if (!A.aan || !zorgVoorContext()) return;
+    try {
+      var t = ctx.currentTime;
+      var o = ctx.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(300, t);
+      o.frequency.exponentialRampToValueAtTime(660, t + 0.12);
+      var g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.16, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+      o.connect(g); g.connect(master);
+      o.start(t); o.stop(t + 0.22);
+    } catch (e) { /* ignore */ }
+  };
+
+  /* A short rising triad — an objective met, a happy accent under the bell. */
+  A.fanfare = function () {
+    if (!A.aan || !zorgVoorContext()) return;
+    try {
+      var t = ctx.currentTime;
+      [523, 659, 784].forEach(function (f, i) {
+        stem('triangle', f, t + i * 0.09, 0.28, 0.16);
+      });
+    } catch (e) { /* ignore */ }
+  };
+
+  /* A brighter "ta-daa" for a milestone unlocked. */
+  A.mijlpaal = function () {
+    if (!A.aan || !zorgVoorContext()) return;
+    try {
+      var t = ctx.currentTime;
+      stem('triangle', 784, t, 0.18, 0.18);
+      stem('triangle', 1046, t + 0.12, 0.34, 0.18);
+      stem('sine', 1568, t + 0.12, 0.34, 0.08);
+    } catch (e) { /* ignore */ }
+  };
+
   /* ------------------------------------------------------------------ toggle */
 
   A.zetAan = function (aan) {

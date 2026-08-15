@@ -38,6 +38,7 @@
         tekst += ' (+' + delen.join(', ') + ')';
       }
       Game.ui.log.schrijf(s, tekst, 'goed');
+      if (Game.ui.audio && Game.ui.audio.fanfare) Game.ui.audio.fanfare();
     }
   };
 

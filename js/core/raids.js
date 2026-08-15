@@ -149,6 +149,12 @@
       Game.ui.log.schrijf(s, '🛡️ Je wacht heeft de rovers verjaagd! (' + verdediging + ' tegen ' + kracht + ')', 'goed');
       Game.ui.toast('🛡️ De rovers zijn verjaagd!');
       s.moreel = (s.moreel || 0) + 7;
+      s.raidsVerjaagd = (s.raidsVerjaagd || 0) + 1;
+      s.roversStreak = (s.roversStreak || 0) + 1;
+      if (s.roversStreak >= 3 && s.roversStreak % 3 === 0) {
+        Game.ui.toast('🛡️ ' + s.roversStreak + ' aanvallen op rij afgeslagen!');
+        if (Game.ui.audio && Game.ui.audio.fanfare) Game.ui.audio.fanfare();
+      }
       if (Math.random() < 0.3) verliesSoldaat(s);
       return;
     }
@@ -159,6 +165,7 @@
       Game.ui.log.schrijf(s, '⚔️ Zware strijd! De rovers zijn teruggeslagen, maar namen ' + buit + ' mee.', 'slecht');
       Game.ui.toast('⚔️ Ternauwernood standgehouden');
       s.moreel = (s.moreel || 0) - 4;
+      s.roversStreak = 0;
       verliesSoldaat(s);
       return;
     }
@@ -170,7 +177,11 @@
     if (schade) tekst += ' ' + schade + ' is zwaar beschadigd.';
     Game.ui.log.schrijf(s, tekst, 'slecht');
     Game.ui.toast('🔥 De rovers hebben toegeslagen!');
+    if (Game.ui.audio && Game.ui.audio.dreun) Game.ui.audio.dreun();
+    if (Game.render.renderer.schok) Game.render.renderer.schok(11);
+    if (Game.render.renderer.flits) Game.render.renderer.flits('200,60,40');
     s.moreel = (s.moreel || 0) - 12;
+    s.roversStreak = 0;
     if (s.bevolking.totaal > 4 && Math.random() < 0.5) {
       Game.core.population.verwijderDorpeling(s);
       Game.ui.log.schrijf(s, '💀 Een dorpeling kwam om bij de overval.', 'slecht');

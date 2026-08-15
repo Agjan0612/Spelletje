@@ -30,13 +30,33 @@
     var jaar = Math.floor(totaalDagen / (S.DAGEN_PER_SEIZOEN * 4)) + 1;
 
     if (seizoen !== s.seizoen) {
+      var vorig = s.seizoen;
       s.seizoen = seizoen;
       Game.ui.log.schrijf(s, BOODSCHAP[seizoen], seizoen === 3 ? 'slecht' : '');
 
       if (seizoen === 3) {
+        s.hongerDitWinter = false;   /* start the winter with a clean slate */
         var dagen = Game.core.population.voedselDagen(s);
         if (dagen < 4) {
           Game.ui.toast('❄️ De winter is er — en je voorraad is krap!');
+        }
+      }
+
+      /* Leaving winter for spring: a whole winter without a famine is a real
+         achievement — reward the streak, the moment the game most tests you. */
+      if (vorig === 3 && seizoen === 0 && s.bevolking.totaal > 3) {
+        if (!s.hongerDitWinter) {
+          s.wintersOverleefd = (s.wintersOverleefd || 0) + 1;
+          s.hongervrijeWinters = (s.hongervrijeWinters || 0) + 1;
+          s.moreel = (s.moreel || 0) + 3;
+          if (s.hongervrijeWinters % 3 === 0) {
+            Game.ui.toast('❄️ → 🌱 ' + s.hongervrijeWinters + ' winters op rij zonder honger!');
+            if (Game.ui.audio && Game.ui.audio.fanfare) Game.ui.audio.fanfare();
+            Game.ui.log.schrijf(s, '🌱 Alweer een winter goed doorstaan — je dorp bloeit op. (' +
+              s.hongervrijeWinters + ' op rij)', 'goed');
+          }
+        } else {
+          s.hongervrijeWinters = 0;
         }
       }
     }

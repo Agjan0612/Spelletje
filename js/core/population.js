@@ -21,7 +21,7 @@
 
   function eten(s, dt) {
     var nodig = s.bevolking.totaal * HONGER * dt;
-    if (s.seizoen === 3) nodig *= 1.3;             /* winter: extra brandstof */
+    if (s.seizoen === 3) nodig *= 1.3 * Game.config.streekMult(s, 'winterHonger');  /* winter: extra brandstof */
     if (nodig <= 0) { s.voedselTekort = 0; return; }
 
     var soorten = Game.config.voedselSoorten;
@@ -50,6 +50,8 @@
 
     s.voedselVariatie = variatie;
     s.voedselTekort = Math.max(0, nodig - gegeten);
+    /* Mark a winter as spoiled the moment anyone goes hungry (for the streak). */
+    if (s.seizoen === 3 && s.voedselTekort > 1e-6) s.hongerDitWinter = true;
 
     if (s.voedselTekort > 1e-6) {
       s.hongerTimer += dt;
@@ -128,11 +130,12 @@
 
     var honger = s.voedselTekort > 1e-6 ? -22 : 0;
     var moreel = s.moreel || 0;
+    var beleid = Game.core.beleid ? Game.core.beleid.add(s, 'tevredenheid') : 0;
 
     return {
       basis: 20, voedsel: voedsel, variatie: variatie, wonen: wonen,
-      diensten: diensten, honger: honger, moreel: moreel,
-      doel: Game.util.clamp(20 + voedsel + variatie + wonen + diensten + honger + moreel, 0, 100)
+      diensten: diensten, honger: honger, moreel: moreel, beleid: beleid,
+      doel: Game.util.clamp(20 + voedsel + variatie + wonen + diensten + honger + moreel + beleid, 0, 100)
     };
   };
 
@@ -174,6 +177,8 @@
     if (P.voedselDagen(s) < GROEI_VOORRAAD) return;
 
     var tempo = ((s.tevredenheid - 45) / 55) * 0.05 * (1 + Math.sqrt(s.bevolking.totaal) * 0.5);
+    tempo *= Game.config.streekMult(s, 'groei');
+    if (Game.core.beleid) tempo *= Game.core.beleid.mult(s, 'groei');
     s.groeiVoortgang += tempo * dt;
 
     while (s.groeiVoortgang >= 1 && s.bevolking.ruimte - s.bevolking.totaal > 0) {
@@ -181,6 +186,7 @@
       s.bevolking.totaal++;
       Game.core.state.herbereken(s);
       Game.ui.log.schrijf(s, '👶 Een nieuwe dorpeling heeft zich gevestigd.', 'goed');
+      if (Game.ui.audio && Game.ui.audio.plop) Game.ui.audio.plop();
     }
   }
 
