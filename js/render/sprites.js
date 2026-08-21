@@ -369,6 +369,21 @@
       } else {
         boomVorm(ctx, p, deel, seizoen, t.v + i);
       }
+
+      /* A dusting of snow on the crown — the atlas trees are summer trees, so
+         winter has to be painted on top of them as well as on the fallback.
+         One soft cap, not stripes: it should read as snow, not as bunting. */
+      if (seizoen === 3) {
+        var boomH = p * (0.6 + deel * 0.24);
+        ctx.fillStyle = 'rgba(248,252,255,.72)';
+        ctx.beginPath();
+        ctx.ellipse(0, -boomH * 0.62, p * 0.075, p * 0.03, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(248,252,255,.34)';
+        ctx.beginPath();
+        ctx.ellipse(-p * 0.02, -boomH * 0.34, p * 0.1, p * 0.035, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.restore();
     }
 

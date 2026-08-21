@@ -141,7 +141,11 @@ button {
   display: flex; flex-direction: column; gap: 10px;
   max-height: calc(100% - 20px); overflow-y: auto;
   z-index: 10;
+  scrollbar-width: thin;
 }
+#right-col::-webkit-scrollbar { width: 8px; }
+#right-col::-webkit-scrollbar-thumb { background: var(--hout-licht); border-radius: 4px; }
+#right-col::-webkit-scrollbar-track { background: transparent; }
 
 #age-reqs, #quest-list { list-style: none; margin: 0; padding: 0; font-size: 12.5px; }
 #age-reqs li, #quest-list li {

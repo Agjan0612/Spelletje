@@ -78,6 +78,8 @@
         '<li>Klik op een gebouw om er werkers aan toe te wijzen.</li>' +
         '<li>Houd je dorpelingen gevoed en tevreden — dan groeit je dorp vanzelf.</li>' +
         '<li>Leg voorraad aan vóór de winter, en bouw verdediging vóór de rovers komen.</li>' +
+        '<li>Er komen kooplieden, opdrachten van de heer en gebeurtenissen langs ' +
+        'waar je iets mee moet. Kijk in de balk rechtsboven.</li>' +
         '</ul>';
     }, knoppen, false);
   };
@@ -94,6 +96,29 @@
         '<li><b>Klik</b> op een gebouw: paneel met werkers en opbrengst</li>' +
         '<li><b>Escape</b>: plaatsen annuleren of paneel sluiten</li>' +
         '<li><b>Spatie</b>: pauzeren en hervatten · <b>1 2 3</b>: snelheid</li>' +
+        '<li><b>Shift + 1…9</b>: het zoveelste gebouw uit het open tabblad kiezen</li>' +
+        '<li><b>Shift + slepen</b>: een hele rij neerzetten (muren, straatjes)</li>' +
+        '<li><b>✋ Verplaatsen</b> in het paneel: een gebouw oppakken en ergens ' +
+        'anders neerzetten voor een vijfde van de bouwkosten</li>' +
+        '</ul>' +
+        '<h4>De knoppen rechtsboven</h4>' +
+        '<ul>' +
+        '<li>🎉 <b>Feest</b> — voorraad omzetten in een flinke portie tevredenheid</li>' +
+        '<li>📚 <b>Onderzoek</b> — munten omzetten in blijvende bonussen ' +
+        '(vanaf een gildehuis)</li>' +
+        '<li>📋 <b>Overzicht</b> — wat staat er stil? Alles in één lijst</li>' +
+        '</ul>' +
+        '<h4>Er gebeurt van alles</h4>' +
+        '<ul>' +
+        '<li><b>De koopman</b> komt af en toe langs met eenmalige deals. ' +
+        'Zo krijg je waar je te weinig van hebt — en raak je je overschot kwijt.</li>' +
+        '<li><b>De heer</b> stuurt opdrachten met een deadline. Leveren geeft ' +
+        'munten en een blijer dorp; te laat is een streep door de rekening.</li>' +
+        '<li><b>Gebeurtenissen</b> zoals brand, vorst of vluchtelingen vragen om ' +
+        'een keuze. Er is bijna altijd een goedkope en een goede optie.</li>' +
+        '<li><b>Uitbouwen</b>: huisjes, boerderijen, groeven, de waterput en de ' +
+        'wachttoren kunnen vanaf tijdperk 3 uitgroeien tot iets groters. ' +
+        'Klik het gebouw aan en kijk in het paneel.</li>' +
         '</ul>' +
         '<h4>De vijf dingen die er echt toe doen</h4>' +
         '<ul>' +

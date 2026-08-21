@@ -98,8 +98,9 @@
       aanbod.push({ soort: 'verkoopt', res: r, aantal: aantal, prijs: H.prijs(s, r, aantal, 'verkoopt'), gedaan: false });
     }
 
-    /* One or two things he buys from you. */
-    for (var j = 0; j < rijk.length && aanbod.length < 4; j++) {
+    /* And one thing he takes off your hands — three offers is enough to read
+       at a glance in the city panel. */
+    for (var j = 0; j < rijk.length && aanbod.length < 3; j++) {
       var r2 = rijk[j];
       if (gebruikt[r2]) continue;
       var aantal2 = hoeveelheid(s, r2);
