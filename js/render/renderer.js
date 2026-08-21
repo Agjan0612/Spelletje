@@ -28,6 +28,15 @@
   /* A brief full-screen colour flash for the big moments (raid hit, age-up). */
   var flits = 0, flitsKleur = '255,255,255';
 
+  /* Ambient world life, all real-time and never stored in Game.state:
+       - wolken: a few soft shadow blobs drifting over the ground (B5)
+       - vogels: the odd flock crossing the sky (B2)
+       - weerAccu: throttles the seasonal leaf/snow emitter (B3) */
+  var wolken = null;
+  var vogels = null;
+  var weerAccu = 0;
+  var vogelKans = 0;
+
   R.init = function (el) {
     canvas = el;
     ctx = canvas.getContext('2d');
@@ -51,6 +60,9 @@
     if (Game.render.paths) Game.render.paths.ververs(s);
     R.verversWandelaars(s);
     if (Game.render.raiders) Game.render.raiders.synchroniseer(s);
+    /* Ambient life is tied to this map's size — rebuild it for the new world. */
+    wolken = null;
+    vogels = null;
   };
 
   /* Lighter hook for when only the buildings changed (placed / finished /
@@ -118,21 +130,31 @@
       var route = Game.render.paths ? Game.render.paths.route(s, g.x, g.y, doelX, doelY) : null;
       if (!route) route = [{ x: hx, y: hy }, { x: doelX + 0.5, y: doelY + 0.5 }];
 
+      var lengte = routeLengte(route);
       for (var n = 0; n < aantal && lijst.length < limiet; n++) {
         var sleutel = g.id + ':' + n;
         var bestaand = oud[sleutel];
         if (bestaand) {
+          /* Keep position/gait so nobody teleports; only the derived route,
+             its length and the job (colour) refresh. */
           bestaand.route = route;
+          bestaand.routeLen = lengte;
           bestaand.baan = d.banen.baan;
-          bestaand.fase = (g.id * 7 + n * 13) % 100 / 100;
           lijst.push(bestaand);
         } else {
           lijst.push({
             sleutel: sleutel,
             route: route,
+            routeLen: lengte,
             baan: d.banen.baan,
-            p: Math.random(), richting: Math.random() < 0.5 ? 1 : -1,
-            snelheid: 0.08 + Math.random() * 0.06,
+            p: Math.random(),
+            richting: Math.random() < 0.5 ? 1 : -1,
+            /* Constant *world* speed (tiles/sec): long and short routes now
+               walk at the same pace instead of the old fraction-per-second,
+               which made long routes sprint and short ones crawl. */
+            snelheidT: 0.55 + Math.random() * 0.35,
+            afgelegd: Math.random() * 6,   /* seeds the gait so feet aren't in lockstep */
+            wachtT: 0,
             fase: (g.id * 7 + n * 13) % 100 / 100
           });
         }
@@ -141,13 +163,28 @@
     s.wandelaars = lijst;
   };
 
+  /* Total length of a route in tile units, for constant-speed walking. */
+  function routeLengte(route) {
+    var t = 0;
+    for (var i = 0; i < route.length - 1; i++) {
+      var dx = route[i + 1].x - route[i].x, dy = route[i + 1].y - route[i].y;
+      t += Math.sqrt(dx * dx + dy * dy);
+    }
+    return t || 1e-6;
+  }
+
   R.tickWandelaars = function (s, dt) {
     if (!s.wandelaars) return;
     for (var i = 0; i < s.wandelaars.length; i++) {
       var w = s.wandelaars[i];
-      w.p += w.richting * w.snelheid * dt;
-      if (w.p > 1) { w.p = 1; w.richting = -1; }
-      if (w.p < 0) { w.p = 0; w.richting = 1; }
+      /* Pause + turn at the ends of the route instead of instantly bouncing. */
+      if (w.wachtT > 0) { w.wachtT -= dt; continue; }
+      var len = w.routeLen || 1;
+      var stap = (w.snelheidT || 0.6) * dt;      /* tiles moved this frame */
+      w.p += (w.richting * stap) / len;
+      w.afgelegd = (w.afgelegd || 0) + stap;      /* drives the gait cadence */
+      if (w.p >= 1) { w.p = 1; w.richting = -1; w.wachtT = 0.4 + Math.random() * 0.9; }
+      else if (w.p <= 0) { w.p = 0; w.richting = 1; w.wachtT = 0.4 + Math.random() * 0.9; }
     }
   };
 
@@ -211,6 +248,12 @@
       }
     }
 
+    /* --- cloud shadows gliding over the ground, beneath everything upright --- */
+    tekenWolken(ctx, cam, s, p);
+
+    /* --- seasonal weather: spawn leaves (autumn) / snow (winter) over the view --- */
+    spawnWeer(s, cam);
+
     /* --- roads, drawn under the buildings --- */
     if (Game.render.paths && p > 12) Game.render.paths.teken(ctx, cam, s, p);
 
@@ -273,13 +316,16 @@
       var e = laag[li];
       if (e.soort === 0) {
         var fsp = cam.wereldNaarScherm(e.x * TEGEL, e.y * TEGEL);
-        sprites.tekenKenmerk(ctx, e.tegel, fsp.x, fsp.y, p, s.seizoen);
+        sprites.tekenKenmerk(ctx, e.tegel, fsp.x, fsp.y, p, s.seizoen, tijd);
       } else if (e.soort === 1) {
         tekenGebouwEntry(ctx, cam, s, ui, e.g, e.def, p, tijd);
       } else {
         tekenWandelaar(ctx, cam, s, p, e.w, e.pos);
       }
     }
+
+    /* --- birds crossing the sky, above the town --- */
+    tekenVogels(ctx, cam, s, p);
 
     /* --- age-up construction sweep, over the buildings --- */
     if (sweep.actief) tekenSweep(s, cam, p);
@@ -324,6 +370,130 @@
     tickSweep(s, dt);
     tickWerkrook(s, dt);
     vervaagSchroei(s, dt);
+
+    /* Ambient world life, all real-time (never in the fixed step). */
+    weerAccu += dt;
+    tickWolken(s, dt);
+    tickVogels(s, dt);
+  }
+
+  /* ------------------------------------------------- wolken (B5) --------- */
+
+  function zorgWolken(s) {
+    if (wolken) return;
+    var W = s.kaart.b * Game.render.TEGEL, H = s.kaart.h * Game.render.TEGEL;
+    wolken = [];
+    for (var i = 0; i < 3; i++) {
+      wolken.push({
+        x: Math.random() * W, y: Math.random() * H,
+        r: (5.5 + Math.random() * 4.5) * Game.render.TEGEL,   /* world px */
+        vx: 7 + Math.random() * 5, vy: 3 + Math.random() * 4
+      });
+    }
+  }
+
+  function tickWolken(s, dt) {
+    zorgWolken(s);
+    var m = 10 * Game.render.TEGEL;
+    var W = s.kaart.b * Game.render.TEGEL, H = s.kaart.h * Game.render.TEGEL;
+    for (var i = 0; i < wolken.length; i++) {
+      var c = wolken[i];
+      c.x += c.vx * dt; c.y += c.vy * dt;
+      if (c.x > W + m) { c.x = -m; c.y = Math.random() * H; }
+      if (c.y > H + m) { c.y = -m; c.x = Math.random() * W; }
+    }
+  }
+
+  function tekenWolken(ctx, cam, s, p) {
+    zorgWolken(s);
+    var zoom = p / Game.render.TEGEL;
+    for (var i = 0; i < wolken.length; i++) {
+      var c = wolken[i];
+      var sp = cam.wereldNaarScherm(c.x, c.y);
+      var R = c.r * zoom;
+      if (sp.x < -R || sp.y < -R || sp.x > cam.breedte + R || sp.y > cam.hoogte + R) continue;
+      var g = ctx.createRadialGradient(sp.x, sp.y, R * 0.15, sp.x, sp.y, R);
+      g.addColorStop(0, 'rgba(16,20,26,.09)');
+      g.addColorStop(1, 'rgba(16,20,26,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.ellipse(sp.x, sp.y, R, R * 0.5, 0, 0, Math.PI * 2);   /* iso-flattened */
+      ctx.fill();
+    }
+  }
+
+  /* ------------------------------------------------- vogels (B2) --------- */
+
+  function tickVogels(s, dt) {
+    if (!vogels) vogels = [];
+    vogelKans -= dt;
+    if (vogelKans <= 0) {
+      vogelKans = 12 + Math.random() * 20;
+      if (vogels.length < 2) spawnVlucht(s);
+    }
+    var m = 12 * Game.render.TEGEL;
+    var W = s.kaart.b * Game.render.TEGEL, H = s.kaart.h * Game.render.TEGEL;
+    for (var i = vogels.length - 1; i >= 0; i--) {
+      var f = vogels[i];
+      f.x += f.vx * dt; f.y += f.vy * dt; f.klap += dt * 11;
+      if (f.x < -m || f.x > W + m || f.y < -m || f.y > H + m) vogels.splice(i, 1);
+    }
+  }
+
+  function spawnVlucht(s) {
+    var W = s.kaart.b * Game.render.TEGEL, H = s.kaart.h * Game.render.TEGEL;
+    var links = Math.random() < 0.5;
+    vogels.push({
+      x: links ? -6 * Game.render.TEGEL : W + 6 * Game.render.TEGEL,
+      y: Math.random() * H,
+      vx: (links ? 1 : -1) * (16 + Math.random() * 10),
+      vy: (Math.random() - 0.5) * 8,
+      n: 3 + Math.floor(Math.random() * 4),
+      klap: Math.random() * 6.28
+    });
+  }
+
+  function tekenVogels(ctx, cam, s, p) {
+    if (!vogels || !vogels.length || p < 12) return;
+    ctx.strokeStyle = 'rgba(38,42,50,.6)';
+    ctx.lineWidth = Math.max(1, p * 0.028);
+    ctx.lineCap = 'round';
+    for (var i = 0; i < vogels.length; i++) {
+      var f = vogels[i];
+      var dir = f.vx >= 0 ? 1 : -1;
+      for (var k = 0; k < f.n; k++) {
+        var back = k;
+        var side = (k % 2 === 0 ? 1 : -1) * Math.ceil(k / 2);
+        var wx = f.x - dir * back * Game.render.TEGEL * 0.8;
+        var wy = f.y + side * Game.render.TEGEL * 0.6;
+        var sp = cam.wereldNaarScherm(wx, wy);
+        sp.y -= p * 1.6;                                   /* lift into the sky */
+        if (sp.x < -20 || sp.y < -20 || sp.x > cam.breedte + 20 || sp.y > cam.hoogte + 20) continue;
+        var flap = Math.sin(f.klap + k * 0.7) * p * 0.05;
+        ctx.beginPath();
+        ctx.moveTo(sp.x - p * 0.06, sp.y + flap);
+        ctx.lineTo(sp.x, sp.y - flap * 0.6);
+        ctx.lineTo(sp.x + p * 0.06, sp.y + flap);
+        ctx.stroke();
+      }
+    }
+  }
+
+  /* ------------------------------------------------- weer (B3) ----------- */
+
+  function spawnWeer(s, cam) {
+    if (!Game.render.particles) return;
+    var soort = s.seizoen === 2 ? 'blad' : (s.seizoen === 3 ? 'sneeuw' : null);
+    if (!soort) { weerAccu = 0; return; }
+    if (weerAccu < 0.09) return;
+    weerAccu = 0;
+    var zicht = cam.zichtbaar(s.kaart);
+    var TEGEL = Game.render.TEGEL;
+    for (var k = 0; k < 3; k++) {
+      var tx = zicht.x0 - 2 + Math.random() * (zicht.x1 - zicht.x0 + 2);
+      var ty = zicht.y0 - 2 + Math.random() * (zicht.y1 - zicht.y0 + 2);
+      Game.render.particles.weer(soort, tx * TEGEL, ty * TEGEL);
+    }
   };
 
   /* Advance the age-up wave and puff dust off each building as it passes. */
@@ -357,8 +527,19 @@
     var TEGEL = Game.render.TEGEL;
     for (var i = 0; i < s.gebouwen.length; i++) {
       var g = s.gebouwen[i];
-      if (!g.gebouwd || g.uit || g.werkers <= 0 || g.waarschuwing) continue;
+      if (!g.gebouwd || g.uit || g.waarschuwing) continue;
       var d = Game.core.state.def(g);
+
+      /* Cosy hearth smoke from homes / inns / bakery — no workers required,
+         kept sparse (a chance per cycle) so a large town never floods the
+         particle budget. */
+      if ((d.woonruimte || g.type === 'herberg' || g.type === 'bakkerij') && Math.random() < 0.22) {
+        var hx = (g.x + d.grootte * 0.62) * TEGEL, hy = (g.y + d.grootte * 0.22) * TEGEL;
+        Game.render.particles.emit('rook', hx, hy, 1, { grootte: 0.62, levenSchaal: 1.3, spreiding: 2, begin: 0.2 });
+      }
+
+      /* Work smoke / sparks / dust only when the workplace is staffed. */
+      if (g.werkers <= 0) continue;
       var cx = (g.x + d.grootte * 0.66) * TEGEL, cy = (g.y + d.grootte * 0.2) * TEGEL;
       if (d.maakt && (d.id === 'bakkerij' || d.id === 'smederij' || d.id === 'wapensmid')) {
         Game.render.particles.rook(cx, cy, 1);
@@ -480,43 +661,18 @@
     }
   }
 
-  /* One decorative walker at a precomputed route position. */
+  /* One decorative walker at a precomputed route position: a procedural
+     villager (js/render/villagers.js) whose gait is driven by distance walked,
+     not the clock, so it strides at any game speed instead of vibrating. */
   function tekenWandelaar(ctx, cam, s, p, w, pos) {
-    var atlas = Game.render.atlas;
     var sp = cam.wereldNaarScherm(pos.x * Game.render.TEGEL, pos.y * Game.render.TEGEL);
     if (sp.x < -20 || sp.y < -20 || sp.x > cam.breedte + 20 || sp.y > cam.hoogte + 20) return;
 
-    /* Cheap walk cadence: a little vertical bob, mirrored on heading. Capped
-       against s.snelheid so fast-forward doesn't make them vibrate. */
-    var f = Math.min(2.2, s.snelheid || 1);
-    var wieg = Math.sin(s.tijd * 7 * f + w.fase * 6.28) * p * 0.03;
     var kijk = (pos.dx * w.richting) >= 0 ? 1 : -1;
+    var wandelt = !(w.wachtT > 0);
+    var stapFase = (w.afgelegd || 0) * 7.5 + w.fase * 6.28;
 
-    ctx.fillStyle = 'rgba(0,0,0,.25)';
-    ctx.beginPath();
-    ctx.ellipse(sp.x, sp.y + p * 0.10, p * 0.09, p * 0.04, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    var img = atlas && atlas.werker(w.baan);
-    if (img) {
-      var us = p * 0.62;
-      ctx.save();
-      ctx.translate(sp.x, sp.y + wieg);
-      ctx.scale(kijk, 1);
-      ctx.drawImage(img, -us / 2, -us * 0.78, us, us);
-      ctx.restore();
-      return;
-    }
-
-    var baan = Game.config.jobs[w.baan] || Game.config.jobs.werkloos;
-    ctx.fillStyle = baan.kleur;
-    ctx.beginPath();
-    ctx.arc(sp.x, sp.y + wieg, p * 0.075, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#f0e0c0';
-    ctx.beginPath();
-    ctx.arc(sp.x, sp.y - p * 0.09 + wieg, p * 0.05, 0, Math.PI * 2);
-    ctx.fill();
+    Game.render.villagers.teken(ctx, sp.x, sp.y, p, w.baan, kijk, stapFase, wandelt);
   }
 
   /* Highlights the resource tiles a building needs while you are placing it. */
