@@ -55,6 +55,18 @@
 
       raid: { fase: 'rust', timer: 90, kracht: 0, nummer: 0 },
 
+      /* Morale: the swing that raids, feasts, contracts and events write to.
+         population.js reads it as part of the happiness target and lets it
+         fade back to zero on its own. */
+      moreel: 0,
+
+      /* City life. All four are plain data with a phase or a timer, in the
+         same spirit as `raid` above. */
+      feest: { id: null, resterend: 0, rust: 0, boost: 0 },
+      handel: { fase: 'weg', timer: 240, nummer: 0, aanbod: [] },
+      opdracht: { actief: null, rust: 200, gedaan: 0, gefaald: 0, laatste: null },
+      gebeurtenis: { timer: 280, actief: null, ctx: null, gedaan: 0, laatste: null },
+
       questsGedaan: {},
       log: [],
 

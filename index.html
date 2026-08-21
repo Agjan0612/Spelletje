@@ -40,6 +40,9 @@
         <button class="spd active" data-speed="1" title="Normale snelheid">1×</button>
         <button class="spd" data-speed="2" title="Snel">2×</button>
         <button class="spd" data-speed="4" title="Zeer snel">4×</button>
+        <button id="btn-feest" title="Een feest geven">🎉</button>
+        <button id="btn-onderzoek" title="Onderzoek in de universiteit">📚</button>
+        <button id="btn-overzicht" title="Overzicht: wat staat er stil?">📋</button>
         <button id="btn-sound" title="Geluid uit">🔊</button>
         <button id="btn-menu" title="Menu">☰</button>
       </div>
@@ -58,6 +61,10 @@
         <h3>Volgend tijdperk <span id="age-next-name"></span></h3>
         <ul id="age-reqs"></ul>
         <button id="btn-advance" disabled>Bevorder tijdperk</button>
+      </section>
+      <section id="stadbox" class="card hidden">
+        <h3>Stadszaken</h3>
+        <div id="stad-inhoud"></div>
       </section>
       <section id="questbox" class="card">
         <h3>Doelen</h3>
@@ -107,6 +114,9 @@
 <script src="js/config/buildings.js"></script>
 <script src="js/config/ages.js"></script>
 <script src="js/config/quests.js"></script>
+<script src="js/config/handel.js"></script>
+<script src="js/config/opdrachten.js"></script>
+<script src="js/config/gebeurtenissen.js"></script>
 
 <script src="js/core/rng.js"></script>
 <script src="js/core/map.js"></script>
@@ -117,6 +127,10 @@
 <script src="js/core/seasons.js"></script>
 <script src="js/core/raids.js"></script>
 <script src="js/core/ages.js"></script>
+<script src="js/core/feesten.js"></script>
+<script src="js/core/handel.js"></script>
+<script src="js/core/opdrachten.js"></script>
+<script src="js/core/gebeurtenissen.js"></script>
 <script src="js/core/save.js"></script>
 
 <script src="js/render/camera.js"></script>
@@ -136,6 +150,7 @@
 <script src="js/ui/panel.js"></script>
 <script src="js/ui/quests.js"></script>
 <script src="js/ui/overlay.js"></script>
+<script src="js/ui/stad.js"></script>
 
 <script src="js/devcheck.js"></script>
 <script src="js/main.js"></script>

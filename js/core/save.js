@@ -70,6 +70,16 @@
     s.bevolking = s.bevolking || { totaal: 5 };
     s.bonus = s.bonus || { productie: 1, mijnbouw: 1 };
     s.raid = s.raid || { fase: 'rust', timer: 200, kracht: 0, nummer: 0 };
+
+    /* City life, added after the first release: an older save simply starts
+       with an empty calendar instead of breaking. */
+    s.moreel = typeof s.moreel === 'number' ? s.moreel : 0;
+    s.feest = s.feest || { id: null, resterend: 0, rust: 0, boost: 0 };
+    s.handel = s.handel || { fase: 'weg', timer: 240, nummer: 0, aanbod: [] };
+    if (!s.handel.aanbod) s.handel.aanbod = [];
+    s.opdracht = s.opdracht || { actief: null, rust: 200, gedaan: 0, gefaald: 0, laatste: null };
+    s.gebeurtenis = s.gebeurtenis || { timer: 280, actief: null, ctx: null, gedaan: 0, laatste: null };
+    s.onderzoek = s.onderzoek || {};
     s.questsGedaan = s.questsGedaan || {};
     s.log = s.log || [];
     s.wandelaars = [];
