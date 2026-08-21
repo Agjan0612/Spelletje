@@ -35,7 +35,7 @@
   function handtekening(s) {
     var stukken = [actieveTab, s.tijdperk, spel.plaatsType];
     Game.config.buildingList.forEach(function (d) {
-      if (d.tijdperk !== actieveTab) return;
+      if (d.verborgen || d.tijdperk !== actieveTab) return;
       stukken.push(Game.core.state.kanBetalen(s, d.kosten) ? 1 : 0);
       if (d.max) stukken.push(Game.core.construction.aantalGepland(s, d.id));
     });
@@ -57,7 +57,8 @@
 
     lijstEl.innerHTML = '';
     Game.config.buildingList.forEach(function (d) {
-      if (d.tijdperk !== actieveTab) return;
+      /* Upgrade targets are reached through the panel, never placed. */
+      if (d.verborgen || d.tijdperk !== actieveTab) return;
 
       var vergrendeld = d.tijdperk > s.tijdperk;
       var opMax = d.max && Game.core.construction.aantalGepland(s, d.id) >= d.max;

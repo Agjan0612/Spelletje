@@ -12,10 +12,16 @@
   S.SEIZOENEN = ['Lente', 'Zomer', 'Herfst', 'Winter'];
   S.SEIZOEN_EMOJI = ['🌱', '☀️', '🍂', '❄️'];
 
-  S.nieuw = function (seed, dorpsnaam) {
+  /* `opties` comes from the new-game screen: { kaart: 'normaal',
+     moeilijkheid: 'normaal' }. Both are ids from js/config/instellingen.js. */
+  S.nieuw = function (seed, dorpsnaam, opties) {
     seed = seed || Math.floor(Math.random() * 1e9);
+    opties = opties || {};
 
-    var kaart = Game.core.map.genereer(seed);
+    var maat = Game.config.kaartmaat(opties.kaart);
+    var zwaarte = Game.config.moeilijkheid(opties.moeilijkheid);
+
+    var kaart = Game.core.map.genereer(seed, maat.b, maat.h);
     var start = Game.core.map.kiesStartplek(kaart);
     Game.core.map.maakStartplekVrij(kaart, start.x, start.y);
 
@@ -23,6 +29,8 @@
       versie: S.VERSIE,
       seed: seed,
       dorpsnaam: dorpsnaam || 'Nieuw Dorp',
+      kaartmaat: maat.id,
+      moeilijkheid: zwaarte.id,
 
       tijd: 0,
       dag: 0,
@@ -50,7 +58,8 @@
 
       /* Cached per-second flows, refreshed each tick for the HUD. */
       stroom: {},
-      bonus: { productie: 1, mijnbouw: 1 },
+      bonus: { productie: 1, mijnbouw: 1, voedsel: 1, bouw: 1, winter: 1, tevredenheid: 0 },
+      onderzoek: {},
       verdediging: 0,
 
       raid: { fase: 'rust', timer: 90, kracht: 0, nummer: 0 },
@@ -175,13 +184,23 @@
       }
     }
 
+    /* Research multiplies what the buildings already give. It is derived
+       like everything else here — `s.onderzoek` only stores which studies
+       were bought. */
+    var o = Game.core.onderzoek.bonus(s);
+
     s.bevolking.ruimte = ruimte;
-    s.capaciteit = opslag;
-    s.verdediging = Math.round(verdediging);
-    s.bonus.productie = prodBonus;
+    s.capaciteit = Math.round(opslag * o.opslag);
+    s.verdediging = Math.round(verdediging * o.verdediging);
+    s.bonus.productie = prodBonus * o.productie;
 
     /* Tools speed up every mine and quarry, up to +35%. */
-    s.bonus.mijnbouw = 1 + Math.min(0.35, s.res.gereedschap / 900);
+    s.bonus.mijnbouw = (1 + Math.min(0.35, s.res.gereedschap / 900)) * o.mijnbouw;
+
+    s.bonus.voedsel = o.voedsel;
+    s.bonus.bouw = o.bouw;
+    s.bonus.winter = o.winter;
+    s.bonus.tevredenheid = o.tevredenheid;
 
     s.bevolking.werkend = werkend;
     s.bevolking.soldaten = soldaten;

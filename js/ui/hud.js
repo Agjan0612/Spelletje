@@ -121,8 +121,9 @@
       'Afwisseling in eten ' + n(d.variatie) + '\n' +
       'Woonruimte ' + n(d.wonen) + '\n' +
       'Voorzieningen ' + n(d.diensten) + '\n' +
+      (d.onderzoek ? 'Onderzoek ' + n(d.onderzoek) + '\n' : '') +
       (d.honger ? 'HONGER ' + n(d.honger) + '\n' : '') +
-      (d.moreel ? 'Moreel ' + n(d.moreel) : '');
+      (d.moreel ? 'Moreel ' + n(d.moreel) + ' (feest, rovers, opdrachten)' : '');
   }
 
   Game.ui.hud = H;

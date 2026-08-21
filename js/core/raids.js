@@ -42,9 +42,12 @@
     }
   };
 
+  /* How rough this town has it, from the difficulty chosen at the start. */
+  function zwaarte(s) { return Game.config.moeilijkheid(s.moeilijkheid); }
+
   function volgendeRust(s) {
     var basis = 340 - s.tijdperk * 30;
-    return basis + Math.random() * 90;
+    return (basis + Math.random() * 90) * zwaarte(s).raidRust;
   }
   R.volgendeRust = volgendeRust;
 
@@ -121,7 +124,8 @@
         }
       }
     }
-    return Math.round(garnizoen + positioneel);
+    var o = Game.core.onderzoek ? Game.core.onderzoek.bonus(s).verdediging : 1;
+    return Math.round((garnizoen + positioneel) * o);
   };
 
   /* Scales with how much there is to plunder right now — the size of your
@@ -136,7 +140,7 @@
       + gebouwd * 1.2
       + (s.tijdperk - 1) * 35
       + s.raid.nummer * 8;
-    return Math.round(kracht * (0.85 + Math.random() * 0.3));
+    return Math.round(kracht * (0.85 + Math.random() * 0.3) * zwaarte(s).raid);
   }
 
   function beslecht(s) {

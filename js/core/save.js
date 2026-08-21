@@ -80,6 +80,8 @@
     s.opdracht = s.opdracht || { actief: null, rust: 200, gedaan: 0, gefaald: 0, laatste: null };
     s.gebeurtenis = s.gebeurtenis || { timer: 280, actief: null, ctx: null, gedaan: 0, laatste: null };
     s.onderzoek = s.onderzoek || {};
+    s.kaartmaat = s.kaartmaat || 'normaal';
+    s.moeilijkheid = s.moeilijkheid || 'normaal';
     s.questsGedaan = s.questsGedaan || {};
     s.log = s.log || [];
     s.wandelaars = [];

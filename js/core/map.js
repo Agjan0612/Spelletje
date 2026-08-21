@@ -63,8 +63,10 @@
     return beste;
   };
 
-  M.genereer = function (seed) {
-    var b = M.BREEDTE, h = M.HOOGTE;
+  /* `breedte`/`hoogte` are optional: the new-game screen passes the chosen
+     map size, everything else falls back to the standard 64x48. */
+  M.genereer = function (seed, breedte, hoogte_) {
+    var b = breedte || M.BREEDTE, h = hoogte_ || M.HOOGTE;
     var rng = new Game.core.Rng(seed);
     var hoogte = Game.core.ruis(seed * 7 + 11, b, h, 9);
     var vocht = Game.core.ruis(seed * 13 + 29, b, h, 7);
@@ -137,8 +139,13 @@
       { node: 'edelsteen', aantal: 3, grootte: [2, 3], voorraad: [220, 400] }
     ];
 
+    /* Scale the number of veins with the area, so a big map is not a poor
+       one and a small map is not littered with mines. */
+    var schaal = (kaart.b * kaart.h) / (M.BREEDTE * M.HOOGTE);
+
     soorten.forEach(function (s) {
-      for (var n = 0; n < s.aantal; n++) {
+      var aantal = Math.max(2, Math.round(s.aantal * schaal));
+      for (var n = 0; n < aantal; n++) {
         var start = bergen[rng.int(0, bergen.length - 1)];
         var cx = start % kaart.b, cy = Math.floor(start / kaart.b);
         var grootte = rng.int(s.grootte[0], s.grootte[1]);

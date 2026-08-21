@@ -54,6 +54,7 @@
       if (d.wint) {
         var w = d.wint;
         var tempo = w.tempo * g.werkers * mult * s.bonus.mijnbouw;
+        if (Game.config.resources[w.res].voedsel) tempo *= (s.bonus.voedsel || 1);
         if (d.seizoensgevoelig) tempo *= seizoen.factor(s, 'jacht');
 
         var wil = tempo * dt;
@@ -109,7 +110,8 @@
               flux[inRes2] -= op / dt;
             }
             for (var uitRes in d.maakt.uit) {
-              var maak = d.maakt.uit[uitRes] * factor * deel * dt;
+              var voedselBonus = Game.config.resources[uitRes].voedsel ? (s.bonus.voedsel || 1) : 1;
+              var maak = d.maakt.uit[uitRes] * factor * deel * dt * voedselBonus;
               var werkelijk = Game.core.state.voegToe(s, uitRes, maak);
               flux[uitRes] += werkelijk / dt;
             }

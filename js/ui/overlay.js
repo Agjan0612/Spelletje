@@ -62,8 +62,7 @@
     }
     knoppen.push({
       tekst: '🌱 Nieuw dorp stichten', primair: !erIsEenSave, actie: function () {
-        spel.nieuwSpel();
-        O.sluit();
+        O.nieuwSpelScherm();
       }
     });
     knoppen.push({ tekst: '❓ Hoe speel ik dit?', actie: function () { O.help(true); } });
@@ -156,12 +155,89 @@
 
   O.bevestigNieuw = function () {
     O.open('Nieuw spel beginnen?', '<p>Je huidige dorp gaat verloren. Weet je het zeker?</p>', [
-      { tekst: 'Ja, nieuw dorp', primair: true, actie: function () {
-        spel.nieuwSpel();
-        O.sluit();
-      } },
+      { tekst: 'Ja, nieuw dorp', primair: true, actie: function () { O.nieuwSpelScherm(); } },
       { tekst: 'Nee, terug', actie: function () { O.menu(); } }
     ]);
+  };
+
+  /* ------------------------------------------------------- nieuw spel --- */
+
+  /* The set-up screen: name your village, pick how much world you want and
+     how rough the bandits are. The seed is optional — fill in the same number
+     and you get exactly the same map back. */
+  O.nieuwSpelScherm = function () {
+    var keuze = {
+      naam: spel.verzinNaam(),
+      kaart: 'normaal',
+      moeilijkheid: 'normaal',
+      seed: ''
+    };
+
+    function knoprij(el, lijst, veld) {
+      var rij = Game.util.el('div', 'keuzerij');
+      lijst.forEach(function (item) {
+        var k = Game.util.el('button', 'keuzeknop' + (keuze[veld] === item.id ? ' gekozen' : ''));
+        k.innerHTML = '<b>' + item.emoji + ' ' + item.naam + '</b>' +
+          '<span>' + item.beschrijving + '</span>';
+        k.addEventListener('click', function () {
+          keuze[veld] = item.id;
+          Array.prototype.forEach.call(rij.children, function (kk) { kk.classList.remove('gekozen'); });
+          k.classList.add('gekozen');
+        });
+        rij.appendChild(k);
+      });
+      el.appendChild(rij);
+    }
+
+    O.open('🌱 Een nieuw dorp stichten', function (el) {
+      el.appendChild(Game.util.el('h4', '', 'Naam van je dorp'));
+      var naamRij = Game.util.el('div', 'naamrij');
+      var invoer = document.createElement('input');
+      invoer.type = 'text';
+      invoer.maxLength = 24;
+      invoer.value = keuze.naam;
+      invoer.addEventListener('input', function () { keuze.naam = invoer.value; });
+      naamRij.appendChild(invoer);
+      var dobbel = Game.util.el('button', 'kleineknop', '🎲');
+      dobbel.title = 'Verzin een naam';
+      dobbel.addEventListener('click', function () {
+        keuze.naam = spel.verzinNaam();
+        invoer.value = keuze.naam;
+      });
+      naamRij.appendChild(dobbel);
+      el.appendChild(naamRij);
+
+      el.appendChild(Game.util.el('h4', '', 'Grootte van de kaart'));
+      knoprij(el, Game.config.kaartmaten, 'kaart');
+
+      el.appendChild(Game.util.el('h4', '', 'Hoe zwaar mag het zijn?'));
+      knoprij(el, Game.config.moeilijkheden, 'moeilijkheid');
+
+      el.appendChild(Game.util.el('h4', '', 'Kaartnummer (optioneel)'));
+      var seedRij = Game.util.el('div', 'naamrij');
+      var seedInvoer = document.createElement('input');
+      seedInvoer.type = 'text';
+      seedInvoer.placeholder = 'leeg = een willekeurige wereld';
+      seedInvoer.addEventListener('input', function () { keuze.seed = seedInvoer.value; });
+      seedRij.appendChild(seedInvoer);
+      el.appendChild(seedRij);
+      el.appendChild(Game.util.el('div', 'cursief',
+        'Hetzelfde kaartnummer geeft altijd dezelfde wereld — handig om een mooi dorp opnieuw te spelen.'));
+    }, [
+      {
+        tekst: '🌱 Stichten', primair: true, actie: function () {
+          var seed = parseInt(String(keuze.seed).replace(/\D/g, ''), 10);
+          spel.nieuwSpel({
+            naam: (keuze.naam || '').trim() || spel.verzinNaam(),
+            seed: isNaN(seed) || seed <= 0 ? undefined : seed,
+            kaart: keuze.kaart,
+            moeilijkheid: keuze.moeilijkheid
+          });
+          O.sluit();
+        }
+      },
+      { tekst: '← Terug', actie: function () { O.welkom(); } }
+    ], false);
   };
 
   /* ---------------------------------------------------------- tijdperk -- */

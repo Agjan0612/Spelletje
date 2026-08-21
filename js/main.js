@@ -35,6 +35,7 @@
     Game.ui.panel.init(spel);
     Game.ui.quests.init(spel);
     Game.ui.stad.init(spel);
+    Game.ui.onderzoek.init(spel);
     Game.ui.overlay.init(spel);
     if (Game.render.minimap) Game.render.minimap.init(spel);
 
@@ -49,6 +50,8 @@
     pasMaatAan();
     requestAnimationFrame(loop);
   }
+
+  spel.verzinNaam = function () { return verzinNaam(); };
 
   function verzinNaam() {
     return VOORVOEGSEL[Math.floor(Math.random() * VOORVOEGSEL.length)] +
@@ -78,8 +81,11 @@
     Game.ui.panel.ververs(s);
   };
 
-  spel.nieuwSpel = function () {
-    var s = Game.core.state.nieuw(undefined, verzinNaam());
+  /* `opties` are the choices from the new-game screen:
+     { naam, seed, kaart, moeilijkheid }. Everything may be left out. */
+  spel.nieuwSpel = function (opties) {
+    opties = opties || {};
+    var s = Game.core.state.nieuw(opties.seed, opties.naam || verzinNaam(), opties);
     Game.ui.log.schrijf(s, '🌅 ' + s.dorpsnaam + ' is gesticht. Succes!', 'goed');
     spel.zetState(s);
     spel.actief = true;

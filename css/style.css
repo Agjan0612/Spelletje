@@ -387,6 +387,55 @@ button.feestknop {
 button.feestknop:hover:not(:disabled) { background: var(--goud); color: #2b1d12; }
 button.feestknop:disabled { background: #4a3a26; border-color: var(--rand); color: #9c8a70; cursor: not-allowed; }
 
+.verbeterblok {
+  margin-top: 10px; padding: 8px 9px; border: 1px solid var(--goud);
+  border-radius: 6px; background: rgba(215, 169, 75, .1);
+}
+.verbeterblok.kan-niet { opacity: .6; border-color: var(--rand); background: rgba(0, 0, 0, .2); }
+.verbeterblok .kop { margin: 0 0 3px; }
+.verbeternaam { font-size: 14px; font-weight: 700; color: var(--goud-licht); }
+.verbeterwinst { font-size: 12px; color: var(--mos); margin: 3px 0 2px; }
+button.verbeterknop {
+  margin-top: 6px; width: 100%; padding: 6px; border-radius: 5px; font-size: 12.5px;
+  background: var(--hout-licht); border: 1px solid var(--goud);
+}
+button.verbeterknop:hover:not(:disabled) { background: var(--goud); color: #2b1d12; }
+button.verbeterknop:disabled { background: #4a3a26; border-color: var(--rand); color: #9c8a70; cursor: not-allowed; }
+
+.naamrij { display: flex; gap: 6px; margin-top: 4px; }
+.naamrij input {
+  flex: 1; padding: 7px 9px; font-family: inherit; font-size: 14px;
+  background: #150e07; color: var(--perkament);
+  border: 1px solid var(--rand); border-radius: 5px;
+}
+.naamrij input:focus { outline: none; border-color: var(--goud); }
+button.kleineknop {
+  padding: 6px 10px; border-radius: 5px; font-size: 15px;
+  background: var(--hout-licht); border: 1px solid var(--goud);
+}
+button.kleineknop:hover { background: var(--goud); color: #2b1d12; }
+
+.keuzerij { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+button.keuzeknop {
+  flex: 1 1 150px; display: flex; flex-direction: column; gap: 3px; text-align: left;
+  padding: 8px 10px; border-radius: 6px; font-size: 12px; line-height: 1.35;
+  background: rgba(0, 0, 0, .25); border: 1px solid var(--rand); color: var(--perkament-dof);
+}
+button.keuzeknop b { font-size: 13.5px; color: var(--perkament); }
+button.keuzeknop:hover { border-color: var(--goud); }
+button.keuzeknop.gekozen { border-color: var(--goud); background: rgba(215, 169, 75, .18); }
+button.keuzeknop.gekozen b { color: var(--goud-licht); }
+
+.onderzoekkaart {
+  border: 1px solid var(--rand); border-radius: 7px; padding: 8px 11px;
+  margin-top: 8px; background: rgba(0, 0, 0, .22);
+}
+.onderzoekkaart.kan-niet { opacity: .55; }
+.onderzoekkaart.gedaan { border-color: var(--mos); background: rgba(108, 138, 74, .14); }
+.onderzoekkop { font-size: 14.5px; color: var(--goud-licht); font-weight: 700; }
+.onderzoekinfo { font-size: 12px; margin-top: 3px; color: var(--perkament-dof); }
+.onderzoekklaar { margin-top: 5px; color: var(--mos); font-weight: 700; font-size: 13px; }
+
 ul.overzicht { list-style: none; margin: 0; padding: 0; }
 ul.overzicht li {
   font-size: 13px; line-height: 1.45; padding: 5px 9px; margin: 4px 0;
