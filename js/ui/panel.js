@@ -239,6 +239,12 @@
     }
 
     if (d.id !== 'dorpsplein') {
+      var verzet = Game.util.el('button', '', '✋ Verplaatsen');
+      verzet.title = 'Kost een vijfde van de bouwkosten: ' +
+        Game.ui.stad.kostenTekst(Game.core.construction.verplaatsKosten(g.type));
+      verzet.addEventListener('click', function () { spel.startVerplaatsen(g); });
+      rij.appendChild(verzet);
+
       var sloop = Game.util.el('button', 'gevaar', '🔥 Slopen');
       sloop.addEventListener('click', function () {
         Game.core.construction.sloop(s, g);

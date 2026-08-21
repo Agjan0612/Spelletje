@@ -5,6 +5,9 @@
   var spel = null;
   var tabsEl, lijstEl, tipEl = null;
   var actieveTab = 1;
+  /* Ids of the cards you can actually click, in the order they are shown —
+     that order is what Shift+1..9 selects from. */
+  var zichtbaar = [];
 
   BM.init = function (hetSpel) {
     spel = hetSpel;
@@ -56,6 +59,7 @@
     });
 
     lijstEl.innerHTML = '';
+    zichtbaar = [];
     Game.config.buildingList.forEach(function (d) {
       /* Upgrade targets are reached through the panel, never placed. */
       if (d.verborgen || d.tijdperk !== actieveTab) return;
@@ -104,6 +108,10 @@
         kaart.addEventListener('click', function () {
           spel.kiesBouw(spel.plaatsType === d.id ? null : d.id);
         });
+        zichtbaar.push(d.id);
+        if (zichtbaar.length <= 9) {
+          kaart.appendChild(Game.util.el('div', 'hk', '⇧' + zichtbaar.length));
+        }
       }
 
       kaart.addEventListener('mouseenter', function (ev) { toonTip(d, s, ev.currentTarget); });
@@ -111,6 +119,13 @@
 
       lijstEl.appendChild(kaart);
     });
+  };
+
+  /* Shift + number: pick the n-th clickable building in the open tab. */
+  BM.kiesIndex = function (i) {
+    var id = zichtbaar[i];
+    if (!id) return;
+    spel.kiesBouw(spel.plaatsType === id ? null : id);
   };
 
   /* --------------------------------------------------------------- tooltip */

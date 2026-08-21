@@ -17,15 +17,20 @@
   };
 
   /* Full placement check. Returns { ok, reden } — `reden` is shown to the
-     player in Dutch under the cursor. */
-  C.controleer = function (s, type, x, y) {
+     player in Dutch under the cursor.
+
+     `opties` is used when moving an existing building: { negeerId } lets the
+     building's own tiles (and its copy limit) pass, and { negeerKosten } skips
+     the price of a fresh build. */
+  C.controleer = function (s, type, x, y, opties) {
+    opties = opties || {};
     var d = Game.config.gebouw(type);
     if (!d) return { ok: false, reden: 'Onbekend gebouw' };
 
     if (d.tijdperk > s.tijdperk) {
       return { ok: false, reden: 'Vergrendeld tot tijdperk ' + d.tijdperk };
     }
-    if (d.max && C.aantalGepland(s, type) >= d.max) {
+    if (d.max && !opties.negeerId && C.aantalGepland(s, type) >= d.max) {
       return { ok: false, reden: 'Je mag er maar ' + d.max + ' hebben' };
     }
 
@@ -38,7 +43,9 @@
         if (t.t === 'rots' && !(d.plaats && d.plaats.opRuwTerrein)) {
           return { ok: false, reden: 'De grond is te rotsachtig — alleen mijnbouw kan hier staan' };
         }
-        if (t.b !== null && t.b !== undefined) return { ok: false, reden: 'Hier staat al iets' };
+        if (t.b !== null && t.b !== undefined && t.b !== opties.negeerId) {
+          return { ok: false, reden: 'Hier staat al iets' };
+        }
       }
     }
 
@@ -50,7 +57,8 @@
       }
     }
 
-    if (!Game.core.state.kanBetalen(s, d.kosten)) {
+    var kosten = opties.negeerKosten ? (opties.kosten || {}) : d.kosten;
+    if (!Game.core.state.kanBetalen(s, kosten)) {
       return { ok: false, reden: 'Te weinig grondstoffen' };
     }
 
@@ -145,6 +153,45 @@
         Game.core.population.autoBemannen(s, g);
       }
     }
+  };
+
+  /* --------------------------------------------------------- verplaatsen -- */
+
+  /* Moving a finished building costs a fifth of what it cost to build — the
+     material you lose taking it apart — instead of demolishing at half loss
+     and paying full price again. */
+  C.verplaatsKosten = function (type) {
+    var d = Game.config.gebouw(type);
+    var kosten = {};
+    for (var r in d.kosten) {
+      var deel = Math.ceil(d.kosten[r] * 0.2);
+      if (deel > 0) kosten[r] = deel;
+    }
+    return kosten;
+  };
+
+  C.controleerVerplaatsing = function (s, g, x, y) {
+    if (g.type === 'dorpsplein') return { ok: false, reden: 'Het dorpsplein blijft waar het is' };
+    var kosten = C.verplaatsKosten(g.type);
+    return C.controleer(s, g.type, x, y, { negeerId: g.id, negeerKosten: true, kosten: kosten });
+  };
+
+  C.verplaats = function (s, g, x, y) {
+    var check = C.controleerVerplaatsing(s, g, x, y);
+    if (!check.ok) return { ok: false, reden: check.reden };
+
+    Game.core.state.betaal(s, C.verplaatsKosten(g.type));
+    C.wisTegels(s, g);
+    g.x = x; g.y = y;
+    C.markeerTegels(s, g);
+    Game.core.state.herbereken(s);
+
+    var d = Game.config.gebouw(g.type);
+    if (Game.render.particles) {
+      Game.render.particles.stof((x + d.grootte / 2) * 40, (y + d.grootte / 2) * 40, 6);
+    }
+    Game.ui.log.schrijf(s, d.emoji + ' ' + d.naam + ' is verplaatst.');
+    return { ok: true };
   };
 
   /* --------------------------------------------------------- verbeteren -- */

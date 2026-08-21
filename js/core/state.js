@@ -219,6 +219,51 @@
     return werkelijk;
   };
 
+  /* A snapshot of the town in numbers, plus a score and the title that goes
+     with it. Used by the statistics screen and the victory screen. */
+  S.statistiek = function (s) {
+    var verzameld = 0;
+    Game.config.resourceOrder.forEach(function (r) { verzameld += s.verzameld[r] || 0; });
+
+    var gebouwd = 0;
+    for (var i = 0; i < s.gebouwen.length; i++) if (s.gebouwen[i].gebouwd) gebouwd++;
+
+    var onderzoek = Object.keys(s.onderzoek || {}).length;
+    var opdrachten = (s.opdracht && s.opdracht.gedaan) || 0;
+
+    var punten = Math.round(
+      s.bevolking.totaal * 8 +
+      gebouwd * 6 +
+      s.tevredenheid +
+      (s.tijdperk - 1) * 120 +
+      onderzoek * 60 +
+      opdrachten * 30 +
+      verzameld / 50 +
+      (s.gewonnen ? 500 : 0)
+    );
+
+    return {
+      bevolking: s.bevolking.totaal,
+      gebouwen: gebouwd,
+      jaar: s.jaar,
+      tevredenheid: Math.round(s.tevredenheid),
+      verzameld: Math.round(verzameld),
+      onderzoek: onderzoek,
+      opdrachten: opdrachten,
+      rooftochten: (s.raid && s.raid.nummer) || 0,
+      punten: punten,
+      rang: rang(punten)
+    };
+  };
+
+  function rang(punten) {
+    if (punten < 350) return 'Gehucht in de wildernis';
+    if (punten < 800) return 'Dorp met een naam';
+    if (punten < 1500) return 'Bloeiende handelsstad';
+    if (punten < 2400) return 'Vrije stad met stadsrechten';
+    return 'Parel van het rijk';
+  }
+
   S.kanBetalen = function (s, kosten) {
     for (var r in kosten) if (s.res[r] < kosten[r]) return false;
     return true;

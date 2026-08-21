@@ -145,6 +145,8 @@
         Game.ui.toast('📥 Save geladen');
         O.sluit();
       } },
+      { tekst: '📊 Statistieken', actie: function () { O.statistieken(); } },
+      { tekst: '📷 Plaatje maken', actie: function () { O.plaatje(); } },
       { tekst: '❓ Uitleg', actie: function () { O.help(false); } },
       { tekst: '🌱 Nieuw spel', actie: function () {
         O.bevestigNieuw();
@@ -240,6 +242,75 @@
     ], false);
   };
 
+  /* -------------------------------------------------- statistieken ------ */
+
+  /* Everything the town has done so far, with a score and a title. Available
+     from the menu at any time, not just when you have won. */
+  O.statistiekLijst = function (s) {
+    var st = Game.core.state.statistiek(s);
+    return [
+      ['👥 Inwoners', st.bevolking],
+      ['🏠 Gebouwen', st.gebouwen],
+      ['😀 Tevredenheid', st.tevredenheid + '%'],
+      ['📅 Jaren verstreken', st.jaar],
+      ['📦 Totaal verzameld', Game.util.fmt(st.verzameld)],
+      ['📚 Onderzoek afgerond', st.onderzoek + ' / ' + Game.config.onderzoek.length],
+      ['📜 Opdrachten geleverd', st.opdrachten],
+      ['⚔️ Rooftochten doorstaan', st.rooftochten],
+      ['🪵 Hout verzameld', Game.util.fmt(Math.round(s.verzameld.hout))],
+      ['🪨 Steen verzameld', Game.util.fmt(Math.round(s.verzameld.steen))],
+      ['💎 Edelstenen gedolven', Game.util.fmt(Math.round(s.verzameld.edelsteen))]
+    ];
+  };
+
+  function statistiekBlok(el, s) {
+    var st = Game.core.state.statistiek(s);
+
+    var score = Game.util.el('div', 'scoreblok');
+    score.innerHTML = '<div class="scorepunten">' + st.punten + ' punten</div>' +
+      '<div class="scorerang">' + st.rang + '</div>';
+    el.appendChild(score);
+
+    var tabel = Game.util.el('div', 'stattabel');
+    O.statistiekLijst(s).forEach(function (rij) {
+      var r = Game.util.el('div', 'statrij');
+      r.appendChild(Game.util.el('span', 'k', rij[0]));
+      r.appendChild(Game.util.el('span', 'v', String(rij[1])));
+      tabel.appendChild(r);
+    });
+    el.appendChild(tabel);
+  }
+
+  O.statistieken = function () {
+    O.open('📊 ' + spel.state.dorpsnaam + ' in cijfers', function (el) {
+      statistiekBlok(el, spel.state);
+    }, [
+      { tekst: '← Terug', primair: true, actie: function () { O.menu(); } },
+      { tekst: 'Verder spelen', actie: function () { O.sluit(); } }
+    ]);
+  };
+
+  /* ------------------------------------------------------------ plaatje -- */
+
+  /* Saves the current view as a PNG. Handy for showing off a town — and it
+     works from file:// because the canvas never loads a cross-origin image. */
+  O.plaatje = function () {
+    var canvas = document.getElementById('canvas');
+    try {
+      var url = canvas.toDataURL('image/png');
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = (spel.state.dorpsnaam || 'dorp').replace(/[^\w-]+/g, '_') + '.png';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      Game.ui.toast('📷 Plaatje opgeslagen');
+      O.sluit();
+    } catch (e) {
+      Game.ui.toast('📷 Dat lukte niet in deze browser');
+    }
+  };
+
   /* ---------------------------------------------------------- tijdperk -- */
 
   O.tijdperk = function (age) {
@@ -253,21 +324,16 @@
 
   O.overwinning = function (s) {
     O.open('👑 ' + s.dorpsnaam + ' is een stad!', function (el) {
-      el.innerHTML =
-        '<p style="text-align:center;font-size:16px">Van één boerderij tot een stad met kathedraal, ' +
-        'kasteel en universiteit. Dat heb je knap gedaan.</p>' +
-        '<h4>Je stad in cijfers</h4>' +
-        '<ul>' +
-        '<li>Inwoners: <b>' + s.bevolking.totaal + '</b></li>' +
-        '<li>Gebouwen: <b>' + s.gebouwen.length + '</b></li>' +
-        '<li>Jaren verstreken: <b>' + s.jaar + '</b></li>' +
-        '<li>Tevredenheid: <b>' + Math.round(s.tevredenheid) + '%</b></li>' +
-        '<li>Hout verzameld: <b>' + Math.round(s.verzameld.hout) + '</b></li>' +
-        '<li>Steen verzameld: <b>' + Math.round(s.verzameld.steen) + '</b></li>' +
-        '<li>Edelstenen gedolven: <b>' + Math.round(s.verzameld.edelsteen) + '</b></li>' +
-        '</ul>' +
-        '<p>Je kunt gewoon doorspelen en je stad nog verder uitbouwen.</p>';
-    }, [{ tekst: 'Doorspelen', primair: true, actie: function () { O.sluit(); } }]);
+      el.appendChild(Game.util.el('p', 'midden',
+        'Van één boerderij tot een stad met kathedraal, kasteel en universiteit. ' +
+        'Dat heb je knap gedaan.'));
+      statistiekBlok(el, s);
+      el.appendChild(Game.util.el('p', '',
+        'Je kunt gewoon doorspelen en je stad nog verder uitbouwen — je score blijft meelopen.'));
+    }, [
+      { tekst: 'Doorspelen', primair: true, actie: function () { O.sluit(); } },
+      { tekst: '📷 Plaatje maken', actie: function () { O.plaatje(); } }
+    ]);
   };
 
   Game.ui.overlay = O;

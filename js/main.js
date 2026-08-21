@@ -14,6 +14,10 @@
     cam: null,
     plaatsType: null,
     plaatsCheck: null,
+    /* Set while an existing building is being picked up and put down again. */
+    verplaatst: null,
+    /* Start tile of a shift-drag row of 1x1 buildings. */
+    lijn: null,
     geselecteerd: null,
     muisTegel: null,
     /* Stays false until the player picks "new village" or "continue", so the
@@ -102,6 +106,17 @@
     Game.ui.toast('📜 Je dorp is teruggehaald');
   };
 
+  /* Pick a building up: the ghost follows the cursor and the next click puts
+     it down somewhere else, for a fifth of its build cost. */
+  spel.startVerplaatsen = function (g) {
+    spel.plaatsType = g.type;
+    spel.verplaatst = g.id;
+    spel.geselecteerd = null;
+    document.getElementById('canvas').classList.add('placing');
+    Game.ui.panel.ververs(spel.state, true);
+    Game.ui.toast('✋ Klik waar het gebouw naartoe moet (Escape annuleert)');
+  };
+
   spel.zetSnelheid = function (n) {
     if (!spel.state) return;
     spel.state.snelheid = n;
@@ -109,6 +124,8 @@
   };
 
   spel.kiesBouw = function (type) {
+    if (!type) spel.verplaatst = null;
+    spel.lijn = null;
     spel.plaatsType = type;
     document.getElementById('canvas').classList.toggle('placing', !!type);
     if (!type) document.getElementById('ghost-info').classList.add('hidden');
@@ -151,7 +168,9 @@
     Game.render.renderer.teken(s, spel.cam, {
       plaatsType: spel.plaatsType,
       muisTegel: spel.muisTegel,
-      geselecteerd: spel.geselecteerd
+      geselecteerd: spel.geselecteerd,
+      verplaatst: spel.verplaatst,
+      lijn: spel.lijn
     });
     if (spel.plaatsType) toonGhostInfo();
 
@@ -207,6 +226,16 @@
   function koppelInvoer(canvas) {
     canvas.addEventListener('mousedown', function (ev) {
       if (ev.button === 2) return;
+
+      /* Shift-drag with a 1x1 building selected draws a whole row at once —
+         the quickest way to run a city wall or a street of houses. */
+      if (spel.plaatsType && !spel.verplaatst && ev.shiftKey &&
+          Game.config.gebouw(spel.plaatsType).grootte === 1 && spel.muisTegel) {
+        spel.lijn = { x0: spel.muisTegel.x, y0: spel.muisTegel.y,
+                      x1: spel.muisTegel.x, y1: spel.muisTegel.y };
+        return;
+      }
+
       sleept = true;
       sleepVerplaatst = 0;
       laatsteMuis = { x: ev.clientX, y: ev.clientY };
@@ -217,6 +246,18 @@
       var r = canvas.getBoundingClientRect();
       spel.muisTegel = spel.cam.tegelOnder(ev.clientX - r.left, ev.clientY - r.top);
       spel.muisScherm = { x: ev.clientX, y: ev.clientY };
+
+      /* While drawing a row, the drag is the row — not a camera pan. */
+      if (spel.lijn && spel.muisTegel) {
+        var dxL = spel.muisTegel.x - spel.lijn.x0;
+        var dyL = spel.muisTegel.y - spel.lijn.y0;
+        if (Math.abs(dxL) >= Math.abs(dyL)) {
+          spel.lijn.x1 = spel.muisTegel.x; spel.lijn.y1 = spel.lijn.y0;
+        } else {
+          spel.lijn.x1 = spel.lijn.x0; spel.lijn.y1 = spel.muisTegel.y;
+        }
+        return;
+      }
 
       if (sleept && laatsteMuis) {
         var dx = ev.clientX - laatsteMuis.x;
@@ -231,6 +272,7 @@
     });
 
     window.addEventListener('mouseup', function (ev) {
+      if (spel.lijn) { plaatsLijn(spel.lijn); spel.lijn = null; return; }
       if (!sleept) return;
       sleept = false;
       canvas.classList.remove('dragging');
@@ -290,6 +332,14 @@
         ev.preventDefault();
         spel.zetSnelheid(spel.state.snelheid === 0 ? 1 : 0);
       }
+      /* Shift + a number picks the n-th building in the open build tab.
+         Read from ev.code, because shift turns '1' into '!' on most layouts. */
+      if (ev.shiftKey && /^Digit[1-9]$/.test(ev.code || '')) {
+        ev.preventDefault();
+        Game.ui.buildmenu.kiesIndex(parseInt(ev.code.slice(5), 10) - 1);
+        return;
+      }
+
       if (ev.key === '1') spel.zetSnelheid(1);
       if (ev.key === '2') spel.zetSnelheid(2);
       if (ev.key === '3') spel.zetSnelheid(4);
@@ -315,6 +365,19 @@
     var r = canvas.getBoundingClientRect();
     var tegelPos = spel.cam.tegelOnder(ev.clientX - r.left, ev.clientY - r.top);
 
+    /* Putting a picked-up building back down. */
+    if (spel.verplaatst) {
+      var teVerplaatsen = Game.core.state.gebouw(s, spel.verplaatst);
+      if (!teVerplaatsen) { spel.kiesBouw(null); return; }
+      var verzet = Game.core.construction.verplaats(s, teVerplaatsen, tegelPos.x, tegelPos.y);
+      if (!verzet.ok) { Game.ui.toast('⚠️ ' + verzet.reden, 1600); return; }
+      spel.kiesBouw(null);
+      spel.geselecteerd = teVerplaatsen.id;
+      Game.render.renderer.verversGebouwen(s);
+      Game.ui.panel.ververs(s, true);
+      return;
+    }
+
     if (spel.plaatsType) {
       var uitkomst = Game.core.construction.plaats(s, spel.plaatsType, tegelPos.x, tegelPos.y);
       if (!uitkomst.ok) {
@@ -322,8 +385,9 @@
       } else {
         Game.render.renderer.verversGebouwen(s);
         Game.ui.buildmenu.ververs(s);
-        /* Keep the building selected so you can place a row of houses. */
-        if (!Game.core.state.kanBetalen(s, Game.config.gebouw(spel.plaatsType).kosten)) {
+        /* Keep the building selected so you can place a row of houses; with
+           shift held you keep it even when the purse runs dry. */
+        if (!ev.shiftKey && !Game.core.state.kanBetalen(s, Game.config.gebouw(spel.plaatsType).kosten)) {
           spel.kiesBouw(null);
         }
       }
@@ -342,16 +406,43 @@
     Game.ui.panel.ververs(s);
   }
 
+  /* Puts one building on every tile of a shift-dragged row, stopping as soon
+     as the treasury runs out. */
+  function plaatsLijn(lijn) {
+    var s = spel.state;
+    if (!spel.plaatsType) return;
+    var stapX = Math.sign(lijn.x1 - lijn.x0);
+    var stapY = Math.sign(lijn.y1 - lijn.y0);
+    var aantal = Math.max(Math.abs(lijn.x1 - lijn.x0), Math.abs(lijn.y1 - lijn.y0)) + 1;
+    var gezet = 0;
+
+    for (var i = 0; i < aantal; i++) {
+      var x = lijn.x0 + stapX * i, y = lijn.y0 + stapY * i;
+      if (!Game.core.state.kanBetalen(s, Game.config.gebouw(spel.plaatsType).kosten)) break;
+      if (Game.core.construction.plaats(s, spel.plaatsType, x, y).ok) gezet++;
+    }
+
+    if (gezet) {
+      Game.render.renderer.verversGebouwen(s);
+      Game.ui.buildmenu.ververs(s, true);
+      Game.ui.toast('🏗️ ' + Game.util.telwoord(gezet, 'gebouw geplaatst', 'gebouwen geplaatst'));
+    }
+    if (!Game.core.state.kanBetalen(s, Game.config.gebouw(spel.plaatsType).kosten)) spel.kiesBouw(null);
+  }
+
   /* Little label that follows the cursor while placing. */
   function toonGhostInfo() {
     var el = document.getElementById('ghost-info');
     if (!spel.muisScherm || !spel.muisTegel) { el.classList.add('hidden'); return; }
-    var check = Game.core.construction.controleer(spel.state, spel.plaatsType, spel.muisTegel.x, spel.muisTegel.y);
+    var g = spel.verplaatst ? Game.core.state.gebouw(spel.state, spel.verplaatst) : null;
+    var check = g
+      ? Game.core.construction.controleerVerplaatsing(spel.state, g, spel.muisTegel.x, spel.muisTegel.y)
+      : Game.core.construction.controleer(spel.state, spel.plaatsType, spel.muisTegel.x, spel.muisTegel.y);
     var def = Game.config.gebouw(spel.plaatsType);
     el.classList.remove('hidden');
     el.classList.toggle('fout', !check.ok);
     el.textContent = check.ok
-      ? def.naam + ' hier plaatsen'
+      ? (g ? def.naam + ' hierheen verplaatsen' : def.naam + ' hier plaatsen')
       : check.reden;
     /* muisScherm is in viewport coordinates; the label lives inside #stage. */
     var stage = document.getElementById('stage').getBoundingClientRect();

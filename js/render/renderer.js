@@ -769,7 +769,14 @@
     var TEGEL = Game.render.TEGEL;
     var d = Game.config.gebouw(ui.plaatsType);
     var tx = ui.muisTegel.x, ty = ui.muisTegel.y;
-    var check = Game.core.construction.controleer(s, ui.plaatsType, tx, ty);
+
+    /* While a row is being dragged out, show every tile it would fill. */
+    if (ui.lijn) { tekenLijn(s, cam, ui, p); return; }
+
+    var bezig = ui.verplaatst ? Game.core.state.gebouw(s, ui.verplaatst) : null;
+    var check = bezig
+      ? Game.core.construction.controleerVerplaatsing(s, bezig, tx, ty)
+      : Game.core.construction.controleer(s, ui.plaatsType, tx, ty);
     var sp = cam.wereldNaarScherm(tx * TEGEL, ty * TEGEL);
     var foot = Game.render.diamant(sp.x, sp.y, p * d.grootte);
 
@@ -809,6 +816,28 @@
     }
 
     ui.plaatsCheck = check;
+  }
+
+  /* The preview of a shift-dragged row: a footprint per tile, tinted by
+     whether that particular tile would take the building. */
+  function tekenLijn(s, cam, ui, p) {
+    var TEGEL = Game.render.TEGEL;
+    var l = ui.lijn;
+    var stapX = Math.sign(l.x1 - l.x0), stapY = Math.sign(l.y1 - l.y0);
+    var aantal = Math.max(Math.abs(l.x1 - l.x0), Math.abs(l.y1 - l.y0)) + 1;
+
+    for (var i = 0; i < aantal; i++) {
+      var x = l.x0 + stapX * i, y = l.y0 + stapY * i;
+      var check = Game.core.construction.controleer(s, ui.plaatsType, x, y);
+      var sp = cam.wereldNaarScherm(x * TEGEL, y * TEGEL);
+      var foot = Game.render.diamant(sp.x, sp.y, p);
+      Game.render.padDiamant(ctx, foot);
+      ctx.fillStyle = check.ok ? 'rgba(143,220,106,.22)' : 'rgba(224,96,74,.24)';
+      ctx.fill();
+      ctx.strokeStyle = check.ok ? '#8fdc6a' : '#e0604a';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
   }
 
   R.tegelInfo = function (s, tx, ty) {

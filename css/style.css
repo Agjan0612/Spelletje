@@ -304,6 +304,10 @@ button {
 .bouwkaart .ks { font-size: 10.5px; color: var(--perkament-dof); line-height: 1.35; }
 .bouwkaart .ks .mist { color: #e08a7a; }
 .bouwkaart .slot { position: absolute; top: 3px; right: 5px; font-size: 12px; }
+.bouwkaart .hk {
+  position: absolute; top: 3px; left: 5px; font-size: 9.5px;
+  color: var(--perkament-dof); opacity: .65; letter-spacing: -.3px;
+}
 
 /* Tooltip voor bouwkaarten */
 .tip {
@@ -433,6 +437,20 @@ button.keuzeknop b { font-size: 13.5px; color: var(--perkament); }
 button.keuzeknop:hover { border-color: var(--goud); }
 button.keuzeknop.gekozen { border-color: var(--goud); background: rgba(215, 169, 75, .18); }
 button.keuzeknop.gekozen b { color: var(--goud-licht); }
+
+.scoreblok {
+  text-align: center; margin: 10px 0 14px; padding: 10px;
+  border: 1px solid var(--goud); border-radius: 8px; background: rgba(215, 169, 75, .12);
+}
+.scorepunten { font-size: 26px; font-weight: 700; color: var(--goud-licht); }
+.scorerang { font-size: 13px; color: var(--perkament-dof); font-style: italic; }
+.stattabel { display: flex; flex-direction: column; gap: 2px; }
+.statrij {
+  display: flex; justify-content: space-between; gap: 10px;
+  padding: 3px 6px; border-bottom: 1px dotted rgba(255, 255, 255, .08); font-size: 13px;
+}
+.statrij .v { font-weight: 700; color: var(--goud-licht); }
+p.midden { text-align: center; font-size: 15px; }
 
 .onderzoekkaart {
   border: 1px solid var(--rand); border-radius: 7px; padding: 8px 11px;

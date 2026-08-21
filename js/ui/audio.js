@@ -15,6 +15,7 @@
   var SLEUTEL = 'dorp-tot-stad-geluid';
 
   var ctx = null, master = null, ruisBuf = null;
+  var sfeer = null;             /* the looping ambient wind bed */
   var beschikbaar = true;       /* flips off if Web Audio is missing/blocked */
   A.aan = true;
 
@@ -51,6 +52,7 @@
         master.connect(ctx.destination);
       }
       if (ctx.state === 'suspended' && ctx.resume) ctx.resume();
+      if (A.aan) startSfeer();
       return ctx;
     } catch (e) { beschikbaar = false; return null; }
   }
@@ -160,12 +162,80 @@
     tonen.forEach(function (f, i) { setTimeout(function () { A.klok(f); }, i * 260); });
   };
 
+  /* A cheerful little fanfare when a feast starts. */
+  A.feest = function () {
+    if (!A.aan || !zorgVoorContext()) return;
+    var nu = ctx.currentTime;
+    [523, 659, 784, 1047].forEach(function (f, i) {
+      stem('triangle', f, nu + i * 0.13, 0.34, 0.16);
+    });
+  };
+
+  /* ------------------------------------------------------------------ sfeer
+
+     A soft bed of wind under everything: filtered noise, slowly swelling.
+     It is deliberately almost inaudible — atmosphere, not music — and it is
+     one looping buffer, so it costs nothing to keep running. */
+  function startSfeer() {
+    if (sfeer || !ctx) return;
+    try {
+      var bron = ctx.createBufferSource();
+      bron.buffer = langeRuis();
+      bron.loop = true;
+
+      var filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 340;
+      filter.Q.value = 0.6;
+
+      var gain = ctx.createGain();
+      gain.gain.value = 0.05;
+
+      /* Slow swell so the wind breathes instead of hissing flat. */
+      var lfo = ctx.createOscillator();
+      lfo.frequency.value = 0.06;
+      var lfoGain = ctx.createGain();
+      lfoGain.gain.value = 0.028;
+      lfo.connect(lfoGain);
+      lfoGain.connect(gain.gain);
+
+      bron.connect(filter);
+      filter.connect(gain);
+      gain.connect(master);
+      bron.start();
+      lfo.start();
+
+      sfeer = { bron: bron, gain: gain, lfo: lfo };
+    } catch (e) { sfeer = null; }
+  }
+
+  function stopSfeer() {
+    if (!sfeer) return;
+    try { sfeer.bron.stop(); sfeer.lfo.stop(); } catch (e) { /* already stopped */ }
+    sfeer = null;
+  }
+
+  /* Four seconds of noise, long enough that the loop point is inaudible. */
+  function langeRuis() {
+    var n = Math.floor(ctx.sampleRate * 4);
+    var buf = ctx.createBuffer(1, n, ctx.sampleRate);
+    var data = buf.getChannelData(0);
+    var vorig = 0;
+    for (var i = 0; i < n; i++) {
+      /* Brown-ish noise: smoother and less hissy than white. */
+      vorig = (vorig + (Math.random() * 2 - 1) * 0.06) * 0.985;
+      data[i] = vorig;
+    }
+    return buf;
+  }
+
   /* ------------------------------------------------------------------ toggle */
 
   A.zetAan = function (aan) {
     A.aan = !!aan;
     try { window.localStorage.setItem(SLEUTEL, A.aan ? '1' : '0'); } catch (e) { /* ignore */ }
     if (A.aan) { zorgVoorContext(); A.klok(512); }   /* little confirmation ring */
+    else stopSfeer();
     werkKnopBij();
   };
 
