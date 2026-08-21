@@ -58,6 +58,9 @@
   R.verversWereld = function (s) {
     if (sprites.bereidTerreinVoor) sprites.bereidTerreinVoor(s.kaart);
     if (Game.render.paths) Game.render.paths.ververs(s);
+    if (Game.render.props) Game.render.props.ververs(s);
+    if (Game.render.wildlife) Game.render.wildlife.ververs(s);
+    if (Game.render.floaters) Game.render.floaters.reset();
     R.verversWandelaars(s);
     if (Game.render.raiders) Game.render.raiders.synchroniseer(s);
     /* Ambient life is tied to this map's size — rebuild it for the new world. */
@@ -70,6 +73,8 @@
      cache alone. */
   R.verversGebouwen = function (s) {
     if (Game.render.paths) Game.render.paths.ververs(s);
+    if (Game.render.props) Game.render.props.ververs(s);
+    if (Game.render.wildlife) Game.render.wildlife.ververs(s);
     R.verversWandelaars(s);
   };
 
@@ -127,6 +132,17 @@
       var hx = g.x + d.grootte / 2, hy = g.y + d.grootte / 2;
       var aantal = Math.max(1, Math.round(g.werkers / 2)) + (drukte - 1);
 
+      /* What this walker hauls, and on which leg of the trip. A gatherer walks
+         out empty, works at the resource and carries the load home; a crafter
+         carries the finished goods to the square and comes back empty. */
+      var draagt = null, draagtOp = 'terug';
+      if (d.wint) {
+        draagt = d.wint.res;
+      } else if (d.maakt) {
+        for (var uitR in d.maakt.uit) { draagt = uitR; break; }
+        draagtOp = 'heen';
+      }
+
       var route = Game.render.paths ? Game.render.paths.route(s, g.x, g.y, doelX, doelY) : null;
       if (!route) route = [{ x: hx, y: hy }, { x: doelX + 0.5, y: doelY + 0.5 }];
 
@@ -140,6 +156,9 @@
           bestaand.route = route;
           bestaand.routeLen = lengte;
           bestaand.baan = d.banen.baan;
+          bestaand.draagt = draagt;
+          bestaand.draagtOp = draagtOp;
+          bestaand.werkt = !!d.wint;
           lijst.push(bestaand);
         } else {
           lijst.push({
@@ -153,6 +172,10 @@
                walk at the same pace instead of the old fraction-per-second,
                which made long routes sprint and short ones crawl. */
             snelheidT: 0.55 + Math.random() * 0.35,
+            draagt: draagt,
+            draagtOp: draagtOp,
+            werkt: !!d.wint,          /* gatherers actually work at the far end */
+            klok: Math.random() * 6.28,
             afgelegd: Math.random() * 6,   /* seeds the gait so feet aren't in lockstep */
             wachtT: 0,
             fase: (g.id * 7 + n * 13) % 100 / 100
@@ -178,15 +201,40 @@
     for (var i = 0; i < s.wandelaars.length; i++) {
       var w = s.wandelaars[i];
       /* Pause + turn at the ends of the route instead of instantly bouncing. */
-      if (w.wachtT > 0) { w.wachtT -= dt; continue; }
+      w.klok = (w.klok || 0) + dt;
+      if (w.wachtT > 0) {
+        w.wachtT -= dt;
+        /* Chips, splashes and dust while the axe is actually swinging. */
+        if (w.werkt && w.p >= 1) werkDeeltjes(s, w, dt);
+        continue;
+      }
       var len = w.routeLen || 1;
       var stap = (w.snelheidT || 0.6) * dt;      /* tiles moved this frame */
       w.p += (w.richting * stap) / len;
       w.afgelegd = (w.afgelegd || 0) + stap;      /* drives the gait cadence */
-      if (w.p >= 1) { w.p = 1; w.richting = -1; w.wachtT = 0.4 + Math.random() * 0.9; }
+      /* A gatherer lingers at the resource: that pause *is* the work. */
+      if (w.p >= 1) { w.p = 1; w.richting = -1; w.wachtT = w.werkt ? 1.6 + Math.random() * 1.6 : 0.4 + Math.random() * 0.9; }
       else if (w.p <= 0) { w.p = 0; w.richting = 1; w.wachtT = 0.4 + Math.random() * 0.9; }
     }
   };
+
+  /* A few particles on every downstroke of the tool, matched to the trade:
+     wood chips, a splash, or rock dust. */
+  function werkDeeltjes(s, w, dt) {
+    if (!Game.render.particles) return;
+    w.slagTimer = (w.slagTimer || 0) - dt;
+    if (w.slagTimer > 0) return;
+    w.slagTimer = 0.55;
+    var eind = w.route[w.route.length - 1];
+    var wx = eind.x * Game.render.TEGEL, wy = eind.y * Game.render.TEGEL;
+    if (w.draagt === 'hout') {
+      Game.render.particles.emit('stof', wx, wy, 2, { spreiding: 5, kleur: '196,158,96', grootte: 0.7 });
+    } else if (w.draagt === 'vlees') {
+      Game.render.particles.emit('stof', wx, wy, 1, { spreiding: 5, kleur: '150,170,140', grootte: 0.6 });
+    } else {
+      Game.render.particles.emit('stof', wx, wy, 2, { spreiding: 4, grootte: 0.8 });
+    }
+  }
 
   /* Point at fraction `f` (0..1) along a multi-segment route, in tile coords. */
   function langsRoute(route, f) {
@@ -299,6 +347,9 @@
       laag.push({ d: g.x + g.y + gd.grootte, yy: g.y + gd.grootte / 2, soort: 1, g: g, def: gd });
     }
 
+    if (p > 14 && Game.render.props) Game.render.props.verzamel(zicht, laag);
+    if (p > 14 && Game.render.wildlife) Game.render.wildlife.verzamel(zicht, laag);
+
     if (p > 15 && s.wandelaars) {
       for (var wi = 0; wi < s.wandelaars.length; wi++) {
         var w = s.wandelaars[wi];
@@ -317,12 +368,19 @@
       if (e.soort === 0) {
         var fsp = cam.wereldNaarScherm(e.x * TEGEL, e.y * TEGEL);
         sprites.tekenKenmerk(ctx, e.tegel, fsp.x, fsp.y, p, s.seizoen, tijd);
+      } else if (e.soort === 0.5) {
+        Game.render.props.teken(ctx, cam, p, e.prop);
+      } else if (e.soort === 0.6) {
+        Game.render.wildlife.teken(ctx, cam, p, e);
       } else if (e.soort === 1) {
         tekenGebouwEntry(ctx, cam, s, ui, e.g, e.def, p, tijd);
       } else {
         tekenWandelaar(ctx, cam, s, p, e.w, e.pos);
       }
     }
+
+    /* --- bunting over the square while a festival is on --- */
+    if (Game.render.props) Game.render.props.tekenFeest(ctx, cam, s, p);
 
     /* --- birds crossing the sky, above the town --- */
     tekenVogels(ctx, cam, s, p);
@@ -335,6 +393,9 @@
 
     /* --- particles (smoke, fire, dust, sparks) --- */
     if (Game.render.particles) Game.render.particles.teken(ctx, cam);
+
+    /* --- floating yields (+🪵) out of the working buildings --- */
+    if (Game.render.floaters) Game.render.floaters.teken(ctx, cam, p);
 
     /* --- defence corridor while a raid is announced --- */
     if (Game.render.raiders && Game.render.raiders.tekenCorridor) {
@@ -369,6 +430,8 @@
 
     tickSweep(s, dt);
     tickWerkrook(s, dt);
+    if (Game.render.wildlife) Game.render.wildlife.tick(s, dt);
+    if (Game.render.floaters) Game.render.floaters.tick(s, dt);
     vervaagSchroei(s, dt);
 
     /* Ambient world life, all real-time (never in the fixed step). */
@@ -638,7 +701,8 @@
     var sp2 = cam.wereldNaarScherm(g.x * Game.render.TEGEL, g.y * Game.render.TEGEL);
 
     if (g.gebouwd) {
-      sprites.tekenGebouw(ctx, d, sp2.x, sp2.y, p, d.grootte, { tijd: tijd, tijdperk: s.tijdperk, geschroeid: g.geschroeid });
+      sprites.tekenGebouw(ctx, d, sp2.x, sp2.y, p, d.grootte,
+        { tijd: tijd, tijdperk: s.tijdperk, geschroeid: g.geschroeid, seizoen: s.seizoen });
       if (g.waarschuwing && p > 16) {
         var fc = Game.render.diamant(sp2.x, sp2.y, p * d.grootte);
         ctx.font = Math.round(p * 0.34) + 'px serif';
@@ -672,7 +736,14 @@
     var wandelt = !(w.wachtT > 0);
     var stapFase = (w.afgelegd || 0) * 7.5 + w.fase * 6.28;
 
-    Game.render.villagers.teken(ctx, sp.x, sp.y, p, w.baan, kijk, stapFase, wandelt);
+    var opties = {};
+    /* Working: standing still at the resource end with a tool in hand. */
+    if (w.werkt && !wandelt && w.p >= 1) opties.werktFase = (w.klok || 0) * 5.5;
+    /* Loaded: on the leg of the trip where this job hauls something. */
+    var geladen = w.draagtOp === 'heen' ? (w.richting > 0) : (w.richting < 0);
+    if (w.draagt && geladen && p > 20) opties.draagt = w.draagt;
+
+    Game.render.villagers.teken(ctx, sp.x, sp.y, p, w.baan, kijk, stapFase, wandelt, opties);
   }
 
   /* Highlights the resource tiles a building needs while you are placing it. */
@@ -712,7 +783,7 @@
 
     /* Translucent preview of the building itself. */
     ctx.globalAlpha = 0.6;
-    sprites.tekenGebouw(ctx, d, sp.x, sp.y, p, d.grootte, { tijd: s.tijd, tijdperk: s.tijdperk });
+    sprites.tekenGebouw(ctx, d, sp.x, sp.y, p, d.grootte, { tijd: s.tijd, tijdperk: s.tijdperk, seizoen: s.seizoen });
     ctx.globalAlpha = 1;
 
     if (d.plaats && d.plaats.nabij) {

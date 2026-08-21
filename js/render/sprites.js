@@ -153,8 +153,15 @@
 
     if (tegel.t === 'water' && kaart) {
       if (p >= 12) water(ctx, d, tegel, p, tijd, kaart, x, y); else kust(ctx, d, kaart, x, y);
+      if (seizoen === 3) ijs(ctx, d, tegel, p, kaart, x, y);
       return;
     }
+
+    /* Winter really lies on the land: a mottled snow cover whose depth varies
+       per tile (from the tile's stable `v`, so it never flickers), with a
+       brighter drift on the light-facing half. */
+    if (seizoen === 3) { sneeuwdek(ctx, d, tegel, p); return; }
+
     if (p >= 12 && tegel.t === 'vruchtbaar') akker(ctx, d, tegel, p, seizoen);
 
     /* Fine detail so a field of grass or rock is not one flat colour. Only when
@@ -164,6 +171,68 @@
       else if (tegel.t === 'rots') grondspikkels(ctx, d, tegel, p);
     }
   };
+
+  /* Snow cover on a land tile. Bare rock and mountains keep more of their own
+     colour; fields and grass go nearly white. */
+  function sneeuwdek(ctx, d, t, p) {
+    var basis = (t.t === 'rots' || t.t === 'berg') ? 0.2 : (t.t === 'bos' ? 0.3 : 0.46);
+    var alpha = basis + (t.v % 0.4) * 0.35;
+    vulDiamant(ctx, d, 'rgba(244,248,252,' + alpha.toFixed(3) + ')');
+
+    /* A brighter drift on the up-light (top-left) half of the diamond. */
+    if (p >= 14 && !t.b) {
+      ctx.fillStyle = 'rgba(255,255,255,' + (0.10 + (t.v % 0.3) * 0.2).toFixed(3) + ')';
+      ctx.beginPath();
+      ctx.moveTo(d.top.x, d.top.y);
+      ctx.lineTo(d.left.x, d.left.y);
+      ctx.lineTo(d.cx, d.cy);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    /* Stubble poking through a snowy field. */
+    if (p >= 26 && t.t === 'vruchtbaar' && !t.b) {
+      ctx.strokeStyle = 'rgba(150,132,86,.45)';
+      ctx.lineWidth = Math.max(1, p * 0.016);
+      for (var i = 0; i < 3; i++) {
+        var bx = d.cx + (((i * 47 + t.v * 110) % 70) / 70 - 0.5) * d.hw;
+        var by = d.cy + (((i * 31 + t.v * 60) % 50) / 50 - 0.5) * d.hh;
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        ctx.lineTo(bx + p * 0.01, by - p * 0.05);
+        ctx.stroke();
+      }
+    }
+  }
+
+  /* Ice on the water in winter: a pale sheen plus a couple of floes, and a
+     frozen white rim wherever the water meets land. */
+  function ijs(ctx, d, t, p, kaart, tx, ty) {
+    vulDiamant(ctx, d, 'rgba(214,232,240,' + (0.2 + (t.v % 0.3) * 0.4).toFixed(3) + ')');
+    if (p < 14) return;
+
+    for (var i = 0; i < 2; i++) {
+      var fx = d.cx + (((i * 43 + t.v * 90) % 60) / 60 - 0.5) * d.hw * 0.9;
+      var fy = d.cy + (((i * 67 + t.v * 40) % 50) / 50 - 0.5) * d.hh * 0.9;
+      ctx.fillStyle = 'rgba(240,248,252,.55)';
+      ctx.beginPath();
+      ctx.ellipse(fx, fy, p * (0.09 + (t.v % 0.2) * 0.2), p * (0.05 + (t.v % 0.1) * 0.2), 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    /* Frozen rim on the shoreline edges. */
+    ctx.strokeStyle = 'rgba(250,253,255,.75)';
+    ctx.lineWidth = Math.max(1, p * 0.05);
+    for (var b = 0; b < BUUREDGE.length; b++) {
+      var e = BUUREDGE[b];
+      var buur = Game.core.map.tegel(kaart, tx + e.dx, ty + e.dy);
+      if (!buur || buur.t === 'water') continue;
+      ctx.beginPath();
+      ctx.moveTo(d[e.a].x, d[e.a].y);
+      ctx.lineTo(d[e.b].x, d[e.b].y);
+      ctx.stroke();
+    }
+  }
 
   /* A few wind-bent grass blades, deterministic from the tile's `v` so they
      never flicker between frames. */
@@ -381,8 +450,25 @@
      peak in winter) wear a snow cap, so a range reads as a mix rather than a
      field of identical spikes. */
   function berg(ctx, d, t, p, seizoen) {
-    var H = p * (0.5 + t.v * 0.75);
-    var apex = { x: d.cx + (t.v - 0.5) * p * 0.14, y: d.cy - H };
+    /* Two stable pseudo-randoms per tile so neighbouring peaks differ in both
+       height and lean; a field of identical spikes was the giveaway that this
+       was one repeated shape. */
+    var r1 = (t.v * 7.31) % 1;
+    var r2 = (t.v * 13.77) % 1;
+
+    var H = p * (0.42 + r1 * 1.05);
+    var lean = (r2 - 0.5) * p * 0.3;
+    var apex = { x: d.cx + lean, y: d.cy - H };
+
+    /* A lower shoulder peak against the main one turns a lone cone into a
+       ridge, especially where several mountain tiles meet. */
+    if (r2 > 0.38) {
+      var kant = r1 > 0.5 ? 1 : -1;
+      var sub = { x: d.cx + kant * d.hw * 0.44, y: d.cy - H * (0.42 + r2 * 0.25) };
+      tri(ctx, d.left, d.bottom, sub, '#5f5a51');
+      tri(ctx, d.bottom, d.right, sub, '#736c61');
+    }
+
     /* Two front flanks (near, bottom corner splits them) then the two back
        flanks a touch darker for silhouette against neighbours. */
     tri(ctx, d.left, d.bottom, apex, '#6a645a');
@@ -390,8 +476,12 @@
     tri(ctx, d.top, d.left, apex, '#565049');
     tri(ctx, d.top, d.right, apex, '#726b60');
 
-    var sneeuw = (seizoen === 3 ? 0.24 : 0) + (t.v > 0.5 ? (t.v - 0.5) * 0.9 : 0);
+    /* Snow lies on what is high, not on what is random: tall peaks keep a cap
+       all year, low ones only get one in winter. */
+    var hoogte = (H / p - 0.42) / 1.05;
+    var sneeuw = (seizoen === 3 ? 0.3 : 0) + (hoogte > 0.45 ? (hoogte - 0.45) * 1.1 : 0);
     if (sneeuw < 0.08) return;
+    sneeuw = Math.min(0.75, sneeuw);
     var snL = lerp(apex, d.left, sneeuw), snR = lerp(apex, d.right, sneeuw);
     var snB = lerp(apex, d.bottom, sneeuw);
     tri(ctx, apex, snL, snB, '#dfe6ea');
@@ -582,6 +672,8 @@
     else if (cfg.stijl === 'plat') vulDiamant(ctx, top, verf(cfg.muur, 0.98));
     else vulDiamant(ctx, top, verf(cfg.muur, 0.9));   /* 'geen': open wall top */
 
+    if (opties.seizoen === 3) dakSneeuw(ctx, top, dakH, cfg);
+
     if (cfg.torens) kasteelTorens(ctx, foot, H, dakH, cfg);
     if (cfg.kruis) kruisTop(ctx, top, dakH, p);
     if (cfg.vlag) vlag(ctx, top, dakH, p);
@@ -598,6 +690,24 @@
       ctx.fillText(def.emoji, top.cx, top.cy - (cfg.stijl === 'plat' ? p * 0.1 : dakH * 0.42));
     }
   };
+
+  /* Snow settling on a roof in winter: a white cap over the upper part of the
+     two front roof faces, or a full white top on a flat roof. The single
+     cheapest thing that makes winter read as winter in the town itself. */
+  function dakSneeuw(ctx, t, dakH, cfg) {
+    if (cfg.stijl === 'plat' || cfg.stijl === 'geen') {
+      vulDiamant(ctx, t, 'rgba(240,247,252,.72)');
+      return;
+    }
+    var apex = { x: t.cx, y: t.cy - dakH };
+    var deel = 0.46;
+    var sL = lerp(apex, t.left, deel), sR = lerp(apex, t.right, deel);
+    var sB = lerp(apex, t.bottom, deel), sT = lerp(apex, t.top, deel);
+    tri(ctx, apex, sL, sB, 'rgba(238,245,250,.85)');
+    tri(ctx, apex, sB, sR, 'rgba(248,252,255,.9)');
+    tri(ctx, apex, sT, sL, 'rgba(230,238,245,.7)');
+    tri(ctx, apex, sT, sR, 'rgba(236,243,249,.75)');
+  }
 
   /* Draw a registered iso building sprite in place of the procedural volume,
      anchored with its base at the front corner of the footprint so it sits on

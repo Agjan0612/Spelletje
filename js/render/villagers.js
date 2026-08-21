@@ -113,10 +113,17 @@
      tile so the figure scales with zoom. `stapFase` advances with distance
      walked (not the clock), so the gait keeps its cadence at any speed; when
      `wandelt` is false the legs settle and the figure just breathes. */
-  V.teken = function (ctx, x, y, p, baan, kijk, stapFase, wandelt) {
+  V.teken = function (ctx, x, y, p, baan, kijk, stapFase, wandelt, opties) {
     var job = Game.config.jobs[baan] || Game.config.jobs.werkloos;
     var body = job.kleur;
     var acc = ACCENT[baan] || {};
+    opties = opties || {};
+
+    /* At the far end of their route villagers stop and actually work: the arm
+       swings a full stroke and the body leans into it. `werktFase` runs on
+       real time, so the axe keeps chopping while the figure stands still. */
+    var werkt = opties.werktFase != null;
+    var slag = werkt ? Math.max(0, Math.sin(opties.werktFase)) : 0;
 
     var legLen = p * 0.15, torsoH = p * 0.17, torsoW = p * 0.15, headR = p * 0.072;
     var broek = verf(body, 0.5);
@@ -126,7 +133,9 @@
        the main "springerige" complaint. */
     var swing = wandelt ? Math.sin(stapFase) : 0;
     var armSwing = wandelt ? Math.sin(stapFase + Math.PI) : Math.sin(stapFase * 0.5) * 0.15;
+    if (werkt) armSwing = 1.1 - slag * 2.3;
     var bob = wandelt ? -Math.abs(Math.sin(stapFase)) * p * 0.012 : Math.sin(stapFase * 0.6) * p * 0.004;
+    if (werkt) bob += slag * p * 0.02;
     var legAmp = p * 0.055;
 
     var hipY = y - legLen + bob;
@@ -184,8 +193,18 @@
     ctx.fillStyle = HUID;
     ctx.beginPath(); ctx.arc(handX, handY, p * 0.022, 0, Math.PI * 2); ctx.fill();
 
-    /* carried tool in the front hand */
-    if (acc.gereedschap) tekenGereedschap(ctx, acc.gereedschap, handX, handY, p, kijk);
+    /* carried tool in the front hand — swung down during a work stroke */
+    if (acc.gereedschap) {
+      if (werkt) {
+        ctx.save();
+        ctx.translate(handX, handY);
+        ctx.rotate(kijk * (-0.5 + slag * 1.7));
+        tekenGereedschap(ctx, acc.gereedschap, 0, 0, p, kijk);
+        ctx.restore();
+      } else {
+        tekenGereedschap(ctx, acc.gereedschap, handX, handY, p, kijk);
+      }
+    }
 
     /* --- neck + head --- */
     ctx.strokeStyle = verf(HUID, 0.9);
@@ -200,7 +219,28 @@
 
     /* --- headwear --- */
     hoofddeksel(ctx, x, headY, headR, kijk, acc);
+
+    /* What they are hauling home, held above the head on the way back. */
+    if (opties.draagt && !werkt) vracht(ctx, x, headY - headR * 1.5, p, opties.draagt);
   };
+
+  /* A small crate of goods above the head, with the resource's own colour and
+     emoji, so you can see what a walker is bringing in. */
+  function vracht(ctx, x, y, p, res) {
+    var def = Game.config.resources[res];
+    if (!def) return;
+    var w = p * 0.15, h = p * 0.1;
+    ctx.fillStyle = verf(def.kleur, 0.75);
+    ctx.fillRect(x - w / 2, y - h, w, h);
+    ctx.fillStyle = verf(def.kleur, 1.1);
+    ctx.fillRect(x - w / 2, y - h, w, h * 0.32);
+    if (p >= 26) {
+      ctx.font = Math.round(p * 0.13) + 'px serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(def.emoji, x, y - h * 0.45);
+    }
+  }
 
   function hoofddeksel(ctx, x, hy, r, kijk, acc) {
     if (acc.helm) {

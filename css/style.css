@@ -201,6 +201,14 @@ button {
 .waarschuwing { color: #e8a37a; font-size: 12px; margin-top: 6px; line-height: 1.35; }
 
 /* Log linksonder */
+#log-toggle {
+  position: absolute; left: 346px; bottom: 10px; z-index: 10;
+  width: 22px; height: 22px; padding: 0; line-height: 1;
+  background: rgba(20, 14, 9, .8); color: var(--perkament-dof);
+  border: 1px solid var(--rand); border-radius: 4px; font-size: 12px;
+}
+#log-toggle:hover { color: var(--goud-licht); border-color: var(--goud); }
+
 #logbox {
   position: absolute; left: 10px; bottom: 10px; width: 330px;
   display: flex; flex-direction: column-reverse; gap: 3px;
@@ -457,4 +465,5 @@ ul.overzicht li.slecht { border-left-color: var(--bloed); }
   #right-col { width: 200px; }
   #panel { width: 232px; }
   #logbox { width: 232px; }
+  #log-toggle { left: 248px; }
 }
