@@ -61,6 +61,13 @@
       if (!bronBestaatVoor(r, 4)) fouten.push('Geen enkel gebouw produceert ' + r);
     });
 
+    /* Any registered iso building sprite (Spoor D) must name a real building. */
+    if (Game.render && Game.render.atlas && Game.render.atlas.isoGebouwMap) {
+      Object.keys(Game.render.atlas.isoGebouwMap).forEach(function (id) {
+        if (!Game.config.gebouw(id)) fouten.push('iso-sprite geregistreerd voor onbekend gebouw: ' + id);
+      });
+    }
+
     if (fouten.length) {
       console.error('⚠️ Configuratiefouten in Dorp tot Stad:\n' + fouten.join('\n'));
     } else {

@@ -12,22 +12,27 @@
   var A = {};
 
   var BASIS = 'assets/kenney/';
-  var beelden = {};          /* naam -> { img, klaar } */
+  var ISO_BASIS = 'assets/iso/';   /* optional hand-drawn / generated iso art */
+  var beelden = {};          /* sleutel -> { img, klaar } */
 
   function pad(naam) {
     var map = { s: 'structure/', e: 'environment/', u: 'unit/' };
     return BASIS + (map[naam.charAt(0)] || '') + naam + '.png';
   }
 
-  function laad(naam) {
-    if (beelden[naam]) return;
+  /* Load an image under an explicit key + source. The onerror keeps a missing
+     file harmless: the key just never becomes `klaar`, so callers fall back. */
+  function laadBron(sleutel, src) {
+    if (beelden[sleutel]) return;
     var img = new Image();
     var rec = { img: img, klaar: false };
     img.onload = function () { rec.klaar = img.naturalWidth > 0; };
     img.onerror = function () { rec.klaar = false; };
-    img.src = pad(naam);
-    beelden[naam] = rec;
+    img.src = src;
+    beelden[sleutel] = rec;
   }
+
+  function laad(naam) { laadBron(naam, pad(naam)); }
 
   /* ---- building id -> Structure sprite. Reuse is fine: mines all share one
      "mine mouth", churches share one chapel, etc. Buildings not listed keep
@@ -46,6 +51,16 @@
     /* stadsmuur keeps its coded wall so it tiles cleanly; molen keeps its
        hand-drawn body so its sails can turn. */
   };
+
+  /* ---- optional true iso building art (Spoor D). Empty by default, so no
+     requests are made and the polished procedural volumes stay the default.
+     To switch a building over to a real iso sprite, drop `assets/iso/<file>.png`
+     in place and add an entry here: `stadhuis: 'stadhuis'`. tekenGebouw picks it
+     up automatically, and falls back to the procedural volume if it is missing
+     or still loading — the same never-breaks contract the trees/rocks use. ---- */
+  A.isoGebouwMap = {};
+
+  function isoPad(best) { return ISO_BASIS + best + '.png'; }
 
   /* Trees for a bos tile and rocks for a rots tile. */
   var BOMEN = ['e04', 'e03', 'e02', 'e01'];
@@ -69,6 +84,10 @@
     BOMEN.forEach(function (n) { set[n] = 1; });
     ROTSEN.forEach(function (n) { set[n] = 1; });
     Object.keys(set).forEach(laad);
+    /* Preload only the iso building art that has actually been registered. */
+    Object.keys(A.isoGebouwMap).forEach(function (id) {
+      laadBron('iso:' + id, isoPad(A.isoGebouwMap[id]));
+    });
   };
 
   /* --------------------------------------------------------------- api ---- */
@@ -83,6 +102,12 @@
   A.gebouw = function (id) {
     var naam = A.gebouwMap[id];
     return naam ? A.get(naam) : null;
+  };
+
+  /* Loaded iso building sprite for an id, or null (missing / still loading /
+     not registered) so the caller falls back to the procedural volume. */
+  A.isoGebouw = function (id) {
+    return A.isoGebouwMap[id] ? A.get('iso:' + id) : null;
   };
 
   /* Asset path for a building's sprite (for use as an <img> src in the UI), or
