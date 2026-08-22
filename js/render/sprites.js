@@ -36,7 +36,7 @@
      the up/left neighbours, as if lit from the top-left. Computed once per map
      and kept in this module (never in Game.state) so saves stay pure JSON. */
 
-  var schaduwCache = { seed: null, arr: null };
+  var schaduwCache = { seed: null, arr: null, diepte: null };
 
   function tegelH(kaart, x, y, terug) {
     var t = Game.core.map.tegel(kaart, x, y);
@@ -61,11 +61,84 @@
         arr[i] = Game.util.clamp(1 + dh * 2.4, 0.8, 1.22);
       }
     }
-    schaduwCache = { seed: kaart.seed, arr: arr };
+    schaduwCache = {
+      seed: kaart.seed, arr: arr,
+      diepte: bouwDiepte(kaart),
+      randen: bouwRanden(kaart)
+    };
   };
+
+  /* How far every water tile is from the nearest land, in tiles (a flood fill
+     from the coastline, capped at MAXDIEPTE). Land is 0. Shallow water near a
+     shore is drawn turquoise and open water deep blue, which is what turns a
+     flat teal blob into a sea. Computed once per map and kept here, never in
+     Game.state. */
+  var MAXDIEPTE = 7;
+
+  function bouwDiepte(kaart) {
+    var b = kaart.b, h = kaart.h, n = b * h;
+    var diep = new Uint8Array(n);
+    var rij = [];
+    for (var i = 0; i < n; i++) {
+      if (kaart.tegels[i].t !== 'water') { diep[i] = 0; rij.push(i); }
+      else diep[i] = 255;
+    }
+    for (var k = 0; k < rij.length; k++) {
+      var idx = rij[k];
+      var d = diep[idx];
+      if (d >= MAXDIEPTE) continue;
+      var x = idx % b, y = (idx - x) / b;
+      for (var e = 0; e < BUUREDGE.length; e++) {
+        var nx = x + BUUREDGE[e].dx, ny = y + BUUREDGE[e].dy;
+        if (nx < 0 || ny < 0 || nx >= b || ny >= h) continue;
+        var ni = ny * b + nx;
+        if (diep[ni] !== 255) continue;
+        diep[ni] = d + 1;
+        rij.push(ni);
+      }
+    }
+    for (var j = 0; j < n; j++) if (diep[j] === 255) diep[j] = MAXDIEPTE;
+    return diep;
+  }
+
+  /* Which of a tile's four edges border a *different* terrain, and which
+     terrain that is. One byte per tile for the mask plus four for the
+     neighbours, worked out once per map instead of four map.tegel() lookups
+     per tile per frame — and the common case (a tile in the middle of a field)
+     then costs a single array read and an early return. */
+  var TERREINEN = ['gras', 'vruchtbaar', 'bos', 'rots', 'berg', 'water'];
+
+  function bouwRanden(kaart) {
+    var b = kaart.b, h = kaart.h, n = b * h;
+    var masker = new Uint8Array(n);
+    var buren = new Uint8Array(n * 4);
+    var nr = {};
+    for (var q = 0; q < TERREINEN.length; q++) nr[TERREINEN[q]] = q;
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < b; x++) {
+        var i = y * b + x;
+        var eigen = kaart.tegels[i].t;
+        for (var e = 0; e < BUUREDGE.length; e++) {
+          var nx = x + BUUREDGE[e].dx, ny = y + BUUREDGE[e].dy;
+          if (nx < 0 || ny < 0 || nx >= b || ny >= h) continue;
+          var bt = kaart.tegels[ny * b + nx].t;
+          if (bt === eigen) continue;
+          masker[i] |= (1 << e);
+          buren[i * 4 + e] = nr[bt] || 0;
+        }
+      }
+    }
+    return { masker: masker, buren: buren };
+  }
 
   function schaduwFactor(kaart, i) {
     return (kaart && schaduwCache.arr && schaduwCache.seed === kaart.seed) ? schaduwCache.arr[i] : 1;
+  }
+
+  /* 0 at the shoreline, 1 in open water. */
+  function diepteDeel(kaart, i) {
+    if (!kaart || !schaduwCache.diepte || schaduwCache.seed !== kaart.seed) return 0.5;
+    return Game.util.clamp((schaduwCache.diepte[i] - 1) / (MAXDIEPTE - 1), 0, 1);
   }
 
   /* -------------------------------------------------------- colour helpers */
@@ -78,12 +151,26 @@
     return [200, 200, 200];
   }
 
-  /* Multiply a colour by a brightness factor, returning an rgb() string. */
+  /* Multiply a colour by a brightness factor, returning an rgb() string.
+     Memoised on (colour, factor rounded to 1/200): this runs a few times per
+     tile per frame — terrain shade, every transition band, every building face
+     — and re-parsing a hex string that often was measurable. */
+  var verfCache = Object.create(null);
+  var verfAantal = 0;
+
   function verf(kleur, f) {
+    var sleutel = kleur + '#' + (f * 200 | 0);
+    var uit = verfCache[sleutel];
+    if (uit) return uit;
     var c = ontleed(kleur);
-    return 'rgb(' + Game.util.clamp(Math.round(c[0] * f), 0, 255) + ',' +
-                    Game.util.clamp(Math.round(c[1] * f), 0, 255) + ',' +
-                    Game.util.clamp(Math.round(c[2] * f), 0, 255) + ')';
+    uit = 'rgb(' + Game.util.clamp(Math.round(c[0] * f), 0, 255) + ',' +
+                   Game.util.clamp(Math.round(c[1] * f), 0, 255) + ',' +
+                   Game.util.clamp(Math.round(c[2] * f), 0, 255) + ')';
+    /* Bounded: buildings mix their own shades, so the key space is open. */
+    if (verfAantal > 6000) { verfCache = Object.create(null); verfAantal = 0; }
+    verfCache[sleutel] = uit;
+    verfAantal++;
+    return uit;
   }
 
   /* Final tile colour: base hex, per-tile brightness `v`, and the hillshade. */
@@ -144,7 +231,9 @@
   S.tekenGrond = function (ctx, tegel, sx, sy, p, seizoen, tijd, kaart, x, y) {
     var d = Game.render.diamant(sx, sy, p);
     var idx = kaart ? y * kaart.b + x : 0;
-    var kleur = eindKleur(S.terreinKleur(tegel, seizoen), tegel.v, schaduwFactor(kaart, idx));
+    var basis = S.terreinKleur(tegel, seizoen);
+    if (tegel.t === 'water') basis = waterKleur(basis, diepteDeel(kaart, idx));
+    var kleur = eindKleur(basis, tegel.v, schaduwFactor(kaart, idx));
     vulDiamant(ctx, d, kleur);
     /* Hairline-seam guard: a 1px stroke in the same colour closes the sub-pixel
        cracks between neighbouring diamonds without changing the look. */
@@ -156,6 +245,11 @@
       if (seizoen === 3) ijs(ctx, d, tegel, p, kaart, x, y);
       return;
     }
+
+    /* Soft edges between terrains: the neighbour's colour bleeds a little way
+       into this tile, so grass runs into forest and land runs into a beach
+       instead of meeting along a hard diamond edge. */
+    if (kaart && p >= 9) overgangen(ctx, d, tegel, kaart, seizoen, idx);
 
     /* Winter really lies on the land: a mottled snow cover whose depth varies
        per tile (from the tile's stable `v`, so it never flickers), with a
@@ -172,11 +266,72 @@
     }
   };
 
+  /* Deep water is darker and bluer than the shallows. `deel` is 0 at the
+     shoreline and 1 out at sea. */
+  function waterKleur(basis, deel) {
+    var c = ontleed(basis);
+    var diep = [22, 52, 84];
+    var ondiep = [96, 176, 186];
+    /* Shallow first (a turquoise lift right at the shore), then down into the
+       dark. Two mixes rather than one keeps the beach from looking bleached. */
+    var m = mix(mix(c, ondiep, Math.max(0, 0.5 - deel) * 0.7), diep, deel * 0.62);
+    return 'rgb(' + m[0] + ',' + m[1] + ',' + m[2] + ')';
+  }
+
+  function mix(a, b, t) {
+    t = Game.util.clamp(t, 0, 1);
+    return [Math.round(a[0] + (b[0] - a[0]) * t),
+            Math.round(a[1] + (b[1] - a[1]) * t),
+            Math.round(a[2] + (b[2] - a[2]) * t)];
+  }
+
+  /* Sand along a coast, per season — winter sand is pale and frozen. */
+  var ZAND = ['#d5c290', '#dbc994', '#cfb87f', '#d9d5c8'];
+
+  /* Two bands of the neighbour's colour along every edge this tile shares with
+     a different terrain: close to the edge nearly opaque, further in faint.
+     Two flat quads read as a gradient and cost a fraction of a real one. */
+  function overgangen(ctx, d, tegel, kaart, seizoen, idx) {
+    var R = schaduwCache.randen;
+    if (!R || schaduwCache.seed !== kaart.seed) return;
+    var masker = R.masker[idx];
+    if (!masker) return;                       /* the common case: no border */
+
+    var fijn = d.hw >= 15;
+    for (var i = 0; i < BUUREDGE.length; i++) {
+      if (!(masker & (1 << i))) continue;
+      var e = BUUREDGE[i];
+      var buurT = TERREINEN[R.buren[idx * 4 + i]];
+
+      var kleur;
+      if (buurT === 'water') kleur = ZAND[seizoen] || ZAND[0];
+      else kleur = schakering(S.terreinKleur({ t: buurT }, seizoen), tegel.v);
+
+      var a = d[e.a], b = d[e.b], c = { x: d.cx, y: d.cy };
+      if (fijn) {
+        band(ctx, a, b, c, 0, 0.32, kleur, 0.6);
+        band(ctx, a, b, c, 0.32, 0.66, kleur, 0.24);
+      } else {
+        /* Zoomed out there are several thousand tiles on screen, so one band
+           per edge instead of two — at that size the softness is carried by
+           the sheer number of edges anyway. */
+        band(ctx, a, b, c, 0, 0.45, kleur, 0.5);
+      }
+    }
+  }
+
+  /* A quad along edge a→b, between fractions u0 and u1 of the way to centre c. */
+  function band(ctx, a, b, c, u0, u1, kleur, alpha) {
+    ctx.globalAlpha = alpha;
+    quad(ctx, lerp(a, c, u0), lerp(b, c, u0), lerp(b, c, u1), lerp(a, c, u1), kleur);
+    ctx.globalAlpha = 1;
+  }
+
   /* Snow cover on a land tile. Bare rock and mountains keep more of their own
      colour; fields and grass go nearly white. */
   function sneeuwdek(ctx, d, t, p) {
-    var basis = (t.t === 'rots' || t.t === 'berg') ? 0.2 : (t.t === 'bos' ? 0.3 : 0.46);
-    var alpha = basis + (t.v % 0.4) * 0.35;
+    var basis = (t.t === 'rots' || t.t === 'berg') ? 0.2 : (t.t === 'bos' ? 0.28 : 0.42);
+    var alpha = basis + (t.v % 0.4) * 0.32;
     vulDiamant(ctx, d, 'rgba(244,248,252,' + alpha.toFixed(3) + ')');
 
     /* A brighter drift on the up-light (top-left) half of the diamond. */
@@ -185,6 +340,18 @@
       ctx.beginPath();
       ctx.moveTo(d.top.x, d.top.y);
       ctx.lineTo(d.left.x, d.left.y);
+      ctx.lineTo(d.cx, d.cy);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    /* ...and a cool shadow on the away half, so a snowfield has form instead
+       of being one white sheet. */
+    if (p >= 14 && !t.b) {
+      ctx.fillStyle = 'rgba(150,176,206,.16)';
+      ctx.beginPath();
+      ctx.moveTo(d.bottom.x, d.bottom.y);
+      ctx.lineTo(d.right.x, d.right.y);
       ctx.lineTo(d.cx, d.cy);
       ctx.closePath();
       ctx.fill();
@@ -312,16 +479,19 @@
     if (kaart) kust(ctx, d, kaart, tx, ty, tijd);
 
     /* Three drifting ripple lines instead of two static ones. */
-    ctx.strokeStyle = 'rgba(255,255,255,.12)';
-    ctx.lineWidth = Math.max(1, p * 0.035);
+    ctx.strokeStyle = 'rgba(226,244,250,.09)';
+    ctx.lineWidth = Math.max(1, p * 0.03);
     ctx.lineCap = 'round';
     ctx.beginPath();
     for (var i = 0; i < 3; i++) {
       var ph = tijd * (1.0 + i * 0.33) + t.v * 9 + i * 2.1;
-      var yy = d.cy + (i - 1) * d.hh * 0.42 + Math.sin(ph) * p * 0.045;
-      var xx = d.cx + Math.cos(ph) * p * 0.05;
-      ctx.moveTo(xx - p * 0.13, yy);
-      ctx.lineTo(xx + p * 0.13, yy);
+      /* Offsets keyed to the tile's own random, so the ripples do not line up
+         into rows that give the grid away. */
+      var yy = d.cy + ((t.v * 3.3 + i) % 1 - 0.5) * d.hh * 1.1 + Math.sin(ph) * p * 0.04;
+      var xx = d.cx + ((t.v * 7.9 + i * 0.4) % 1 - 0.5) * d.hw * 0.5 + Math.cos(ph) * p * 0.05;
+      var len = p * (0.08 + ((t.v * 11 + i) % 1) * 0.08);
+      ctx.moveTo(xx - len, yy);
+      ctx.lineTo(xx + len, yy);
     }
     ctx.stroke();
 
@@ -336,6 +506,25 @@
       ctx.arc(d.cx + Math.sin(tijd * 0.7 + t.v * 12) * p * 0.13, d.cy - p * 0.02, p * 0.028, 0, Math.PI * 2);
       ctx.fill();
     }
+  }
+
+  /* The shadow an upright thing throws on the ground: an ellipse stretched and
+     leaned along the one light direction the whole scene shares, so a wood, a
+     boulder field and a street of houses all agree on where the sun is. */
+  var SCHADUWVERF = 'rgba(24,20,14,.2)';
+  var SCHADUWVERF_LICHT = 'rgba(24,20,14,.18)';
+  var SCHADUWHOEK = Math.atan2(0.30, 0.62);
+
+  function grondschaduw(ctx, x, y, straal, hoogte, alpha) {
+    var richting = (Game.render.sfeer && Game.render.sfeer.SCHADUW) || { x: 0.62, y: 0.30 };
+    var ox = hoogte * richting.x, oy = hoogte * richting.y;
+    var lengte = Math.sqrt(ox * ox + oy * oy) * 0.5 + straal;
+    /* ellipse() takes its own rotation, so this needs no save/translate/rotate
+       /restore — which matters, because a forest draws three of these per tile. */
+    ctx.fillStyle = alpha >= 0.19 ? SCHADUWVERF : SCHADUWVERF_LICHT;
+    ctx.beginPath();
+    ctx.ellipse(x + ox * 0.5, y + oy * 0.5, lengte, straal * 0.55, SCHADUWHOEK, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   /* An upright billboard (sprite or richer fallback tree) at a point, bent by
@@ -353,10 +542,7 @@
       var oy = d.cy + p * (((i * 61 + t.v * 70) % 20) / 100 - 0.06);
       var wind = Math.sin(tijd * 0.9 + t.v * 6.28 + i * 1.3) * 0.05;   /* ~3° */
 
-      ctx.fillStyle = 'rgba(0,0,0,.16)';
-      ctx.beginPath();
-      ctx.ellipse(ox, oy + p * 0.03, p * 0.11, p * 0.05, 0, 0, Math.PI * 2);
-      ctx.fill();
+      grondschaduw(ctx, ox, oy + p * 0.03, p * 0.11, p * (0.34 + deel * 0.16), 0.2);
 
       ctx.save();
       ctx.translate(ox, oy);
@@ -423,14 +609,14 @@
 
   function rotsen(ctx, d, t, p) {
     var atlas = Game.render.atlas;
-    for (var i = 0; i < 3; i++) {
+    /* One to three boulders, from the tile's own stable random: a rock field
+       of exactly three stones per tile reads as wallpaper. */
+    var aantal = 1 + Math.floor(((t.v * 5.7) % 1) * 3);
+    for (var i = 0; i < aantal; i++) {
       var ox = d.cx + p * (((i * 41 + t.v * 90) % 50) / 100 - 0.25);
       var oy = d.cy + p * (((i * 67 + t.v * 60) % 26) / 100 - 0.1);
 
-      ctx.fillStyle = 'rgba(0,0,0,.15)';
-      ctx.beginPath();
-      ctx.ellipse(ox, oy + p * 0.05, p * 0.1, p * 0.045, 0, 0, Math.PI * 2);
-      ctx.fill();
+      grondschaduw(ctx, ox, oy + p * 0.05, p * 0.1, p * 0.14, 0.18);
 
       var img = atlas && atlas.rots(t.v, i);
       if (img) {
@@ -471,36 +657,64 @@
     var r1 = (t.v * 7.31) % 1;
     var r2 = (t.v * 13.77) % 1;
 
-    var H = p * (0.42 + r1 * 1.05);
-    var lean = (r2 - 0.5) * p * 0.3;
+    var H = p * (0.55 + r1 * 1.25);
+    var lean = (r2 - 0.5) * p * 0.34;
     var apex = { x: d.cx + lean, y: d.cy - H };
+
+    grondschaduw(ctx, d.cx, d.cy + d.hh * 0.2, d.hw * 0.8, H * 0.5, 0.2);
 
     /* A lower shoulder peak against the main one turns a lone cone into a
        ridge, especially where several mountain tiles meet. */
-    if (r2 > 0.38) {
+    if (r2 > 0.3) {
       var kant = r1 > 0.5 ? 1 : -1;
-      var sub = { x: d.cx + kant * d.hw * 0.44, y: d.cy - H * (0.42 + r2 * 0.25) };
-      tri(ctx, d.left, d.bottom, sub, '#5f5a51');
-      tri(ctx, d.bottom, d.right, sub, '#736c61');
+      var sub = { x: d.cx + kant * d.hw * 0.5, y: d.cy - H * (0.4 + r2 * 0.3) };
+      tri(ctx, d.left, d.bottom, sub, '#4e4941');
+      tri(ctx, d.bottom, d.right, sub, '#63594c');
     }
 
     /* Two front flanks (near, bottom corner splits them) then the two back
        flanks a touch darker for silhouette against neighbours. */
-    tri(ctx, d.left, d.bottom, apex, '#6a645a');
-    tri(ctx, d.bottom, d.right, apex, '#847d70');
-    tri(ctx, d.top, d.left, apex, '#565049');
-    tri(ctx, d.top, d.right, apex, '#726b60');
+    tri(ctx, d.left, d.bottom, apex, '#5e574d');
+    tri(ctx, d.bottom, d.right, apex, '#7d7365');
+    tri(ctx, d.top, d.left, apex, '#484238');
+    tri(ctx, d.top, d.right, apex, '#665e52');
 
-    /* Snow lies on what is high, not on what is random: tall peaks keep a cap
-       all year, low ones only get one in winter. */
-    var hoogte = (H / p - 0.42) / 1.05;
-    var sneeuw = (seizoen === 3 ? 0.3 : 0) + (hoogte > 0.45 ? (hoogte - 0.45) * 1.1 : 0);
-    if (sneeuw < 0.08) return;
-    sneeuw = Math.min(0.75, sneeuw);
-    var snL = lerp(apex, d.left, sneeuw), snR = lerp(apex, d.right, sneeuw);
-    var snB = lerp(apex, d.bottom, sneeuw);
-    tri(ctx, apex, snL, snB, '#dfe6ea');
-    tri(ctx, apex, snB, snR, '#eef3f6');
+    /* A lit crest down the near ridge, so the two front faces meet in an edge
+       instead of a colour change. */
+    ctx.strokeStyle = 'rgba(178,168,150,.55)';
+    ctx.lineWidth = Math.max(1, p * 0.02);
+    ctx.beginPath();
+    ctx.moveTo(apex.x, apex.y);
+    ctx.lineTo(d.bottom.x, d.bottom.y);
+    ctx.stroke();
+
+    /* Snow lies on what is high, not on what is random: only real peaks keep a
+       cap all year, the rest wait for winter. The snow line is broken rather
+       than a clean lerp — a straight white triangle is what made these read as
+       paper cones. */
+    var hoogte = (H / p - 0.55) / 1.25;
+    var sneeuw = (seizoen === 3 ? 0.26 : 0) + (hoogte > 0.62 ? (hoogte - 0.62) * 1.3 : 0);
+    if (sneeuw < 0.1) return;
+    sneeuw = Math.min(0.62, sneeuw);
+    sneeuwkap(ctx, apex, d.left, d.bottom, sneeuw, r1, '#dbe3e8');
+    sneeuwkap(ctx, apex, d.bottom, d.right, sneeuw, r2, '#eff4f7');
+  }
+
+  /* One snowy face: a wedge from the apex down to a ragged snow line between
+     the two given corners. */
+  function sneeuwkap(ctx, apex, a, b, deel, seed, kleur) {
+    ctx.fillStyle = kleur;
+    ctx.beginPath();
+    ctx.moveTo(apex.x, apex.y);
+    for (var i = 0; i <= 4; i++) {
+      var u = i / 4;
+      var kant = lerp(a, b, u);
+      var rafel = deel * (0.72 + ((i * 37 + seed * 90) % 55) / 100);
+      var pt = lerp(apex, kant, rafel);
+      ctx.lineTo(pt.x, pt.y);
+    }
+    ctx.closePath();
+    ctx.fill();
   }
 
   function ader(ctx, d, t, p) {
@@ -622,6 +836,18 @@
     juwelier:    { muurH: 0.56, stijl: 'schuin', dakH: 0.5, muur: '#d3c39c', dak: '#6a5240' }
   };
 
+  /* A stable little wobble per building instance, from its id: no two roofs in
+     a street are quite the same brown, and no two walls quite the same plaster.
+     Without this a row of five identical huisjes reads as one long shed. */
+  function verscheidenheid(cfg, zaad) {
+    if (!zaad && zaad !== 0) return cfg;
+    var r1 = ((zaad * 2654435761) % 1000) / 1000;
+    var r2 = ((zaad * 40503) % 997) / 997;
+    cfg.muur = verf(cfg.muur, 0.94 + r1 * 0.12);
+    cfg.dak = verf(cfg.dak, 0.88 + r2 * 0.24);
+    return cfg;
+  }
+
   function isoCfg(def, tier) {
     var basis = ISO[def.id] || ISO._default;
     var cfg = {
@@ -656,9 +882,18 @@
     var isoImg = atlas && atlas.isoGebouw && atlas.isoGebouw(def.id);
     if (isoImg) { tekenGebouwSprite(ctx, isoImg, def, sx, sy, p, grootte, opties); return; }
 
-    var cfg = isoCfg(def, opties.tijdperk);
+    var cfg = verscheidenheid(isoCfg(def, opties.tijdperk), opties.zaad);
     var foot = Game.render.diamant(sx, sy, p * grootte);
     if (cfg.smal) foot = diamantVan(foot.cx, foot.cy, foot.hw * (1 - cfg.smal * 0.5), foot.hh * (1 - cfg.smal * 0.5));
+
+    var H = p * cfg.muurH * (0.8 + 0.2 * grootte);
+    var dakH = p * cfg.dakH * (0.85 + 0.08 * grootte);
+
+    /* Cast shadow on the ground, in the one light direction the whole game
+       shares (Game.render.sfeer.SCHADUW — the same top-left sun the terrain
+       hillshade is baked from). This is what sets a building *on* the ground
+       instead of on top of it. */
+    slagschaduw(ctx, foot, H + dakH * 0.55);
 
     /* Soft ambient-occlusion shadow (a radial gradient, so its edge feathers
        into the ground instead of a hard ellipse), offset to the light-away
@@ -672,7 +907,6 @@
     ctx.ellipse(scx, scy, sr, sr * 0.5, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    var H = p * cfg.muurH * (0.8 + 0.2 * grootte);
     var top = isoMuren(ctx, foot, H, cfg.muur);
 
     /* Door + shuttered windows on the visible wall faces. */
@@ -685,10 +919,13 @@
 
     /* Roofs stay proportionate as footprints grow (a big hall gets a broad,
        not a towering, roof). */
-    var dakH = p * cfg.dakH * (0.85 + 0.08 * grootte);
     if (cfg.stijl === 'schuin' || cfg.stijl === 'punt') dakSchuin(ctx, top, dakH, cfg.dak);
     else if (cfg.stijl === 'plat') vulDiamant(ctx, top, verf(cfg.muur, 0.98));
     else vulDiamant(ctx, top, verf(cfg.muur, 0.9));   /* 'geen': open wall top */
+
+    /* Contour: a dark line around the standing silhouette, so a row of houses
+       reads as separate roofs instead of one brown field. */
+    if (p * grootte >= 18) contour(ctx, foot, top);
 
     if (opties.seizoen === 3) dakSneeuw(ctx, top, dakH, cfg);
 
@@ -700,14 +937,82 @@
 
     if (opties.geschroeid) schroei(ctx, foot, H, dakH, opties.geschroeid);
 
-    /* Icon badge so every building stays recognisable at a glance. */
-    if (p * grootte >= 26 && def.id !== 'stadsmuur' && !cfg.wieken) {
-      ctx.font = Math.round(p * grootte * 0.3) + 'px serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(def.emoji, top.cx, top.cy - (cfg.stijl === 'plat' ? p * 0.1 : dakH * 0.42));
+    /* Icon badge so every building stays recognisable at a glance. It hangs on
+       a little wooden board rather than floating loose over the roof, and it
+       fades as you zoom in — close up the silhouette and the facade already
+       say what this is, and a giant emoji on every roof is the one thing that
+       still reads as placeholder art. */
+    if (p >= 22 && def.id !== 'stadsmuur' && !cfg.wieken) {
+      bordje(ctx, def.emoji, top.cx, top.cy - (cfg.stijl === 'plat' ? p * 0.1 : dakH * 0.46), p);
     }
   };
+
+  /* The ground shadow a building throws: the footprint diamond swept along the
+     light direction by its height. Drawn as the swept silhouette (the hull of
+     the near and the offset diamond) so it stays one clean shape. */
+  function slagschaduw(ctx, foot, hoogte) {
+    var richting = (Game.render.sfeer && Game.render.sfeer.SCHADUW) || { x: 0.62, y: 0.30 };
+    var ox = hoogte * richting.x, oy = hoogte * richting.y;
+    if (ox < 1 && oy < 1) return;
+
+    ctx.fillStyle = 'rgba(24,20,14,.22)';
+    ctx.beginPath();
+    ctx.moveTo(foot.top.x, foot.top.y);
+    ctx.lineTo(foot.right.x, foot.right.y);
+    ctx.lineTo(foot.right.x + ox, foot.right.y + oy);
+    ctx.lineTo(foot.bottom.x + ox, foot.bottom.y + oy);
+    ctx.lineTo(foot.left.x + ox, foot.left.y + oy);
+    ctx.lineTo(foot.left.x, foot.left.y);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  /* Dark outline over the wall corners and the eaves. Only the edges that are
+     part of the outer silhouette, so the inside of the volume stays clean. */
+  function contour(ctx, foot, top) {
+    ctx.strokeStyle = 'rgba(28,20,12,.42)';
+    ctx.lineWidth = Math.max(1, foot.hw * 0.035);
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(foot.left.x, foot.left.y);
+    ctx.lineTo(foot.bottom.x, foot.bottom.y);
+    ctx.lineTo(foot.right.x, foot.right.y);
+    ctx.moveTo(foot.left.x, foot.left.y); ctx.lineTo(top.left.x, top.left.y);
+    ctx.moveTo(foot.bottom.x, foot.bottom.y); ctx.lineTo(top.bottom.x, top.bottom.y);
+    ctx.moveTo(foot.right.x, foot.right.y); ctx.lineTo(top.right.x, top.right.y);
+    ctx.stroke();
+  }
+
+  /* A small dark plaque with the building's icon on it, with a peg and a
+     shadow so it hangs rather than floats. Fades out as the building grows on
+     screen. */
+  function bordje(ctx, emoji, cx, cy, p) {
+    /* Tied to the zoom, not to the building: far out every roof is a few
+       pixels and the icon is the only thing that identifies it; close up the
+       silhouette, the facade and the yard already say what this is, and a
+       badge on every house is just clutter. */
+    if (p > 70) return;
+    var alpha = Game.util.clamp((70 - p) / 22, 0, 1);
+    var r = Game.util.clamp(p * 0.26, 8, 17);
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    ctx.fillStyle = 'rgba(24,17,10,.82)';
+    ctx.strokeStyle = 'rgba(215,169,75,.55)';
+    ctx.lineWidth = Math.max(1, r * 0.09);
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(cx - r, cy - r * 0.86, r * 2, r * 1.72, r * 0.32);
+    else ctx.rect(cx - r, cy - r * 0.86, r * 2, r * 1.72);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.font = Math.round(r * 1.15) + 'px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(emoji, cx, cy + r * 0.06);
+    ctx.restore();
+  }
 
   /* Snow settling on a roof in winter: a white cap over the upper part of the
      two front roof faces, or a full white top on a flat roof. The single
@@ -765,19 +1070,35 @@
      ridge line so the two front faces read as a proper roof, plus a few faint
      courses parallel to the eaves that suggest tiles / thatch (C1). */
   function dakSchuin(ctx, t, dakH, dak, stijl) {
-    var apex = { x: t.cx, y: t.cy - dakH };
-    tri(ctx, t.top, t.left, apex, verf(dak, 0.7));    /* back-left  (far)  */
-    tri(ctx, t.top, t.right, apex, verf(dak, 0.84));  /* back-right */
-    tri(ctx, t.left, t.bottom, apex, verf(dak, 0.92)); /* front-left */
-    tri(ctx, t.bottom, t.right, apex, verf(dak, 1.08));/* front-right (lit) */
+    /* Eaves: the roof springs from a slightly wider diamond than the wall top,
+       and hangs a touch lower. That overhang is most of what separates "a house"
+       from "a box with a point on it", and it gives the wall below a shadow
+       line for free. */
+    var e = diamantVan(t.cx, t.cy + t.hh * 0.14, t.hw * 1.14, t.hh * 1.14);
+    var apex = { x: e.cx, y: t.cy - dakH };
 
-    dakLagen(ctx, t.left, t.bottom, apex, dak, 0.9);   /* front-left courses  */
-    dakLagen(ctx, t.bottom, t.right, apex, dak, 1.06); /* front-right courses */
+    tri(ctx, e.top, e.left, apex, verf(dak, 0.7));    /* back-left  (far)  */
+    tri(ctx, e.top, e.right, apex, verf(dak, 0.84));  /* back-right */
+    tri(ctx, e.left, e.bottom, apex, verf(dak, 0.92)); /* front-left */
+    tri(ctx, e.bottom, e.right, apex, verf(dak, 1.08));/* front-right (lit) */
 
-    ctx.strokeStyle = verf(dak, 1.22);
+    dakLagen(ctx, e.left, e.bottom, apex, dak, 0.9);   /* front-left courses  */
+    dakLagen(ctx, e.bottom, e.right, apex, dak, 1.06); /* front-right courses */
+
+    /* Lit ridge, then a dark line along the eaves so the roof edge reads. */
+    ctx.strokeStyle = verf(dak, 1.28);
     ctx.lineWidth = Math.max(1, dakH * 0.03);
     ctx.beginPath();
-    ctx.moveTo(t.bottom.x, t.bottom.y); ctx.lineTo(apex.x, apex.y);
+    ctx.moveTo(e.bottom.x, e.bottom.y); ctx.lineTo(apex.x, apex.y);
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(26,18,10,.45)';
+    ctx.lineWidth = Math.max(1, e.hw * 0.035);
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(e.left.x, e.left.y);
+    ctx.lineTo(e.bottom.x, e.bottom.y);
+    ctx.lineTo(e.right.x, e.right.y);
     ctx.stroke();
   }
 

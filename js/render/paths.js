@@ -160,18 +160,59 @@
         if (!t || !t.weg) continue;
         var sp = cam.wereldNaarScherm(x * TEGEL, y * TEGEL);
         var dia = Game.render.diamant(sp.x, sp.y, p);
-        ctx.fillStyle = 'rgba(139,120,92,.92)';
+        ctx.fillStyle = 'rgba(132,113,86,.94)';
         Game.render.padDiamant(ctx, dia);
         ctx.fill();
         /* A lighter core so a long street reads as cobbles, not a flat slab. */
         if (p > 16) {
-          ctx.fillStyle = 'rgba(170,151,118,.55)';
+          ctx.fillStyle = 'rgba(176,157,123,.55)';
           Game.render.padDiamant(ctx, Game.render.diamant(sp.x, sp.y, p * 0.62));
           ctx.fill();
+        }
+        if (p > 22) {
+          kasseien(ctx, dia, t, p);
+          stoeprand(ctx, dia, s, x, y, p);
         }
       }
     }
   };
+
+  /* A handful of stones per tile, placed from the tile's own stable random so
+     they never crawl between frames. Cheap, and it is the difference between a
+     paved street and a tan stripe. */
+  function kasseien(ctx, dia, t, p) {
+    ctx.fillStyle = 'rgba(96,82,62,.34)';
+    for (var i = 0; i < 5; i++) {
+      var u = ((i * 43 + t.v * 130) % 90) / 90 - 0.5;
+      var v = ((i * 71 + t.v * 70) % 80) / 80 - 0.5;
+      ctx.beginPath();
+      ctx.ellipse(dia.cx + u * dia.hw * 1.1, dia.cy + v * dia.hh * 1.1,
+                  p * 0.05, p * 0.026, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  /* A kerb along every edge where the street stops: the outline is what makes
+     a road look laid rather than painted on. */
+  var KANTEN = [
+    { dx: -1, dy: 0, a: 'top',   b: 'left'   },
+    { dx: 0, dy: -1, a: 'top',   b: 'right'  },
+    { dx: 1, dy: 0,  a: 'right', b: 'bottom' },
+    { dx: 0, dy: 1,  a: 'left',  b: 'bottom' }
+  ];
+
+  function stoeprand(ctx, dia, s, x, y, p) {
+    ctx.strokeStyle = 'rgba(74,62,45,.5)';
+    ctx.lineWidth = Math.max(1, p * 0.035);
+    ctx.beginPath();
+    for (var i = 0; i < KANTEN.length; i++) {
+      var b = Game.core.map.tegel(s.kaart, x + KANTEN[i].dx, y + KANTEN[i].dy);
+      if (b && b.weg) continue;
+      var a1 = dia[KANTEN[i].a], a2 = dia[KANTEN[i].b];
+      ctx.moveTo(a1.x, a1.y); ctx.lineTo(a2.x, a2.y);
+    }
+    ctx.stroke();
+  }
 
   P.teken = function (ctx, cam, s, p) {
     P.tekenWegen(ctx, cam, s, p);

@@ -1,8 +1,9 @@
 /* Draws the whole scene in one clear stack:
  *
  *   deep sea → terrain (+ relief) → roads → buildings (shadow + body,
- *   y-sorted) → walkers + raiders → particles → overlays (grid, ghost,
- *   winter veil, day/night)
+ *   y-sorted) → walkers + raiders → particles → overlays (grid, ghost)
+ *   → the light of the world (js/render/sfeer.js: grade, windows, haze,
+ *     vignette)
  *
  * Later steps read what earlier ones drew, so the order is deliberate. All of
  * the lively extras (walkers, roads, raiders, particles) are decorative: they
@@ -414,11 +415,15 @@
     /* --- placement ghost --- */
     if (ui.plaatsType && ui.muisTegel) tekenSpook(s, cam, ui, p);
 
-    /* --- overlays: day/night + winter veil + event flash --- */
-    tekenDagNacht(s, cam, p);
-    if (s.seizoen === 3) {
-      ctx.fillStyle = 'rgba(200,220,240,.10)';
-      ctx.fillRect(0, 0, cam.breedte, cam.hoogte);
+    /* --- overlays: the light of the world (js/render/sfeer.js) + event flash.
+       Order matters: the windows glow *through* the night wash, the haze sits
+       over everything to push the horizon back, and the vignette closes the
+       frame. --- */
+    if (Game.render.sfeer) {
+      Game.render.sfeer.tekenGradatie(ctx, cam, s);
+      Game.render.sfeer.tekenVensters(ctx, cam, s, p);
+      Game.render.sfeer.tekenNevel(ctx, cam, s);
+      Game.render.sfeer.tekenVignet(ctx, cam);
     }
     if (flits > 0.01) {
       ctx.save();
@@ -667,51 +672,40 @@
     }
   }
 
-  /* A soft day/night wash driven by the clock already in s.tijd. Kept subtle
-     so the map never becomes hard to read; a separate layer from the fixed
-     top-left relief light. */
-  function tekenDagNacht(s, cam, p) {
-    var dagLengte = Game.core.state.DAG;
-    var f = (s.tijd % dagLengte) / dagLengte;          /* 0..1 through the day */
-    /* Coldest a little after midnight (f≈0), warm at dusk (f≈0.75). */
-    var nacht = 0.5 - 0.5 * Math.cos(f * Math.PI * 2); /* 0 at midday, 1 at midnight */
-    if (nacht < 0.04) return;
-    ctx.save();
-    ctx.fillStyle = 'rgba(20,26,58,' + (nacht * 0.34).toFixed(3) + ')';
-    ctx.fillRect(0, 0, cam.breedte, cam.hoogte);
-
-    /* Warm window glow on houses once it is properly dark. */
-    if (nacht > 0.45 && p > 18) {
-      ctx.globalCompositeOperation = 'lighter';
-      var zicht = cam.zichtbaar(s.kaart);
-      for (var i = 0; i < s.gebouwen.length; i++) {
-        var g = s.gebouwen[i];
-        if (!g.gebouwd) continue;
-        if (g.x < zicht.x0 - 2 || g.x > zicht.x1 + 2 || g.y < zicht.y0 - 2 || g.y > zicht.y1 + 2) continue;
-        var d = Game.core.state.def(g);
-        if (!d.woonruimte && !d.tevredenheid && g.type !== 'herberg') continue;
-        var sp = cam.wereldNaarScherm((g.x + d.grootte / 2) * Game.render.TEGEL, (g.y + d.grootte * 0.6) * Game.render.TEGEL);
-        var straal = p * 0.22 * (nacht);
-        var grad = ctx.createRadialGradient(sp.x, sp.y, 0, sp.x, sp.y, straal);
-        grad.addColorStop(0, 'rgba(255,200,110,' + (0.5 * nacht).toFixed(3) + ')');
-        grad.addColorStop(1, 'rgba(255,200,110,0)');
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(sp.x, sp.y, straal, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-    ctx.restore();
+  /* Is the mouse over this building's footprint? Pointing at a thing should
+     look like pointing at it, not only feel like it after the click. */
+  function onderMuis(ui, g, d) {
+    if (!ui.muisTegel || ui.plaatsType) return false;
+    return ui.muisTegel.x >= g.x && ui.muisTegel.x < g.x + d.grootte &&
+           ui.muisTegel.y >= g.y && ui.muisTegel.y < g.y + d.grootte;
   }
 
   /* One building, from a depth-sorted entry: body (or construction site),
      raid warning, and selection outline. */
   function tekenGebouwEntry(ctx, cam, s, ui, g, d, p, tijd) {
     var sp2 = cam.wereldNaarScherm(g.x * Game.render.TEGEL, g.y * Game.render.TEGEL);
+    var gekozen = ui.geselecteerd === g.id;
+    var gewezen = onderMuis(ui, g, d);
+
+    /* A warm pool of light on the ground under the building you have selected
+       — the dashed outline alone gets lost in a crowded street. */
+    if (gekozen || gewezen) {
+      var gd = Game.render.diamant(sp2.x, sp2.y, p * d.grootte);
+      var straal = gd.hw * 1.35;
+      var gl = ctx.createRadialGradient(gd.cx, gd.cy, straal * 0.2, gd.cx, gd.cy, straal);
+      var sterkte = gekozen ? 0.34 : 0.16;
+      gl.addColorStop(0, 'rgba(240,205,127,' + sterkte + ')');
+      gl.addColorStop(1, 'rgba(240,205,127,0)');
+      ctx.fillStyle = gl;
+      ctx.beginPath();
+      ctx.ellipse(gd.cx, gd.cy, straal, straal * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     if (g.gebouwd) {
       sprites.tekenGebouw(ctx, d, sp2.x, sp2.y, p, d.grootte,
-        { tijd: tijd, tijdperk: s.tijdperk, geschroeid: g.geschroeid, seizoen: s.seizoen });
+        { tijd: tijd, tijdperk: s.tijdperk, geschroeid: g.geschroeid,
+          seizoen: s.seizoen, zaad: g.id });
       if (g.waarschuwing && p > 16) {
         var fc = Game.render.diamant(sp2.x, sp2.y, p * d.grootte);
         ctx.font = Math.round(p * 0.34) + 'px serif';
@@ -723,14 +717,29 @@
       sprites.tekenBouwplaats(ctx, d, sp2.x, sp2.y, p, d.grootte, g.voortgang / d.bouwtijd);
     }
 
-    if (ui.geselecteerd === g.id) {
+    if (gekozen) {
       var sd = Game.render.diamant(sp2.x, sp2.y, p * d.grootte);
-      ctx.strokeStyle = '#f0cd7f';
-      ctx.lineWidth = 2.5;
-      ctx.setLineDash([6, 4]);
+      /* Marching ants: the dashes crawl around the footprint, which separates
+         "this one is selected" from "this one happens to be outlined". */
+      ctx.save();
+      ctx.strokeStyle = 'rgba(20,13,6,.5)';
+      ctx.lineWidth = 4;
       Game.render.padDiamant(ctx, sd);
       ctx.stroke();
-      ctx.setLineDash([]);
+      ctx.strokeStyle = '#f6d896';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([7, 5]);
+      /* Real time, not game time: the ants keep crawling while paused. */
+      ctx.lineDashOffset = -(Date.now() * 0.02) % 12;
+      Game.render.padDiamant(ctx, sd);
+      ctx.stroke();
+      ctx.restore();
+    } else if (gewezen) {
+      var hd = Game.render.diamant(sp2.x, sp2.y, p * d.grootte);
+      ctx.strokeStyle = 'rgba(240,205,127,.55)';
+      ctx.lineWidth = 1.5;
+      Game.render.padDiamant(ctx, hd);
+      ctx.stroke();
     }
   }
 
