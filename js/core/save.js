@@ -70,6 +70,22 @@
     s.bevolking = s.bevolking || { totaal: 5 };
     s.bonus = s.bonus || { productie: 1, mijnbouw: 1 };
     s.raid = s.raid || { fase: 'rust', timer: 200, kracht: 0, nummer: 0 };
+    /* The marching band, its choices and the captain were added later. An
+       older save simply starts its next raid with a clean slate. */
+    if (typeof s.raid.voortgang !== 'number') s.raid.voortgang = 0;
+    if (typeof s.raid.afgeslagen !== 'number') s.raid.afgeslagen = 0;
+    if (typeof s.raid.beginKracht !== 'number') s.raid.beginKracht = s.raid.kracht || 0;
+    if (!s.raid.beschoten || typeof s.raid.beschoten !== 'object') s.raid.beschoten = {};
+    if (!s.raid.keuze) s.raid.keuze = { evacuatie: false, burgerwacht: false };
+    /* A siege in progress needs its clock back, or it would never lift. */
+    if (s.raid.fase === 'beleg' && typeof s.raid.belegTimer !== 'number') {
+      s.raid.belegTimer = Game.config.rovers.belegDuur;
+    }
+    s.rovers = s.rovers || { naam: '', wrok: 0, ontmoetingen: 0, schattingen: 0, verslagen: 0 };
+    ['wrok', 'ontmoetingen', 'schattingen', 'verslagen'].forEach(function (k) {
+      if (typeof s.rovers[k] !== 'number') s.rovers[k] = 0;
+    });
+    if (typeof s.rovers.naam !== 'string') s.rovers.naam = '';
 
     /* City life, added after the first release: an older save simply starts
        with an empty calendar instead of breaking. */

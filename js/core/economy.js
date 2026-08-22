@@ -40,6 +40,10 @@
       }
 
       if (g.uit) { g.waarschuwing = 'Handmatig stilgelegd'; continue; }
+
+      /* Evacuated outskirts and besieged fields simply do not work today. */
+      var onderbroken = Game.core.raids.werkOnderbroken(s, g);
+      if (onderbroken) { g.waarschuwing = onderbroken; continue; }
       if (!d.banen || g.werkers === 0) {
         if (d.banen) g.waarschuwing = 'Geen werkers toegewezen';
         continue;

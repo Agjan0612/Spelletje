@@ -201,6 +201,9 @@
     }
     if (!sites.length) return;
 
+    /* Nothing gets raised while the militia is standing on the wall. */
+    if (Game.core.raids.bouwStilgelegd(s)) return;
+
     var bouwers = Math.min(8, s.bevolking.werkloos);
     var snelheid = (0.5 + bouwers * 0.55) * (s.bonus.bouw || 1) / sites.length;
 

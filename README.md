@@ -125,10 +125,25 @@ Op een tablet werkt het ook: één vinger sleept, tikken selecteert of plaatst.
 4. **De winter.** Boerderijen leveren dan níets en er wordt meer gegeten. Vissershutten
    en mijnen werken gewoon door. Leg in de herfst voorraad aan.
 
-5. **Rovers.** Vanaf tijdperk 2 komen er bandieten langs. Je krijgt altijd 45 seconden
-   waarschuwing, met hun kracht en jouw verdediging erbij. Wachttorens, stadsmuren,
-   soldaten in de kazerne, de wapensmid en het kasteel houden ze buiten. Verlies je,
-   dan stelen ze grondstoffen en raakt een gebouw beschadigd — nooit meteen game over.
+5. **Rovers.** Vanaf tijdperk 2 komen er bandieten langs, aangevoerd door een hoofdman
+   met een naam die onthoudt wat je vorige keer deed. Je krijgt 45 seconden
+   waarschuwing, en die seconden zijn nu het spannendste moment van het spel: de bende
+   **marcheert** over de kaart naar je stad, en elke wachttoren, muur en poort die ze
+   passeren schiet ze uitdunner. Een toren die niet op hun route staat, doet niets —
+   dus zet ze op de weg die ze nemen (kaartlaag *Verdediging*). Ondertussen kies je uit
+   vier dingen:
+
+   | Keuze | Wat het doet | Wat het kost |
+   |---|---|---|
+   | ⚔️ **Uitval** | Win je in het veld, dan is de bende vernietigd | Verlies je, dan sta je zonder mannen op de muur |
+   | 🏃 **Ontruimen** | Er valt veel minder te roven en er komt niemand om | Buiten het centrum ligt het werk stil |
+   | 🔱 **Burgerwacht** | Iedereen zonder werk telt mee als verdediging | Er wordt niets gebouwd |
+   | 💰 **Schatting** | Ze trekken meteen af | Ze komen sneller én sterker terug |
+
+   Verlies je alsnog, dan stelen ze grondstoffen en raakt een gebouw beschadigd — nooit
+   meteen game over. En vanaf tijdperk 4 kan een bende die je niet kan overrompelen
+   besluiten je te **belegeren**: dan ligt alles buiten je stad stil tot je het beleg
+   breekt met een uitval, of tot ze het opgeven.
 
 ---
 
@@ -229,6 +244,7 @@ js/config/            De speldata — hier pas je de balans aan
   opdrachten.js         De opdrachten van de heer
   gebeurtenissen.js     De gebeurtenissen met een keuze
   onderzoek.js          De studies van gildehuis en universiteit
+  rovers.js             De roverhoofdmannen en de knoppen van hun aanval
 
 js/core/              De simulatie
   rng.js                Seeded toeval + ruis voor de kaart

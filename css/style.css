@@ -554,3 +554,26 @@ ul.overzicht li.slecht { border-left-color: var(--bloed); }
   .laagknop .lbl { display: none; }
   #lagen-legenda { max-width: 70vw; }
 }
+
+/* ===== De roversbalk =======================================================
+   Tijdens de 45 seconden waarschuwing (en tijdens een beleg) staan hier de
+   opmars, wat je torens er al af hebben geschoten, en de vier dingen die je
+   eraan kunt doen. */
+.raidbalk {
+  margin: 5px 0 3px; height: 5px; border-radius: 3px;
+  background: rgba(0, 0, 0, .35); overflow: hidden;
+}
+.raidbalk i {
+  display: block; height: 100%;
+  background: linear-gradient(90deg, #a63a2a, #d8683f);
+  transition: width .25s linear;
+}
+.raidknoppen { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.raidknoppen button {
+  flex: 1 1 auto; padding: 4px 8px; font-size: 11px; cursor: pointer;
+  background: var(--hout); color: var(--perkament);
+  border: 1px solid var(--rand); border-radius: 4px; white-space: nowrap;
+}
+.raidknoppen button:hover:not(:disabled) { background: var(--hout-licht); border-color: var(--goud); }
+.raidknoppen button.armed { background: var(--bloed); border-color: #d8683f; font-weight: 700; }
+.raidknoppen button:disabled { opacity: .45; cursor: not-allowed; }

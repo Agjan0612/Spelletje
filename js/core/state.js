@@ -62,7 +62,17 @@
       onderzoek: {},
       verdediging: 0,
 
-      raid: { fase: 'rust', timer: 90, kracht: 0, nummer: 0 },
+      raid: {
+        fase: 'rust', timer: 90, kracht: 0, nummer: 0,
+        /* Filled in when a band is on its way: how far it has marched, which
+           cover already fired at it, and what the player chose to do. */
+        voortgang: 0, beschoten: {}, afgeslagen: 0, beginKracht: 0,
+        keuze: { evacuatie: false, burgerwacht: false }
+      },
+
+      /* The bandit captain across the field and what he remembers about you.
+         Plain JSON; core/raids.js fills in the name on the first raid. */
+      rovers: { naam: '', wrok: 0, ontmoetingen: 0, schattingen: 0, verslagen: 0 },
 
       /* The field army: how often it beat a raiding party, and whether a
          sortie is ordered for the raid that is on its way. */
