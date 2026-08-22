@@ -82,7 +82,9 @@
         e.delta.textContent = '';
       }
 
-      var plafond = Game.core.state.plafond(s, e.id);
+      /* Ask for *this* resource's ceiling: food, goods and treasure each have
+         their own storehouse, and the general s.capaciteit would lie. */
+      var plafond = Game.core.state.plafond(s, id);
       e.wrap.classList.toggle('vol', waarde >= plafond - 0.5);
       e.wrap.classList.toggle('leeg', waarde < 1 && stroom < 0);
       e.wrap.title = Game.config.resources[id].naam + ': ' +

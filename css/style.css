@@ -4,20 +4,35 @@
    ========================================================================== */
 
 :root {
+  --hout-diep: #180f08;
   --hout-donker: #2b1d12;
   --hout: #3d2b1c;
   --hout-licht: #55402c;
+  --perkament-fel: #f8eed8;
   --perkament: #efe0c4;
   --perkament-dof: #cbb894;
+  --perkament-stil: #a18f6f;
   --goud: #d7a94b;
   --goud-licht: #f0cd7f;
-  --mos: #6c8a4a;
+  --goud-dof: #9d7b34;
+  --mos: #7fa055;
   --bloed: #a63a2a;
   --lucht: #7fa8c9;
   --rand: rgba(0, 0, 0, .45);
+  --rand-licht: rgba(255, 232, 190, .10);
   --schaduw: 0 4px 14px rgba(0, 0, 0, .45);
+  --schaduw-diep: 0 10px 30px rgba(0, 0, 0, .55);
   --hudhoogte: 78px;
   --barhoogte: 132px;
+
+  /* Two materials the whole interface is cut from: dark oak for the frame,
+     and a lit parchment for anything you are meant to read. Defined once so a
+     new panel never has to invent its own brown. */
+  --eik: linear-gradient(180deg, #4a3524 0%, #33230f 55%, #241708 100%);
+  --paneel:
+    radial-gradient(120% 90% at 20% 0%, rgba(215, 169, 75, .10), transparent 62%),
+    linear-gradient(180deg, rgba(56, 39, 24, .97), rgba(28, 19, 11, .97));
+  --soepel: 140ms cubic-bezier(.3, .7, .4, 1);
 }
 
 * { box-sizing: border-box; }
@@ -27,10 +42,11 @@ html, body {
   padding: 0;
   height: 100%;
   overflow: hidden;
-  background: #1a120b;
+  background: var(--hout-diep);
   color: var(--perkament);
   font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   user-select: none;
 }
 
@@ -38,6 +54,25 @@ button {
   font-family: inherit;
   color: inherit;
   cursor: pointer;
+  transition: background var(--soepel), border-color var(--soepel),
+              color var(--soepel), transform var(--soepel), box-shadow var(--soepel);
+}
+button:active:not(:disabled) { transform: translateY(1px); }
+
+/* One focus treatment for the whole game, so it stays playable from the
+   keyboard without a blue browser ring landing on the woodwork. */
+:focus-visible {
+  outline: 2px solid var(--goud-licht);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
 }
 
 #app {
@@ -57,60 +92,91 @@ button {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   padding: 0 14px;
-  background: linear-gradient(180deg, var(--hout-licht), var(--hout-donker));
-  border-bottom: 3px solid var(--goud);
+  background: var(--eik);
+  border-bottom: 1px solid var(--hout-diep);
   box-shadow: var(--schaduw);
   z-index: 20;
+  position: relative;
 }
+/* The gold rule under the bar, with a hairline of light above it: two 1px
+   lines do more for the "carved wood" feeling than any amount of texture. */
+#hud::after, #buildbar::before {
+  content: ""; position: absolute; left: 0; right: 0; height: 3px;
+  background: linear-gradient(180deg, var(--goud-licht), var(--goud) 45%, var(--goud-dof));
+  box-shadow: 0 0 12px rgba(215, 169, 75, .28);
+}
+#hud::after { bottom: -3px; }
+#buildbar::before { top: -3px; }
 
-#hud-left { display: flex; align-items: center; gap: 10px; min-width: 190px; }
+#hud-left { display: flex; align-items: center; gap: 10px; min-width: 168px; }
 .crest { font-size: 30px; filter: drop-shadow(0 2px 3px #000); }
-#townname { font-size: 18px; font-weight: 700; color: var(--goud-licht); letter-spacing: .4px; }
-.sub { font-size: 12px; color: var(--perkament-dof); }
+#townname {
+  font-size: 19px; font-weight: 700; color: var(--goud-licht);
+  letter-spacing: .3px; text-shadow: 0 1px 0 rgba(0, 0, 0, .6);
+}
+.sub { font-size: 11.5px; color: var(--perkament-stil); letter-spacing: .3px; }
 
-#hud-res { flex: 1 1 auto; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
-.resrow { display: flex; flex-wrap: wrap; gap: 6px; }
+#hud-res {
+  flex: 1 1 auto; display: flex; flex-direction: column;
+  justify-content: center; gap: 5px; overflow: hidden;
+}
+.resrow { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+/* A hairline between the resources you always watch and the ones you only
+   glance at, so the second row reads as a footnote instead of a leftover. */
+.resrow.small { padding-top: 4px; border-top: 1px solid rgba(255, 232, 190, .07); }
 
 .res {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 5px;
   padding: 3px 9px;
-  background: rgba(0, 0, 0, .3);
-  border: 1px solid var(--rand);
+  background: linear-gradient(180deg, rgba(255, 240, 210, .07), rgba(0, 0, 0, .34));
+  border: 1px solid rgba(0, 0, 0, .5);
+  box-shadow: inset 0 1px 0 var(--rand-licht);
   border-radius: 5px;
   font-size: 14px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  transition: border-color var(--soepel), background var(--soepel);
 }
-.resrow.small .res { font-size: 12.5px; padding: 2px 7px; opacity: .92; }
-.res .ico { font-size: 15px; }
-.res .val { font-weight: 700; }
+.resrow.small .res { font-size: 12.5px; padding: 2px 7px; }
+.res .ico { font-size: 14px; align-self: center; filter: saturate(.92); }
+.res .val { font-weight: 700; letter-spacing: .2px; }
 .res .cap { font-size: 10px; color: var(--perkament-dof); }
+.res.vol { border-color: rgba(215, 169, 75, .55); }
 .res.vol .val { color: var(--goud-licht); }
-.res.leeg .val { color: #e08a7a; }
+.res.leeg { border-color: rgba(200, 80, 60, .55); }
+.res.leeg .val { color: #e8907c; }
 .res .delta { font-size: 10px; color: var(--mos); }
 .res .delta.neg { color: #e08a7a; }
 
-#hud-right { display: flex; align-items: center; gap: 14px; }
-#stats { display: flex; gap: 8px; }
+#hud-right { display: flex; align-items: center; gap: 12px; }
+#stats { display: flex; gap: 6px; }
 .stat {
-  display: flex; align-items: center; gap: 4px;
-  padding: 3px 8px; font-size: 13px;
-  background: rgba(0, 0, 0, .3); border: 1px solid var(--rand); border-radius: 5px;
+  display: flex; align-items: center; gap: 5px;
+  padding: 4px 9px; font-size: 13px;
+  background: linear-gradient(180deg, rgba(255, 240, 210, .07), rgba(0, 0, 0, .34));
+  border: 1px solid rgba(0, 0, 0, .5); border-radius: 5px;
+  box-shadow: inset 0 1px 0 var(--rand-licht);
   white-space: nowrap;
 }
 .stat .val { font-weight: 700; }
 
 #speeds { display: flex; gap: 4px; }
 #speeds button {
-  width: 34px; height: 30px; font-size: 13px; font-weight: 700;
-  background: var(--hout); border: 1px solid var(--rand); border-radius: 5px;
+  min-width: 32px; height: 30px; font-size: 13px; font-weight: 700;
+  background: linear-gradient(180deg, var(--hout-licht), var(--hout));
+  border: 1px solid rgba(0, 0, 0, .55); border-radius: 5px;
+  box-shadow: inset 0 1px 0 var(--rand-licht);
 }
-#speeds button:hover { background: var(--hout-licht); }
-#speeds button.active { background: var(--goud); color: #2b1d12; border-color: var(--goud-licht); }
+#speeds button:hover { background: linear-gradient(180deg, #6a5136, var(--hout-licht)); }
+#speeds button.active {
+  background: linear-gradient(180deg, var(--goud-licht), var(--goud));
+  color: #2b1d12; border-color: var(--goud-licht);
+  box-shadow: 0 0 10px rgba(215, 169, 75, .45), inset 0 1px 0 rgba(255, 255, 255, .35);
+}
 #btn-sound.uit { opacity: .5; }
 
 /* ==========================================================================
@@ -123,16 +189,23 @@ button {
 #canvas.placing { cursor: crosshair; }
 
 .card {
-  background: linear-gradient(180deg, rgba(43, 29, 18, .96), rgba(26, 18, 11, .96));
-  border: 2px solid var(--goud);
-  border-radius: 8px;
-  box-shadow: var(--schaduw);
-  padding: 10px 12px;
+  background: var(--paneel);
+  border: 1px solid rgba(215, 169, 75, .55);
+  border-radius: 9px;
+  box-shadow: var(--schaduw-diep), inset 0 1px 0 rgba(255, 232, 190, .12);
+  padding: 11px 13px;
+  backdrop-filter: blur(2px);
 }
 .card h3 {
-  margin: 0 0 8px; font-size: 14px; color: var(--goud-licht);
-  text-transform: uppercase; letter-spacing: .8px;
-  border-bottom: 1px solid var(--rand); padding-bottom: 5px;
+  margin: 0 0 9px; font-size: 12.5px; color: var(--goud-licht);
+  text-transform: uppercase; letter-spacing: 1.1px; font-weight: 700;
+  padding-bottom: 6px; position: relative;
+}
+/* A rule that fades out to the right instead of a full box-line: the panels
+   stack, and four hard lines in a column reads as a table. */
+.card h3::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px;
+  background: linear-gradient(90deg, var(--goud), rgba(215, 169, 75, .05));
 }
 
 /* Rechterkolom: tijdperk + doelen */
@@ -140,17 +213,23 @@ button {
   position: absolute; top: 10px; right: 10px; width: 258px;
   display: flex; flex-direction: column; gap: 10px;
   max-height: calc(100% - 20px); overflow-y: auto;
+  padding-bottom: 12px;
   z-index: 10;
   scrollbar-width: thin;
+  /* The column scrolls, so the last card is often cut mid-sentence. Fading the
+     bottom few pixels says "there is more" instead of "this is broken". */
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 26px), transparent 100%);
+  mask-image: linear-gradient(180deg, #000 calc(100% - 26px), transparent 100%);
 }
 #right-col::-webkit-scrollbar { width: 8px; }
 #right-col::-webkit-scrollbar-thumb { background: var(--hout-licht); border-radius: 4px; }
 #right-col::-webkit-scrollbar-track { background: transparent; }
 
 .advies {
-  font-size: 12px; line-height: 1.35; margin: 0 0 8px; padding: 7px 9px;
-  background: rgba(196, 160, 90, .14); border-left: 3px solid var(--goud);
-  border-radius: 5px; color: var(--perkament);
+  font-size: 12px; line-height: 1.4; margin: 0 0 9px; padding: 8px 10px;
+  background: linear-gradient(90deg, rgba(196, 160, 90, .2), rgba(196, 160, 90, .07));
+  border-left: 3px solid var(--goud);
+  border-radius: 0 6px 6px 0; color: var(--perkament);
 }
 #age-reqs, #quest-list { list-style: none; margin: 0; padding: 0; font-size: 12.5px; }
 #age-reqs li, #quest-list li {
@@ -158,14 +237,21 @@ button {
   padding: 3px 0; line-height: 1.3; color: var(--perkament-dof);
 }
 #age-reqs li.ok, #quest-list li.ok { color: var(--mos); text-decoration: none; }
+#age-reqs li, #quest-list li { transition: color var(--soepel); }
 #age-reqs li .mark, #quest-list li .mark { flex: 0 0 14px; }
 
 #btn-advance {
-  margin-top: 8px; width: 100%; padding: 8px;
-  background: var(--goud); color: #2b1d12; font-weight: 700; font-size: 13px;
-  border: 1px solid var(--goud-licht); border-radius: 5px;
+  margin-top: 10px; width: 100%; padding: 9px;
+  background: linear-gradient(180deg, var(--goud-licht), var(--goud));
+  color: #2b1d12; font-weight: 700; font-size: 13px;
+  letter-spacing: .4px; text-transform: uppercase;
+  border: 1px solid var(--goud-licht); border-radius: 6px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .4);
 }
-#btn-advance:disabled { background: #4a3a26; color: #8b7a62; border-color: var(--rand); cursor: not-allowed; }
+#btn-advance:disabled {
+  background: rgba(0, 0, 0, .28); color: #8b7a62;
+  border-color: var(--rand); cursor: not-allowed; box-shadow: none;
+}
 #btn-advance:not(:disabled) { animation: gloed 1.6s ease-in-out infinite; }
 @keyframes gloed {
   0%, 100% { box-shadow: 0 0 0 rgba(215, 169, 75, 0); }
@@ -190,31 +276,49 @@ ul.dorpsboek .sinds { color: var(--perkament-dof); font-size: 11px; min-width: 9
 }
 #panel .titelrij { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 #panel .titelrij .emoji { font-size: 26px; }
-#panel .titelrij h2 { margin: 0; font-size: 17px; color: var(--goud-licht); }
+#panel .titelrij h2 { margin: 0; font-size: 17px; color: var(--goud-licht); line-height: 1.15; }
 #panel .beschrijving { font-size: 12px; color: var(--perkament-dof); font-style: italic; margin-bottom: 8px; line-height: 1.35; }
 #panel .regel { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
 #panel .regel .k { color: var(--perkament-dof); }
-#panel .kop { margin: 9px 0 3px; font-size: 11px; letter-spacing: .8px; text-transform: uppercase; color: var(--goud); }
+#panel .kop {
+  margin: 11px 0 4px; font-size: 10.5px; letter-spacing: 1.1px;
+  text-transform: uppercase; color: var(--goud-dof); font-weight: 700;
+}
 
 .werkers { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
 .werkers button {
   width: 30px; height: 28px; font-size: 16px; font-weight: 700;
-  background: var(--hout-licht); border: 1px solid var(--rand); border-radius: 5px;
+  background: linear-gradient(180deg, var(--hout-licht), var(--hout));
+  border: 1px solid rgba(0, 0, 0, .5); border-radius: 5px;
+  box-shadow: inset 0 1px 0 var(--rand-licht);
 }
-.werkers button:hover:not(:disabled) { background: var(--goud); color: #2b1d12; }
+.werkers button:hover:not(:disabled) {
+  background: linear-gradient(180deg, var(--goud-licht), var(--goud)); color: #2b1d12;
+}
 .werkers button:disabled { opacity: .35; cursor: not-allowed; }
 .werkers .telling { flex: 1; text-align: center; font-weight: 700; font-size: 15px; }
 
-.balk { height: 7px; background: rgba(0, 0, 0, .45); border-radius: 4px; overflow: hidden; margin: 3px 0 6px; }
-.balk > div { height: 100%; background: var(--mos); transition: width .2s; }
-.balk.bouw > div { background: var(--goud); }
+.balk {
+  height: 7px; background: rgba(0, 0, 0, .5); border-radius: 4px;
+  overflow: hidden; margin: 4px 0 7px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .6);
+}
+.balk > div {
+  height: 100%; border-radius: 4px; transition: width .25s ease-out;
+  background: linear-gradient(180deg, #9dc06e, var(--mos));
+}
+.balk.bouw > div { background: linear-gradient(180deg, var(--goud-licht), var(--goud)); }
 
 .knoprij { display: flex; gap: 6px; margin-top: 10px; }
 .knoprij button {
-  flex: 1; padding: 6px; font-size: 12px;
-  background: var(--hout-licht); border: 1px solid var(--rand); border-radius: 5px;
+  flex: 1; padding: 7px; font-size: 12px;
+  background: linear-gradient(180deg, var(--hout-licht), var(--hout));
+  border: 1px solid rgba(0, 0, 0, .5); border-radius: 5px;
+  box-shadow: inset 0 1px 0 var(--rand-licht);
 }
-.knoprij button:hover { background: var(--goud); color: #2b1d12; }
+.knoprij button:hover {
+  background: linear-gradient(180deg, var(--goud-licht), var(--goud)); color: #2b1d12;
+}
 .knoprij button.gevaar:hover { background: var(--bloed); color: #fff; }
 
 .waarschuwing { color: #e8a37a; font-size: 12px; margin-top: 6px; line-height: 1.35; }
@@ -234,23 +338,35 @@ ul.dorpsboek .sinds { color: var(--perkament-dof); font-size: 11px; min-width: 9
   pointer-events: none; z-index: 9;
 }
 #panel:not(.hidden) ~ #logbox { bottom: 10px; }
+/* The oldest lines fade out towards the top, so the log ends rather than being
+   cut off by the edge of its box. */
+#logbox > .logregel:nth-child(n+5) { opacity: .72; }
+#logbox > .logregel:nth-child(n+7) { opacity: .45; }
 .logregel {
-  background: rgba(26, 18, 11, .86); border-left: 3px solid var(--goud);
-  padding: 4px 8px; font-size: 12px; border-radius: 0 4px 4px 0;
+  background: linear-gradient(90deg, rgba(26, 18, 11, .92), rgba(26, 18, 11, .72));
+  border-left: 3px solid var(--goud);
+  padding: 5px 9px; font-size: 12px; border-radius: 0 5px 5px 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .3);
   animation: vervaag .4s ease-out;
 }
 .logregel.goed { border-left-color: var(--mos); }
 .logregel.slecht { border-left-color: var(--bloed); }
-.logregel .tijd { color: var(--perkament-dof); font-size: 10.5px; margin-right: 5px; }
+.logregel .tijd { color: var(--perkament-stil); font-size: 10.5px; margin-right: 5px; }
 @keyframes vervaag { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: none; } }
 
 /* Minimap rechtsonder */
 #minimap {
   position: absolute; right: 10px; bottom: 10px; z-index: 9;
   width: 172px; height: 129px;
-  border: 2px solid var(--rand); border-radius: 5px;
+  border: 1px solid rgba(215, 169, 75, .5); border-radius: 6px;
   background: rgba(26, 18, 11, .85);
-  box-shadow: 0 3px 10px rgba(0, 0, 0, .45); cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .5), inset 0 0 0 3px rgba(0, 0, 0, .45);
+  cursor: pointer;
+  transition: border-color var(--soepel), box-shadow var(--soepel);
+}
+#minimap:hover {
+  border-color: var(--goud-licht);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, .55), inset 0 0 0 3px rgba(0, 0, 0, .45);
 }
 
 /* Zwevende hint bij plaatsen */
@@ -282,9 +398,12 @@ ul.dorpsboek .sinds { color: var(--perkament-dof); font-size: 11px; min-width: 9
 /* Toast */
 #toast {
   position: absolute; top: 42%; left: 50%; transform: translate(-50%, -50%);
-  background: rgba(26, 18, 11, .95); border: 2px solid var(--goud);
-  border-radius: 9px; padding: 14px 28px; font-size: 19px; text-align: center;
+  background: linear-gradient(180deg, rgba(48, 33, 19, .96), rgba(22, 15, 8, .96));
+  border: 1px solid var(--goud);
+  border-radius: 10px; padding: 15px 30px; font-size: 19px; text-align: center;
+  box-shadow: var(--schaduw-diep), inset 0 1px 0 rgba(255, 232, 190, .16);
   z-index: 15; pointer-events: none;
+  animation: oprijzen .2s cubic-bezier(.2, .8, .3, 1);
 }
 
 /* ==========================================================================
@@ -293,46 +412,70 @@ ul.dorpsboek .sinds { color: var(--perkament-dof); font-size: 11px; min-width: 9
 
 #buildbar {
   height: var(--barhoogte); flex: 0 0 auto;
-  background: linear-gradient(0deg, var(--hout-donker), var(--hout));
-  border-top: 3px solid var(--goud); box-shadow: 0 -4px 14px rgba(0, 0, 0, .5);
-  display: flex; flex-direction: column; z-index: 20;
+  background: linear-gradient(0deg, #241708 0%, #33230f 45%, #4a3524 100%);
+  border-top: 1px solid var(--hout-diep);
+  box-shadow: 0 -6px 18px rgba(0, 0, 0, .55);
+  display: flex; flex-direction: column; z-index: 20; position: relative;
 }
 
-#build-tabs { display: flex; gap: 4px; padding: 5px 10px 0; }
+#build-tabs { display: flex; gap: 4px; padding: 6px 10px 0; }
 #build-tabs button {
-  padding: 4px 13px; font-size: 12px; border: 1px solid var(--rand);
-  border-bottom: none; border-radius: 5px 5px 0 0; background: var(--hout-donker);
-  color: var(--perkament-dof);
+  padding: 5px 14px; font-size: 12px; letter-spacing: .3px;
+  border: 1px solid rgba(0, 0, 0, .5); border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  background: linear-gradient(180deg, rgba(255, 240, 210, .05), rgba(0, 0, 0, .3));
+  color: var(--perkament-stil);
 }
-#build-tabs button.active { background: var(--goud); color: #2b1d12; font-weight: 700; }
-#build-tabs button.op-slot { opacity: .55; }
+#build-tabs button:hover { color: var(--perkament); background: rgba(255, 240, 210, .1); }
+#build-tabs button.active {
+  background: linear-gradient(180deg, var(--goud-licht), var(--goud));
+  color: #2b1d12; font-weight: 700; border-color: var(--goud-licht);
+}
+#build-tabs button.op-slot { opacity: .5; }
 
 #build-list {
-  flex: 1; display: flex; gap: 7px; padding: 7px 10px;
+  flex: 1; display: flex; gap: 7px; padding: 8px 10px;
   overflow-x: auto; overflow-y: hidden; align-items: stretch;
+  scrollbar-width: thin;
 }
 #build-list::-webkit-scrollbar { height: 8px; }
 #build-list::-webkit-scrollbar-thumb { background: var(--hout-licht); border-radius: 4px; }
+#build-list::-webkit-scrollbar-track { background: rgba(0, 0, 0, .25); border-radius: 4px; }
 
 .bouwkaart {
   flex: 0 0 118px; display: flex; flex-direction: column; align-items: center;
-  padding: 5px 4px; background: rgba(0, 0, 0, .28);
-  border: 1px solid var(--rand); border-radius: 6px; text-align: center;
+  padding: 5px 4px;
+  background: linear-gradient(180deg, rgba(255, 240, 210, .07), rgba(0, 0, 0, .34));
+  border: 1px solid rgba(0, 0, 0, .5); border-radius: 7px; text-align: center;
+  box-shadow: inset 0 1px 0 var(--rand-licht);
   position: relative;
+  transition: border-color var(--soepel), background var(--soepel),
+              transform var(--soepel), box-shadow var(--soepel);
 }
-.bouwkaart:hover:not(.vergrendeld) { border-color: var(--goud); background: rgba(215, 169, 75, .14); }
-.bouwkaart.geselecteerd { border-color: var(--goud-licht); background: rgba(215, 169, 75, .28); }
-.bouwkaart.vergrendeld { opacity: .4; cursor: not-allowed; }
-.bouwkaart.tekort { border-color: #7a3a2a; }
-.bouwkaart .em { font-size: 22px; line-height: 1.1; height: 34px; display: flex; align-items: center; justify-content: center; }
+.bouwkaart:hover:not(.vergrendeld) {
+  border-color: var(--goud); background: rgba(215, 169, 75, .16);
+  transform: translateY(-2px);
+  box-shadow: 0 5px 14px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 232, 190, .2);
+}
+.bouwkaart.geselecteerd {
+  border-color: var(--goud-licht); background: rgba(215, 169, 75, .3);
+  box-shadow: 0 0 0 1px var(--goud-licht), 0 0 16px rgba(215, 169, 75, .4);
+}
+.bouwkaart.vergrendeld { opacity: .38; cursor: not-allowed; filter: grayscale(.5); }
+.bouwkaart.tekort { border-color: rgba(166, 58, 42, .7); }
+.bouwkaart .em {
+  font-size: 24px; line-height: 1.1; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .5));
+}
 .bouwkaart .em img.sprite { width: 36px; height: 36px; object-fit: contain; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .45)); }
-.bouwkaart .nm { font-size: 11.5px; font-weight: 700; line-height: 1.15; margin: 1px 0 2px; }
-.bouwkaart .ks { font-size: 10.5px; color: var(--perkament-dof); line-height: 1.35; }
-.bouwkaart .ks .mist { color: #e08a7a; }
+.bouwkaart .nm { font-size: 11.5px; font-weight: 700; line-height: 1.15; margin: 1px 0 3px; }
+.bouwkaart .ks { font-size: 10.5px; color: var(--perkament-dof); line-height: 1.4; font-variant-numeric: tabular-nums; }
+.bouwkaart .ks .mist { color: #e8907c; font-weight: 700; }
 .bouwkaart .slot { position: absolute; top: 3px; right: 5px; font-size: 12px; }
 .bouwkaart .hk {
   position: absolute; top: 3px; left: 5px; font-size: 9.5px;
-  color: var(--perkament-dof); opacity: .65; letter-spacing: -.3px;
+  color: var(--perkament-stil); letter-spacing: -.3px;
 }
 
 /* Tooltip voor bouwkaarten */
@@ -353,18 +496,40 @@ ul.dorpsboek .sinds { color: var(--perkament-dof); font-size: 11px; min-width: 9
 
 #overlay {
   position: fixed; inset: 0; z-index: 50;
-  background: rgba(10, 7, 4, .82);
+  background: radial-gradient(120% 90% at 50% 40%, rgba(20, 13, 6, .74), rgba(6, 4, 2, .92));
+  backdrop-filter: blur(3px);
   display: flex; align-items: center; justify-content: center;
+  animation: opdoemen .18s ease-out;
 }
 #overlay-card {
   width: min(560px, 92vw); max-height: 86vh; overflow-y: auto;
-  background: linear-gradient(180deg, #3a2818, #221709);
-  border: 3px solid var(--goud); border-radius: 12px;
-  padding: 22px 26px; box-shadow: 0 12px 48px rgba(0, 0, 0, .7);
+  background:
+    radial-gradient(130% 80% at 50% 0%, rgba(215, 169, 75, .14), transparent 60%),
+    linear-gradient(180deg, #3a2818, #1d1206);
+  border: 1px solid var(--goud); border-radius: 12px;
+  padding: 24px 28px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, .75),
+              inset 0 0 0 4px rgba(0, 0, 0, .3),
+              inset 0 0 0 5px rgba(215, 169, 75, .28);
   text-align: center;
+  animation: oprijzen .22s cubic-bezier(.2, .8, .3, 1);
+  scrollbar-width: thin;
 }
-#overlay-title { margin: 0 0 12px; font-size: 26px; color: var(--goud-licht); }
-#overlay-body { font-size: 14px; line-height: 1.6; text-align: left; }
+#overlay-title {
+  margin: 0 0 6px; font-size: 27px; color: var(--goud-licht);
+  letter-spacing: .3px; text-shadow: 0 2px 6px rgba(0, 0, 0, .6);
+}
+/* A small ornament under the title: a hairline with a diamond in the middle. */
+#overlay-title::after {
+  content: "◆"; display: block; margin: 6px auto 14px;
+  font-size: 9px; color: var(--goud-dof); letter-spacing: 0;
+}
+#overlay-body { font-size: 14px; line-height: 1.62; text-align: left; }
+@keyframes opdoemen { from { opacity: 0; } to { opacity: 1; } }
+@keyframes oprijzen {
+  from { opacity: 0; transform: translateY(12px) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
 #overlay-body h4 { margin: 14px 0 4px; color: var(--goud); font-size: 13px; text-transform: uppercase; letter-spacing: .7px; }
 #overlay-body ul { margin: 4px 0; padding-left: 20px; }
 #overlay-body li { margin: 2px 0; }
@@ -374,11 +539,20 @@ ul.dorpsboek .sinds { color: var(--perkament-dof); font-size: 11px; min-width: 9
 }
 #overlay-actions { display: flex; gap: 9px; justify-content: center; flex-wrap: wrap; margin-top: 18px; }
 #overlay-actions button {
-  padding: 9px 18px; font-size: 14px; border-radius: 6px;
-  background: var(--hout-licht); border: 1px solid var(--goud);
+  padding: 10px 20px; font-size: 14px; border-radius: 7px;
+  background: linear-gradient(180deg, var(--hout-licht), var(--hout));
+  border: 1px solid var(--goud-dof);
+  box-shadow: inset 0 1px 0 var(--rand-licht);
 }
-#overlay-actions button:hover { background: var(--goud); color: #2b1d12; }
-#overlay-actions button.primair { background: var(--goud); color: #2b1d12; font-weight: 700; }
+#overlay-actions button:hover {
+  background: linear-gradient(180deg, var(--goud-licht), var(--goud));
+  color: #2b1d12; border-color: var(--goud-licht);
+}
+#overlay-actions button.primair {
+  background: linear-gradient(180deg, var(--goud-licht), var(--goud));
+  color: #2b1d12; font-weight: 700; border-color: var(--goud-licht);
+  box-shadow: 0 4px 14px rgba(215, 169, 75, .35), inset 0 1px 0 rgba(255, 255, 255, .4);
+}
 
 /* ==========================================================================
    Stadszaken (feest, koopman, opdracht) + de dialogen daarvan
