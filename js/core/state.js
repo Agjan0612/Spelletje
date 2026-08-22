@@ -96,6 +96,11 @@
       questsGedaan: {},
       log: [],
 
+      /* Bumped whenever a street is laid or lifted, so core/logistiek.js
+         knows its cached hauling distances went stale. The streets themselves
+         live on the map tiles as `t.weg`. */
+      wegTeller: 0,
+
       /* Purely cosmetic walkers on the map. */
       wandelaars: []
     };

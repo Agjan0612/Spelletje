@@ -40,7 +40,7 @@ Je verzamelt zes grondstoffen uit het land — 🥩 vlees, 🪵 hout, 🪨 steen
 
 | Tijdperk | Wat je krijgt |
 |---|---|
-| 1 · **Nederzetting** | Boerderij, huisjes, houthakker, jacht, visserij, steengroeve, waterput |
+| 1 · **Nederzetting** | Boerderij, huisjes, houthakker, jacht, visserij, steengroeve, waterput, **straatjes** |
 | 2 · **Dorp** | Molen, bakkerij, marktplaats, kapel, koper- en ijzermijn, wachttoren, **haven**, **oefenveld** |
 | 3 · **Handelsstad** | Smederij, wapensmid, kazerne, muren, **stadspoort**, kerk, herberg, edelsteenmijn, gildehuis |
 | 4 · **Middeleeuwse stad** | Stadhuis, herenhuizen, juwelier, handelshuis, universiteit, kathedraal, kasteel |
@@ -61,6 +61,18 @@ universiteit en het stadhuis staan. Daarna kun je gewoon doorbouwen.
   buurt meer vangen.
 - **Samenhorigheid.** Bouw dicht om het dorpsplein in plaats van verspreid over de kaart:
   een hecht dorp is een gelukkiger dorp.
+- **Voorzieningen tellen waar ze staan.** Een waterput, kapel, herberg of markt helpt
+  alleen de huizen die er te voet bij kunnen. Twee dorpen met precies dezelfde gebouwen
+  kunnen dus tientallen procenten in tevredenheid schelen — het gaat om je stratenplan.
+  Op het dorpsplein zie je hoeveel procent van je huizen goed bediend wordt.
+- **Aantrekkelijkheid.** Een fontein, kerk of kathedraal maakt de buurt prettig; een
+  smederij, mijn of steengroeve maakt hem grauw. Huisjes groeien alléén uit tot
+  vakwerkhuis in een nette buurt, en een herenhuis wil helemaal niet in de rook staan.
+  Zet je nijverheid dus aan de rand.
+- **Aanvoer.** Wat een werkplaats maakt moet naar je opslag gebracht worden. Ver van elk
+  depot gaat de halve dag op aan lopen — bouw een voorraadschuur dichterbij, of leg een
+  **straatje**: een geplaveide route scheelt bijna de helft van de afstand. Shift-slepen
+  legt een hele straat; klik op een bestaand straatje om het weer op te breken.
 - **Feesten.** Via de kaart **"Het dorp"** (rechts) vier je een feest — kost graan en
   munten en tilt het humeur van de hele gemeenschap tijdelijk op.
 - **Een reizende koopman** komt af en toe langs met ruilaanbiedingen, en de **heer** stuurt
@@ -85,6 +97,7 @@ universiteit en het stadhuis staan. Daarna kun je gewoon doorbouwen.
 | Gebouw uitbouwen | Klik het aan → **⬆️ Uitbouwen** (vanaf tijdperk 3) |
 | Pauzeren | **Spatie** |
 | Snelheid | **1** = normaal, **2** = snel, **3** = zeer snel |
+| Kaartlagen aan/uit | **L**, of de knoppen onderin het beeld |
 | Feest, onderzoek, overzicht | De **🎉 📚 📋** knoppen rechtsboven |
 | Menu, opslaan, uitleg | De **☰** knop rechtsboven |
 
@@ -102,10 +115,12 @@ Op een tablet werkt het ook: één vinger sleept, tikken selecteert of plaatst.
 2. **Woonruimte.** Nieuwe dorpelingen komen alleen als er een bed vrij is. Geen huizen,
    geen groei.
 
-3. **Tevredenheid.** Waterput, kapel, kerk, herberg en marktplaats tillen het humeur op.
-   Tevreden dorpelingen werken harder én je dorp groeit sneller. Hoe groter je stad,
-   hoe meer voorzieningen je nodig hebt. Beweeg met de muis over het 😀-icoon bovenin
-   om te zien waar je punten vandaan komen.
+3. **Tevredenheid.** Waterput, kapel, kerk, herberg en marktplaats tillen het humeur op —
+   maar **alleen voor de huizen die er te voet bij kunnen**. Bouw je voorzieningen dus
+   midden tussen je huizen, niet in een verre hoek. Hoe groter je stad, hoe meer buurten
+   je moet bedienen. Druk op **L** voor de kaartlaag *Voorzieningen*: groen betekent goed
+   bediend, rood betekent vergeten. Beweeg met de muis over het 😀-icoon bovenin om te
+   zien waar je punten vandaan komen.
 
 4. **De winter.** Boerderijen leveren dan níets en er wordt meer gegeten. Vissershutten
    en mijnen werken gewoon door. Leg in de herfst voorraad aan.
@@ -225,6 +240,7 @@ js/core/              De simulatie
   seasons.js            Dagen, seizoenen, jaren
   raids.js              Roversaanvallen
   buurt.js              Wat er per plek in de buurt staat (voorzieningen, sfeer)
+  logistiek.js          Hoe ver het sjouwen is naar de dichtstbijzijnde opslag
   ages.js               Tijdperkovergang en overwinning
   feesten.js            Feesten en het moreel
   handel.js             De reizende koopman
@@ -240,7 +256,7 @@ js/render/            Tekenen op het canvas
   props.js              Erf rond de gebouwen (houtstapels, kramen, hekken)
   wildlife.js           Schapen en springende vissen
   floaters.js           Zwevende opbrengstcijfers
-  lagen.js              De vier kaartlagen
+  lagen.js              De vijf kaartlagen
   raiders.js  minimap.js
 
 js/ui/                De schermelementen

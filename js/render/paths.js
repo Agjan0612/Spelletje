@@ -147,16 +147,44 @@
 
   /* --------------------------------------------------------------- drawing */
 
+  /* Player-laid streets: real tiles with `t.weg`, drawn as paved diamonds
+     under the buildings. These are the ones that shorten the haul to a depot
+     (see js/core/logistiek.js); the tree below is only where feet wore the
+     grass down by themselves. */
+  P.tekenWegen = function (ctx, cam, s, p) {
+    var TEGEL = Game.render.TEGEL;
+    var zicht = cam.zichtbaar(s.kaart);
+    for (var y = zicht.y0; y < zicht.y1; y++) {
+      for (var x = zicht.x0; x < zicht.x1; x++) {
+        var t = Game.core.map.tegel(s.kaart, x, y);
+        if (!t || !t.weg) continue;
+        var sp = cam.wereldNaarScherm(x * TEGEL, y * TEGEL);
+        var dia = Game.render.diamant(sp.x, sp.y, p);
+        ctx.fillStyle = 'rgba(139,120,92,.92)';
+        Game.render.padDiamant(ctx, dia);
+        ctx.fill();
+        /* A lighter core so a long street reads as cobbles, not a flat slab. */
+        if (p > 16) {
+          ctx.fillStyle = 'rgba(170,151,118,.55)';
+          Game.render.padDiamant(ctx, Game.render.diamant(sp.x, sp.y, p * 0.62));
+          ctx.fill();
+        }
+      }
+    }
+  };
+
   P.teken = function (ctx, cam, s, p) {
+    P.tekenWegen(ctx, cam, s, p);
     if (!netwerk.randen.length) return;
     var TEGEL = Game.render.TEGEL;
 
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    /* Two passes: a wider earthy base, then a lighter trodden centre. */
+    /* Two passes: a wider earthy base, then a lighter trodden centre. Fainter
+       than they used to be, so real paved streets read as the stronger line. */
     for (var laag = 0; laag < 2; laag++) {
-      ctx.strokeStyle = laag === 0 ? 'rgba(92,72,48,.42)' : 'rgba(150,126,90,.40)';
+      ctx.strokeStyle = laag === 0 ? 'rgba(92,72,48,.30)' : 'rgba(150,126,90,.28)';
       ctx.lineWidth = laag === 0 ? p * 0.28 : p * 0.14;
       ctx.beginPath();
       for (var i = 0; i < netwerk.randen.length; i++) {

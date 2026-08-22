@@ -31,6 +31,11 @@
  *   plaats.aantrekkelijkheid  same demand, but for a fresh placement
  *   verborgen       true = never in the build menu; only reachable as an
  *                   upgrade target (same footprint as what it grows out of)
+ *   weg             true = not a building at all but a paved tile: it sets a
+ *                   flag on the map tile instead of creating a building, is
+ *                   finished the moment it is laid, and shortens the haul to
+ *                   the nearest depot (see js/core/logistiek.js). Placing one
+ *                   on an existing street takes it up again and refunds it.
  */
 (function (Game) {
 
@@ -46,6 +51,12 @@
     },
 
     /* ================= Tijdperk 1 — Nederzetting ================= */
+    {
+      id: 'straat', naam: 'Straatje', emoji: '🛣️', tijdperk: 1, grootte: 1,
+      kosten: { hout: 3, steen: 2 }, bouwtijd: 0, weg: true,
+      muur: '#a89272', dak: '#8a7658',
+      beschrijving: 'Een verhard karrenspoor. Werkplaatsen langs een geplaveide route brengen veel meer van hun opbrengst thuis. Sleep met Shift voor een hele straat; klik op een bestaand straatje om het weer op te breken.'
+    },
     {
       id: 'huisje', naam: 'Huisje', emoji: '🏠', tijdperk: 1, grootte: 1,
       kosten: { hout: 30 }, bouwtijd: 8, muur: '#d8c39a', dak: '#7c4b2e',

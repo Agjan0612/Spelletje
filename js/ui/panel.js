@@ -20,6 +20,7 @@
       Math.round(s.tevredenheid), s.seizoen, s.tijdperk,
       Math.round((s.samenhorigheid || 0) * 100), s.bevolking.soldaten,
       Math.round((s.dienstdekking || 0) * 100), Math.round(s.sfeer || 0),
+      s.wegTeller || 0,
       s.raid.fase, s.leger ? (s.leger.uitval ? 1 : 0) + ':' + s.leger.overwinningen : '-',
       Game.core.construction.kanVerbeteren(s, g).ok ? 1 : 0].join('|');
   }
@@ -157,6 +158,7 @@
       el.appendChild(Game.util.el('div', 'waarschuwing', '⚠️ ' + g.waarschuwing));
     }
 
+    aanvoerBlok(el, s, g, d);
     buurtBlok(el, s, g, d);
 
     if (g.type === 'dorpsplein') dorpsleven(el, s);
@@ -164,6 +166,26 @@
     verbeterBlok(el, s, g, d);
     el.appendChild(knoppen(s, g, d));
   };
+
+  /* How much of what this workplace makes actually arrives in the store. A
+     building next to a barn loses nothing; one on the far rim of the map
+     spends half its day walking. */
+  function aanvoerBlok(el, s, g, d) {
+    if (!d.wint && !d.maakt) return;
+    var info = Game.core.logistiek.omschrijving(s, g);
+    var bij = Game.core.logistiek.dichtstbijDepot(s, g);
+
+    el.appendChild(Game.util.el('div', 'kop', '🛣️ Aanvoer'));
+    el.appendChild(regel('Komt aan', Math.round(info.factor * 100) + '%'));
+    if (bij.depot) {
+      el.appendChild(regel('Naar', Game.config.gebouw(bij.depot.type).naam +
+        ' (' + Math.round(bij.ruweAfstand) + ' tegels)'));
+    }
+    if (info.slecht) {
+      el.appendChild(Game.util.el('div', 'beschrijving',
+        'Bouw een voorraadschuur of pakhuis dichterbij, of leg een straatje naar de opslag — een geplaveide route scheelt bijna de helft.'));
+    }
+  }
 
   /* What this spot on the map is like: what a household here can reach on
      foot, and how pleasant it is to stand. Only shown where it changes a

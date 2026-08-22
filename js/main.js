@@ -423,18 +423,25 @@
     var aantal = Math.max(Math.abs(lijn.x1 - lijn.x0), Math.abs(lijn.y1 - lijn.y0)) + 1;
     var gezet = 0;
 
+    /* A street may also be *lifted* by dragging over it, and lifting refunds
+       rather than costs — so let plaats() judge each tile instead of stopping
+       the whole row on an empty purse. */
+    var isWeg = !!Game.config.gebouw(spel.plaatsType).weg;
+
     for (var i = 0; i < aantal; i++) {
       var x = lijn.x0 + stapX * i, y = lijn.y0 + stapY * i;
-      if (!Game.core.state.kanBetalen(s, Game.config.gebouw(spel.plaatsType).kosten)) break;
+      if (!isWeg && !Game.core.state.kanBetalen(s, Game.config.gebouw(spel.plaatsType).kosten)) break;
       if (Game.core.construction.plaats(s, spel.plaatsType, x, y).ok) gezet++;
     }
 
     if (gezet) {
       Game.render.renderer.verversGebouwen(s);
       Game.ui.buildmenu.ververs(s, true);
-      Game.ui.toast('🏗️ ' + Game.util.telwoord(gezet, 'gebouw geplaatst', 'gebouwen geplaatst'));
+      Game.ui.toast(isWeg
+        ? '🛣️ ' + Game.util.telwoord(gezet, 'tegel straat', 'tegels straat')
+        : '🏗️ ' + Game.util.telwoord(gezet, 'gebouw geplaatst', 'gebouwen geplaatst'));
     }
-    if (!Game.core.state.kanBetalen(s, Game.config.gebouw(spel.plaatsType).kosten)) spel.kiesBouw(null);
+    if (!isWeg && !Game.core.state.kanBetalen(s, Game.config.gebouw(spel.plaatsType).kosten)) spel.kiesBouw(null);
   }
 
   /* Little label that follows the cursor while placing. */

@@ -30,6 +30,10 @@
     if (d.tijdperk > s.tijdperk) {
       return { ok: false, reden: 'Vergrendeld tot tijdperk ' + d.tijdperk };
     }
+
+    /* A street is a flag on a tile, not a building, so it plays by its own
+       short set of rules: laying one on an existing street takes it up. */
+    if (d.weg) return C.controleerWeg(s, d, x, y);
     if (d.max && !opties.negeerId && C.aantalGepland(s, type) >= d.max) {
       return { ok: false, reden: 'Je mag er maar ' + d.max + ' hebben' };
     }
@@ -78,6 +82,47 @@
     return { ok: true, reden: '' };
   };
 
+  /* --------------------------------------------------------------- wegen -- */
+
+  C.controleerWeg = function (s, d, x, y) {
+    var t = map.tegel(s.kaart, x, y);
+    if (!t) return { ok: false, reden: 'Buiten de kaart' };
+    if (t.weg) return { ok: true, reden: '', opbreken: true };
+    if (t.t === 'water') return { ok: false, reden: 'Niet over water — daar hoort een brug' };
+    if (t.t === 'berg') return { ok: false, reden: 'De berg is te steil voor een weg' };
+    if (t.b !== null && t.b !== undefined) return { ok: false, reden: 'Hier staat al iets' };
+    if (!Game.core.state.kanBetalen(s, d.kosten)) {
+      return { ok: false, reden: 'Te weinig grondstoffen' };
+    }
+    return { ok: true, reden: '' };
+  };
+
+  /* Lays or lifts one street tile. Streets are never building sites: there is
+     nothing to raise, so they are done the moment they are laid. */
+  C.legWeg = function (s, d, x, y) {
+    var check = C.controleerWeg(s, d, x, y);
+    if (!check.ok) return { ok: false, reden: check.reden };
+    var t = map.tegel(s.kaart, x, y);
+
+    if (check.opbreken) {
+      t.weg = 0;
+      for (var r in d.kosten) Game.core.state.voegToe(s, r, Math.floor(d.kosten[r] * 0.5));
+    } else {
+      Game.core.state.betaal(s, d.kosten);
+      /* Clearing the ground for a street yields the same scrap of timber as
+         clearing it for a building would. */
+      if (t.t === 'bos') {
+        Game.core.state.voegToe(s, 'hout', Math.round(Math.min(8, t.amt)));
+        t.t = 'gras'; t.n = null; t.amt = 0; t.max = 0;
+      }
+      t.weg = 1;
+    }
+
+    /* One counter is all core/logistiek.js needs to know the network moved. */
+    s.wegTeller = (s.wegTeller || 0) + 1;
+    return { ok: true, weg: true, opgebroken: !!check.opbreken };
+  };
+
   C.aantalGepland = function (s, type) {
     var n = 0;
     for (var i = 0; i < s.gebouwen.length; i++) if (s.gebouwen[i].type === type) n++;
@@ -107,6 +152,9 @@
   /* Places a building site. Costs are paid immediately; the site then needs
      builders to finish. Clearing forest yields a little timber. */
   C.plaats = function (s, type, x, y) {
+    var d0 = Game.config.gebouw(type);
+    if (d0 && d0.weg) return C.legWeg(s, d0, x, y);
+
     var check = C.controleer(s, type, x, y);
     if (!check.ok) return { ok: false, reden: check.reden };
 
@@ -121,6 +169,8 @@
           gekapt += Math.min(12, t.amt);
           t.t = 'gras'; t.n = null; t.amt = 0; t.max = 0;
         }
+        /* A building swallows the street it stands on. */
+        if (t && t.weg) { t.weg = 0; s.wegTeller = (s.wegTeller || 0) + 1; }
       }
     }
     if (gekapt > 0) Game.core.state.voegToe(s, 'hout', Math.round(gekapt));

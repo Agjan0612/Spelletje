@@ -98,6 +98,10 @@
     s.dienstdekking = typeof s.dienstdekking === 'number' ? s.dienstdekking : 0;
     s.sfeer = typeof s.sfeer === 'number' ? s.sfeer : 0;
 
+    /* Streets, added later: an older map simply has none. The flag lives on
+       the tiles, so nothing else needs restoring. */
+    s.wegTeller = typeof s.wegTeller === 'number' ? s.wegTeller : 0;
+
     /* Relief layer: saves from before it lack per-tile height. Recompute it
        from the seed so old towns get relief too, without breaking pure JSON. */
     if (s.kaart.seed != null && (!s.kaart.tegels[0] || typeof s.kaart.tegels[0].h !== 'number')) {

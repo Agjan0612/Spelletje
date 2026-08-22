@@ -24,6 +24,13 @@
         controleerResources(fouten, d.id + '.maakt.in', d.maakt.in, res);
         controleerResources(fouten, d.id + '.maakt.uit', d.maakt.uit, res);
       }
+      /* A street is a tile flag, not a building: it must not pretend to be one. */
+      if (d.weg) {
+        if (d.banen || d.wint || d.maakt || d.woonruimte || d.opslag) {
+          fouten.push(d.id + ': weg-gebouwen mogen geen werk, opbrengst, woonruimte of opslag hebben');
+        }
+        if (d.grootte !== 1) fouten.push(d.id + ': een weg beslaat altijd precies één tegel');
+      }
       if (d.wint) {
         if (!res[d.wint.res]) fouten.push(d.id + ': wint onbekende grondstof ' + d.wint.res);
         if (!Game.core.map.nodeNaam[d.wint.node]) fouten.push(d.id + ': onbekende node ' + d.wint.node);

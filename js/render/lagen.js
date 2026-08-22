@@ -19,6 +19,8 @@
       uitleg: 'Groen = een prettige plek om te wonen. Rood = rook, herrie en stof. Huisjes groeien alleen uit in het groen.' },
     { id: 'verdediging', naam: 'Verdediging', emoji: '🛡️',
       uitleg: 'Wat je torens, muren en poorten daadwerkelijk bestrijken. De rode baan is de route waarlangs de rovers binnenkomen.' },
+    { id: 'logistiek', naam: 'Aanvoer', emoji: '🛣️',
+      uitleg: 'Hoeveel van de opbrengst een werkplaats hier daadwerkelijk thuisbrengt. Rood = te ver van elke opslag: bouw een voorraadschuur dichterbij of leg een straat.' },
     { id: 'aders', naam: 'Grondstoffen', emoji: '⛏️',
       uitleg: 'Hoeveel er nog in de grond zit. Rood betekent bijna uitgeput — tijd om te verhuizen.' }
   ];
@@ -53,6 +55,7 @@
     /* The ore layer changes continuously, so re-read it on a coarse clock
        instead of on the buildings. */
     if (L.actief === 'aders') d += '|t' + Math.floor(s.tijd / 3);
+    if (L.actief === 'logistiek') d += '|w' + (s.wegTeller || 0);
     return d;
   }
 
@@ -101,6 +104,20 @@
                brighter than a lone wall segment. */
             w[idx] = Math.min(1, (w[idx] < 0 ? 0 : w[idx]) + d.verdediging / 60);
           }
+        }
+      }
+    } else if (L.actief === 'logistiek') {
+      /* Ask the real formula what a workplace on this tile would bring home,
+         so the map cannot drift away from what the economy actually does. */
+      var log = Game.core.logistiek;
+      log.ververs(s);
+      for (var y4 = 0; y4 < h; y4++) {
+        for (var x4 = 0; x4 < b; x4++) {
+          var t4 = Game.core.map.tegel(s.kaart, x4, y4);
+          if (!t4 || t4.t === 'water' || t4.t === 'berg') { w[y4 * b + x4] = -1; continue; }
+          /* Map the 0.5..1 range the formula can return onto the shared ramp. */
+          var f = log.factorOpTegel(s, x4, y4);
+          w[y4 * b + x4] = Game.util.clamp((f - log.MIN) / (1 - log.MIN), 0, 1);
         }
       }
     } else if (L.actief === 'aders') {

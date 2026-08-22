@@ -50,6 +50,17 @@
          spiral into nothing. The floor of 0.75 keeps a bad patch recoverable. */
       var mult = s.bonus.productie * (0.75 + 0.25 * (s.tevredenheid / 100));
 
+      /* And the haul home: a workplace far from any barn loses part of its
+         day to walking. Floored at 0.5 in logistiek.js for the same reason
+         the happiness multiplier is floored — a bad spot is a bad decision,
+         never a dead end. */
+      var vracht = Game.core.logistiek.factor(s, g);
+      mult *= vracht;
+      if (vracht < 0.85) {
+        g.waarschuwing = 'Ver van je opslag — maar ' + Math.round(vracht * 100) +
+          '% komt aan. Bouw een voorraadschuur dichterbij of leg een straat.';
+      }
+
       /* --- extraction --------------------------------------------------- */
       if (d.wint) {
         var w = d.wint;
