@@ -47,6 +47,12 @@
       if (d.tevredenheid && !d.bereik) {
         fouten.push(d.id + ': heeft tevredenheid maar geen bereik — die punten bereiken geen enkel huis');
       }
+      if (d.stand && !Game.config.standen[d.stand]) {
+        fouten.push(d.id + ': onbekende stand ' + d.stand);
+      }
+      if (d.stand && !d.woonruimte) {
+        fouten.push(d.id + ': stand zonder woonruimte — daar woont niemand');
+      }
       if (d.bereik && !d.tevredenheid) {
         fouten.push(d.id + ': heeft bereik maar geen tevredenheid');
       }

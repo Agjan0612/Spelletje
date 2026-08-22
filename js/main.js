@@ -210,12 +210,14 @@
     Game.core.construction.tick(s, dt);
     Game.core.economy.tick(s, dt);
     Game.core.population.tick(s, dt);
+    Game.core.demografie.tick(s, dt);
+    Game.core.standen.tick(s, dt);
     Game.core.raids.tick(s, dt);
     Game.core.feesten.tick(s, dt);
     Game.core.handel.tick(s, dt);
     Game.core.opdrachten.tick(s, dt);
     Game.core.gebeurtenissen.tick(s, dt);
-    Game.core.dorpelingen.tick(s);
+    Game.core.dorpelingen.tick(s, dt);
     Game.ui.quests.controleer(s);
     Game.core.ages.controleerOverwinning(s);
   }

@@ -42,13 +42,33 @@ Je verzamelt zes grondstoffen uit het land — 🥩 vlees, 🪵 hout, 🪨 steen
 |---|---|
 | 1 · **Nederzetting** | Boerderij, huisjes, houthakker, jacht, visserij, steengroeve, waterput, **straatjes** |
 | 2 · **Dorp** | Molen, bakkerij, marktplaats, kapel, koper- en ijzermijn, wachttoren, **haven**, **oefenveld** |
-| 3 · **Handelsstad** | Smederij, wapensmid, kazerne, muren, **stadspoort**, kerk, herberg, edelsteenmijn, gildehuis |
+| 3 · **Handelsstad** | Smederij, wapensmid, kazerne, muren, **stadspoort**, kerk, herberg, edelsteenmijn, gildehuis, **school** |
 | 4 · **Middeleeuwse stad** | Stadhuis, herenhuizen, juwelier, handelshuis, universiteit, kathedraal, kasteel |
 
 Rechtsboven staat precies wat je nog nodig hebt voor het volgende tijdperk. Een
 **adviseur** in de doelenkolom wijst je steeds op de handigste volgende stap. Je stad is
 "af" zodra je 100 inwoners hebt, 70% tevredenheid, en de kathedraal, het kasteel, de
 universiteit en het stadhuis staan. Daarna kun je gewoon doorbouwen.
+
+### Standen: van boeren naar poorters
+
+Elk huis herbergt een **stand**, en die bepaalt wat de bewoners vragen én wat ze
+opbrengen aan belasting:
+
+| Stand | Woont in | Vraagt | Betaalt |
+|---|---|---|---|
+| 🌾 **Boeren** | Huisje | Niets bijzonders | Weinig |
+| 🏘️ **Burgers** | Vakwerkhuis | 2 soorten voedsel, redelijk wat voorzieningen | Ruim 3× zoveel |
+| 🎩 **Poorters** | Herenhuis | 3 soorten voedsel, véél voorzieningen | Ruim 7× zoveel |
+
+Krijgt een stand niet wat hij vraagt, dan betaalt hij nog maar een derde en gaat er
+mopperen. Zo wordt het uitbouwen van je huizen een echte afweging in plaats van een
+knop die je altijd indrukt — en zo worden munten iets dat meegroeit met hoe *goed*
+je stad gebouwd is.
+
+**Ervaring.** Een werkplaats die dezelfde ploeg houdt, wordt er steeds beter in: tot
+25% meer opbrengst. Haal je er werkers vanaf, dan gaat een kwart van die ervaring
+verloren. Voortdurend mensen heen en weer schuiven kost je dus iets.
 
 ### Je dorp als geheel
 
@@ -78,6 +98,8 @@ universiteit en het stadhuis staan. Daarna kun je gewoon doorbouwen.
 - **Een reizende koopman** komt af en toe langs met ruilaanbiedingen, en de **heer** stuurt
   af en toe een leveropdracht met een beloning. Beide regel je op diezelfde "Het dorp"-kaart.
 - **Het Dorpsboek** houdt je inwoners bij met naam en beroep, zodat je dorp echt bevolkt voelt.
+  Af en toe vraagt een van hen bij naam om iets — meestal een put of kapel in een buurt die
+  vergeten is. Geef je het, dan is het hele dorp er blij mee.
 
 ---
 
@@ -113,7 +135,11 @@ Op een tablet werkt het ook: één vinger sleept, tikken selecteert of plaatst.
    jezelf nooit een hongersnood in.
 
 2. **Woonruimte.** Nieuwe dorpelingen komen alleen als er een bed vrij is. Geen huizen,
-   geen groei.
+   geen groei. Een deel van de nieuwkomers zijn **kinderen**: die eten wel, maar werken
+   pas over een jaar of anderhalf. Een school maakt ze eerder inzetbaar. Aan de andere
+   kant van het leven worden volwassenen **ouderen**: die werken door, maar krijgen
+   minder gedaan, en op een dag sterven ze. Een stad die geen mensen meer aantrekt,
+   vergrijst en krimpt langzaam.
 
 3. **Tevredenheid.** Waterput, kapel, kerk, herberg en marktplaats tillen het humeur op —
    maar **alleen voor de huizen die er te voet bij kunnen**. Bouw je voorzieningen dus
@@ -245,6 +271,7 @@ js/config/            De speldata — hier pas je de balans aan
   gebeurtenissen.js     De gebeurtenissen met een keuze
   onderzoek.js          De studies van gildehuis en universiteit
   rovers.js             De roverhoofdmannen en de knoppen van hun aanval
+  standen.js            De drie standen en het tempo van een mensenleven
 
 js/core/              De simulatie
   rng.js                Seeded toeval + ruis voor de kaart
@@ -257,6 +284,8 @@ js/core/              De simulatie
   raids.js              Roversaanvallen
   buurt.js              Wat er per plek in de buurt staat (voorzieningen, sfeer)
   logistiek.js          Hoe ver het sjouwen is naar de dichtstbijzijnde opslag
+  demografie.js         Kinderen, volwassenen en ouderen
+  standen.js            Wat elke stand vraagt en aan belasting opbrengt
   ages.js               Tijdperkovergang en overwinning
   feesten.js            Feesten en het moreel
   handel.js             De reizende koopman

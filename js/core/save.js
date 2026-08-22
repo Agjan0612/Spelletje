@@ -68,6 +68,13 @@
     });
 
     s.bevolking = s.bevolking || { totaal: 5 };
+    /* Cohorts, standing and practice were added later. demografie.zorg (called
+       from herbereken below) counts an older town as all grown-ups, which is
+       exactly what it was. */
+    s.leeftijd = s.leeftijd || { rijp: 0, oud: 0, dood: 0 };
+    s.belasting = typeof s.belasting === 'number' ? s.belasting : 0;
+    s.standOntevreden = typeof s.standOntevreden === 'number' ? s.standOntevreden : 0;
+    s.wens = s.wens || { actief: null, rust: 160, vervuld: 0 };
     s.bonus = s.bonus || { productie: 1, mijnbouw: 1 };
     s.raid = s.raid || { fase: 'rust', timer: 200, kracht: 0, nummer: 0 };
     /* The marching band, its choices and the captain were added later. An
@@ -130,6 +137,7 @@
     for (var j = 0; j < s.gebouwen.length; j++) {
       var g = s.gebouwen[j];
       if (!Game.config.gebouw(g.type)) { s.gebouwen.splice(j--, 1); continue; }
+      if (typeof g.ervaring !== 'number') g.ervaring = 0;
       Game.core.construction.markeerTegels(s, g);
     }
 

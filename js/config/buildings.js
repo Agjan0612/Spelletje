@@ -10,6 +10,9 @@
  *   wint            extraction: { node, straal, res, tempo } per worker per second
  *   maakt           crafting: { in: {res: perSec}, uit: {res: perSec} } per worker per second
  *   woonruimte      housing capacity
+ *   stand           which kind of household lives here: boeren / burgers /
+ *                   poorters (js/config/standen.js). Higher standing pays
+ *                   more tax but demands food variety and services nearby.
  *   opslag          added to the cap of every resource
  *   tevredenheid    happiness points this building offers the homes that can
  *                   reach it (diminishing per extra copy in the same reach)
@@ -45,7 +48,7 @@
     {
       id: 'dorpsplein', naam: 'Dorpsplein', emoji: '🏛️', tijdperk: 0, grootte: 2,
       kosten: {}, bouwtijd: 20, max: 1, muur: '#c8b48c', dak: '#8a5a3a',
-      woonruimte: 4, opslag: 300, tevredenheid: 4, bereik: 10,
+      woonruimte: 4, stand: 'boeren', opslag: 300, tevredenheid: 4, bereik: 10,
       aantrekkelijkheid: 6, sfeerStraal: 9,
       beschrijving: 'Het hart van je nederzetting. Hier komen nieuwe dorpelingen aan en hier ligt je voorraad.'
     },
@@ -60,7 +63,7 @@
     {
       id: 'huisje', naam: 'Huisje', emoji: '🏠', tijdperk: 1, grootte: 1,
       kosten: { hout: 30 }, bouwtijd: 8, muur: '#d8c39a', dak: '#7c4b2e',
-      woonruimte: 4,
+      woonruimte: 4, stand: 'boeren',
       verbetering: { naar: 'vakwerkhuis', tijdperk: 3, kosten: { hout: 45, steen: 35 }, aantrekkelijkheid: 8 },
       beschrijving: 'Een eenvoudige hut van leem en riet. Biedt onderdak aan vier dorpelingen.'
     },
@@ -273,11 +276,21 @@
       beschrijving: 'Groot stenen pakhuis: 1200 extra opslag voor elke grondstof.'
     },
 
+    {
+      id: 'school', naam: 'School', emoji: '🎓', tijdperk: 3, grootte: 1,
+      kosten: { hout: 120, steen: 100 }, bouwtijd: 24, max: 4,
+      muur: '#ded3b6', dak: '#6a5a44',
+      banen: { aantal: 2, baan: 'geleerde' },
+      tevredenheid: 7, bereik: 9, aantrekkelijkheid: 4, sfeerStraal: 6,
+      beschrijving: 'Lezen, rekenen en een ambacht. Kinderen in je stad zijn er merkbaar eerder klaar voor werk — en ouders zijn er blij mee.'
+    },
+
     /* ================= Tijdperk 4 — Middeleeuwse stad ================= */
     {
       id: 'herenhuis', naam: 'Herenhuis', emoji: '🏘️', tijdperk: 4, grootte: 1,
       kosten: { hout: 110, steen: 140, gereedschap: 10 }, bouwtijd: 20, muur: '#e0d0aa', dak: '#8a3f2e',
-      woonruimte: 10, tevredenheid: 2, bereik: 4, aantrekkelijkheid: 3, sfeerStraal: 4,
+      woonruimte: 10, stand: 'poorters', tevredenheid: 2, bereik: 4,
+      aantrekkelijkheid: 3, sfeerStraal: 4,
       plaats: { aantrekkelijkheid: 12 },
       beschrijving: 'Een deftig stadshuis van steen. Biedt onderdak aan tien inwoners — maar deftige lieden bouwen alleen in een nette buurt.'
     },
@@ -340,7 +353,8 @@
     {
       id: 'vakwerkhuis', naam: 'Vakwerkhuis', emoji: '🏡', tijdperk: 3, grootte: 1, verborgen: true,
       kosten: { hout: 75, steen: 35 }, bouwtijd: 12, muur: '#e6d9bb', dak: '#6b3f28',
-      woonruimte: 8, tevredenheid: 1, bereik: 3, aantrekkelijkheid: 2, sfeerStraal: 3,
+      woonruimte: 8, stand: 'burgers', tevredenheid: 1, bereik: 3,
+      aantrekkelijkheid: 2, sfeerStraal: 3,
       beschrijving: 'Een huisje met een verdieping erop: balken, witte vakken en plek voor acht mensen.'
     },
     {

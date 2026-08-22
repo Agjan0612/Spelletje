@@ -19,8 +19,18 @@
 
   /* ------------------------------------------------------------------ eten */
 
+  /* Mouths to feed, weighted: a child does not eat a grown portion. Used both
+     for consumption and for the days-of-supply figure, so the growth gate and
+     the larder always speak about the same thing. */
+  P.monden = function (s) {
+    var b = s.bevolking;
+    var kind = b.kinderen || 0;
+    var rest = Math.max(0, (b.totaal || 0) - kind);
+    return rest + kind * Game.config.leeftijd.kinderEten;
+  };
+
   function eten(s, dt) {
-    var nodig = s.bevolking.totaal * HONGER * dt;
+    var nodig = P.monden(s) * HONGER * dt;
     /* Winter costs extra fuel; the wintervoorraad study softens that. */
     if (s.seizoen === 3) nodig *= 1 + 0.3 * (s.bonus.winter === undefined ? 1 : s.bonus.winter);
     if (nodig <= 0) { s.voedselTekort = 0; return; }
@@ -90,7 +100,7 @@
   };
 
   P.voedselDagen = function (s) {
-    var perDag = Math.max(0.001, s.bevolking.totaal * HONGER * Game.core.state.DAG);
+    var perDag = Math.max(0.001, P.monden(s) * HONGER * Game.core.state.DAG);
     return P.voedselVoorraad(s) / perDag;
   };
 
@@ -140,6 +150,18 @@
       ? s.sfeer : Game.core.buurt.dekking(s).aantrekkelijkheid;
     var sfeer = Game.util.clamp(sfeerWaarde * 0.6, -12, 10);
 
+    /* A town with children playing in the street and grandparents on the
+       bench feels like a place, not a work camp. */
+    var lft = Game.config.leeftijd;
+    var totaalMensen = Math.max(1, s.bevolking.totaal);
+    var generaties =
+      lft.tevredenheidKinderen * Math.min(1, (s.bevolking.kinderen || 0) / (totaalMensen * 0.22)) +
+      lft.tevredenheidOuderen * Math.min(1, (s.bevolking.ouderen || 0) / (totaalMensen * 0.12));
+
+    /* Burghers and patricians who are not getting the variety and the
+       services their standing calls for make that felt. */
+    var stand = -14 * (s.standOntevreden || 0);
+
     /* A close-knit, compactly built town lifts everyone's spirits a little.
        Worth less than it was: local services now do most of that work, and
        counting compactness twice would double-charge the same virtue. */
@@ -153,9 +175,10 @@
       basis: 20, voedsel: voedsel, variatie: variatie, wonen: wonen,
       diensten: diensten, sfeer: sfeer, samen: samen, honger: honger,
       moreel: moreel, onderzoek: onderzoek,
+      generaties: generaties, stand: stand,
       dekking: dekking,
       doel: Game.util.clamp(20 + voedsel + variatie + wonen + diensten + sfeer + samen +
-        honger + moreel + onderzoek, 0, 100)
+        generaties + stand + honger + moreel + onderzoek, 0, 100)
     };
   };
 
@@ -202,8 +225,14 @@
     while (s.groeiVoortgang >= 1 && s.bevolking.ruimte - s.bevolking.totaal > 0) {
       s.groeiVoortgang -= 1;
       s.bevolking.totaal++;
+      /* Some newcomers are families moving in, some are born here — and the
+         latter cannot work for a couple of years. The headcount growth itself
+         is unchanged, so the food and housing balance carries over. */
+      var soort = Game.core.demografie.nieuweInwoner(s);
       Game.core.state.herbereken(s);
-      Game.ui.log.schrijf(s, '👶 Een nieuwe dorpeling heeft zich gevestigd.', 'goed');
+      Game.ui.log.schrijf(s, soort === 'kind'
+        ? '👶 Er is een kind geboren in je dorp.'
+        : '🧳 Een nieuwe dorpeling heeft zich gevestigd.', 'goed');
     }
   }
 
@@ -222,7 +251,7 @@
      winter would snowball into a wiped-out village. Food workers are the
      very last to go, so the village shrinks to a size it can feed and
      then holds there. */
-  function verwijderDorpeling(s) {
+  function verwijderDorpeling(s, stil) {
     if (s.bevolking.werkloos <= 0) {
       var kandidaten = s.gebouwen.filter(function (g) {
         var d = Game.core.state.def(g);
@@ -233,6 +262,7 @@
     }
     s.bevolking.totaal = Math.max(0, s.bevolking.totaal - 1);
     Game.core.state.herbereken(s);
+    return !stil;
   }
 
   function rang(g) {
@@ -251,6 +281,9 @@
     aantal = Game.util.clamp(Math.round(aantal), 0, d.banen.aantal);
     var verschil = aantal - g.werkers;
     if (verschil > 0) verschil = Math.min(verschil, s.bevolking.werkloos);
+    /* Taking practised hands off a workbench loses part of the practice, so
+       shuffling villagers around every few minutes has a price. */
+    if (verschil < 0 && g.ervaring) g.ervaring *= 0.75;
     g.werkers += verschil;
     Game.core.state.herbereken(s);
   };

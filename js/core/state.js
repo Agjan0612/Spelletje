@@ -51,14 +51,27 @@
       verzameld: {},
       capaciteit: Game.config.basisOpslag,
 
-      bevolking: { totaal: 0, werkend: 0, werkloos: 0, soldaten: 0, ruimte: 0 },
+      /* totaal stays the authority on how many mouths there are; the three
+         cohorts next to it say who they are (core/demografie.js). */
+      bevolking: {
+        totaal: 0, werkend: 0, werkloos: 0, soldaten: 0, ruimte: 0,
+        kinderen: 0, volwassenen: 0, ouderen: 0
+      },
+      /* Fractional accumulators for growing up, growing old and dying. */
+      leeftijd: { rijp: 0, oud: 0, dood: 0 },
+
+      /* Cached each tick by core/standen.js for the HUD and the happiness
+         formula: coins per second from taxes, and the share of townsfolk
+         whose standing is not being lived up to. */
+      belasting: 0,
+      standOntevreden: 0,
       groeiVoortgang: 0,
       tevredenheid: 60,
       hongerTimer: 0,
 
       /* Cached per-second flows, refreshed each tick for the HUD. */
       stroom: {},
-      bonus: { productie: 1, mijnbouw: 1, voedsel: 1, bouw: 1, winter: 1, tevredenheid: 0 },
+      bonus: { productie: 1, mijnbouw: 1, voedsel: 1, bouw: 1, winter: 1, tevredenheid: 0, arbeid: 1 },
       onderzoek: {},
       verdediging: 0,
 
@@ -234,9 +247,17 @@
     s.bonus.winter = o.winter;
     s.bonus.tevredenheid = o.tevredenheid;
 
+    /* Cohorts must always add up to the headcount, whatever else changed it. */
+    Game.core.demografie.zorg(s);
+
     s.bevolking.werkend = werkend;
     s.bevolking.soldaten = soldaten;
-    s.bevolking.werkloos = Math.max(0, s.bevolking.totaal - werkend);
+    /* Children are mouths, not hands: only grown-ups can take a job, so the
+       idle pool (which is also the building crew) counts from the workforce. */
+    s.bevolking.handen = Game.core.demografie.arbeidskracht(s);
+    s.bevolking.werkloos = Math.max(0, s.bevolking.handen - werkend);
+    /* A greying town gets less done per pair of hands. */
+    s.bonus.arbeid = Game.core.demografie.arbeidFactor(s);
 
     s.samenhorigheid = S.samenhorigheid(s);
 

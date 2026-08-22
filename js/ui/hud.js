@@ -193,6 +193,8 @@
       'Woonruimte ' + n(d.wonen) + '\n' +
       'Voorzieningen ' + n(d.diensten) + ' (' + Math.round((d.dekking || 0) * 100) + '% van je huizen bereikt ze)\n' +
       'Aantrekkelijke buurt ' + n(d.sfeer) + '\n' +
+      'Kinderen en ouderen ' + n(d.generaties) + '\n' +
+      (d.stand ? 'Standen krijgen niet wat ze vragen ' + n(d.stand) + '\n' : '') +
       'Samenhorigheid ' + n(d.samen) + '\n' +
       (d.onderzoek ? 'Onderzoek ' + n(d.onderzoek) + '\n' : '') +
       (d.honger ? 'HONGER ' + n(d.honger) + '\n' : '') +

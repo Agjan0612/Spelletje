@@ -60,6 +60,11 @@
          never a dead end. */
       var vracht = Game.core.logistiek.factor(s, g);
       mult *= vracht;
+
+      /* A greying workforce, and the practised hands of a crew that has been
+         doing the same job in the same place for a while. */
+      mult *= (s.bonus.arbeid || 1);
+      mult *= 1 + E.ERVARING_BONUS * (g.ervaring || 0);
       if (vracht < 0.85) {
         g.waarschuwing = 'Ver van je opslag — maar ' + Math.round(vracht * 100) +
           '% komt aan. Bouw een voorraadschuur dichterbij of leg een straat.';
@@ -140,6 +145,7 @@
       }
     }
 
+    ervaringGroeit(s, dt);
     E.natuurGroeit(s, dt);
     meldVolleOpslag(s, dt);
 
@@ -148,6 +154,32 @@
       s.stroom[r] = s.stroom[r] * 0.8 + flux[r] * 0.2;
     });
   };
+
+  /* Practice. A workplace that keeps the same crew on the same job gets
+     steadily better at it, up to ERVARING_BONUS. Pulling people off knocks it
+     back (see population.zetWerkers), which is the point: constantly
+     reshuffling your villagers should cost you something.
+     One number per building, so the save stays plain. */
+  E.ERVARING_TIJD = 320;     /* seconds of full staffing to become expert */
+  E.ERVARING_BONUS = 0.15;
+
+  function ervaringGroeit(s, dt) {
+    for (var i = 0; i < s.gebouwen.length; i++) {
+      var g = s.gebouwen[i];
+      if (!g.gebouwd) continue;
+      var d = Game.core.state.def(g);
+      if (!d.banen) continue;
+      if (typeof g.ervaring !== 'number') g.ervaring = 0;
+
+      if (g.werkers > 0 && !g.uit) {
+        var bezetting = g.werkers / d.banen.aantal;
+        g.ervaring = Math.min(1, g.ervaring + (dt / E.ERVARING_TIJD) * bezetting);
+      } else {
+        /* Skills fade in an idle workshop, but slowly. */
+        g.ervaring = Math.max(0, g.ervaring - dt / (E.ERVARING_TIJD * 4));
+      }
+    }
+  }
 
   /* Production silently vanishing into a full warehouse is confusing, so say
      it out loud — but at most once a minute. */

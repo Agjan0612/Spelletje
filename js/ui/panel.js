@@ -20,7 +20,9 @@
       Math.round(s.tevredenheid), s.seizoen, s.tijdperk,
       Math.round((s.samenhorigheid || 0) * 100), s.bevolking.soldaten,
       Math.round((s.dienstdekking || 0) * 100), Math.round(s.sfeer || 0),
-      s.wegTeller || 0,
+      s.wegTeller || 0, Math.round((g.ervaring || 0) * 20),
+      s.bevolking.kinderen + ':' + s.bevolking.ouderen,
+      s.wens && s.wens.actief ? s.wens.actief.gebouwId : '-',
       s.raid.fase, s.leger ? (s.leger.uitval ? 1 : 0) + ':' + s.leger.overwinningen : '-',
       Game.core.construction.kanVerbeteren(s, g).ok ? 1 : 0].join('|');
   }
@@ -158,6 +160,7 @@
       el.appendChild(Game.util.el('div', 'waarschuwing', '⚠️ ' + g.waarschuwing));
     }
 
+    ervaringBlok(el, s, g, d);
     aanvoerBlok(el, s, g, d);
     buurtBlok(el, s, g, d);
 
@@ -166,6 +169,19 @@
     verbeterBlok(el, s, g, d);
     el.appendChild(knoppen(s, g, d));
   };
+
+  /* Practised hands. Shown only once there is something to show, so a fresh
+     building does not carry a row of zeroes. */
+  function ervaringBlok(el, s, g, d) {
+    if (!d.banen || !g.ervaring) return;
+    var pct = Math.round(g.ervaring * 100);
+    el.appendChild(regel('Ervaring', pct + '% (+' +
+      Math.round(g.ervaring * Game.core.economy.ERVARING_BONUS * 100) + '% opbrengst)'));
+    if (pct < 40) {
+      el.appendChild(Game.util.el('div', 'beschrijving',
+        'Deze ploeg is nog aan het inwerken. Laat ze staan: werkers verplaatsen kost ervaring.'));
+    }
+  }
 
   /* How much of what this workplace makes actually arrives in the store. A
      building next to a barn loses nothing; one on the far rim of the map
@@ -232,6 +248,39 @@
     el.appendChild(regel('Samenhorigheid', Math.round((s.samenhorigheid || 0) * 100) + '%'));
     el.appendChild(regel('Huizen met voorzieningen', Math.round((s.dienstdekking || 0) * 100) + '%'));
     el.appendChild(regel('Gemiddelde buurt', Math.round(s.sfeer || 0)));
+
+    var v = Game.core.demografie.verdeling(s);
+    el.appendChild(Game.util.el('div', 'kop', '👪 Bevolking'));
+    el.appendChild(regel('Kinderen', v.kinderen));
+    el.appendChild(regel('Volwassenen', v.volwassenen));
+    el.appendChild(regel('Ouderen', v.ouderen));
+    el.appendChild(regel('Werkende handen', v.handen));
+
+    var st = Game.core.standen.overzicht(s);
+    el.appendChild(Game.util.el('div', 'kop', '🎩 Standen'));
+    Game.config.standOrde.forEach(function (id) {
+      var rij = st.per[id];
+      if (rij.bewoners < 0.5) return;
+      var stand = Game.config.stand(id);
+      var achter = Math.round(rij.bewoners);
+      if (rij.ontevreden >= 0.5) achter += ' — ' + Math.round(rij.ontevreden) + ' onvoldaan';
+      el.appendChild(regel(stand.emoji + ' ' + stand.naam, achter));
+    });
+    el.appendChild(regel('Belasting', (Math.round(st.muntenPerSec * 600) / 10) + ' munten/min'));
+    if (st.ontevredenDeel > 0.05) {
+      el.appendChild(Game.util.el('div', 'beschrijving',
+        'Burgers willen minstens twee soorten voedsel en voorzieningen om de hoek; ' +
+        'poorters willen drie soorten en veel meer voorzieningen. Wie dat niet krijgt, ' +
+        'betaalt nauwelijks belasting en moppert.'));
+    }
+
+    var wens = Game.core.dorpelingen.wens(s);
+    if (wens) {
+      el.appendChild(Game.util.el('div', 'kop', '🙋 Een verzoek'));
+      el.appendChild(Game.util.el('div', 'beschrijving', wens.tekst));
+      el.appendChild(regel('Voorzieningen daar', Math.round(wens.dekking * 100) + '% van ' +
+        Math.round(wens.doel * 100) + '%'));
+    }
     el.appendChild(Game.util.el('div', 'beschrijving',
       'Bouw dicht om het plein, en zorg dat elk huis een put, kapel of herberg binnen loopafstand heeft.'));
 
