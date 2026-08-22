@@ -74,7 +74,9 @@
       id: soort.id,
       resterend: soort.duur,
       rust: soort.rust,
-      boost: Math.min(F.MOREEL_MAX, (s.moreel || 0) + soort.moreel)
+      boost: Math.min(F.MOREEL_MAX, (s.moreel || 0) + soort.moreel),
+      /* Kept across feasts so the objective list can see you held one. */
+      aantal: ((s.feest && s.feest.aantal) || 0) + 1
     };
     s.moreel = s.feest.boost;
 

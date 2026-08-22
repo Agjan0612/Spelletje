@@ -606,6 +606,9 @@
 
     kasteel:     { muurH: 1.05, stijl: 'plat',   dakH: 0.1,  muur: '#b8b0a2', dak: '#5a3a30', kantelen: true, torens: true },
     stadsmuur:   { muurH: 0.55, stijl: 'geen',   dakH: 0,    muur: '#9aa0a6', kantelen: true },
+    poort:       { muurH: 0.8,  stijl: 'plat',   dakH: 0.12, muur: '#8f8578', dak: '#6a3b2c', kantelen: true },
+    haven:       { muurH: 0.34, stijl: 'schuin', dakH: 0.38, muur: '#b0a184', dak: '#3f5a6a', vlag: true, luifel: true },
+    oefenveld:   { muurH: 0.24, stijl: 'geen',   dakH: 0,    muur: '#a7a488', vlag: true },
     molen:       { muurH: 0.72, stijl: 'schuin', dakH: 0.44, smal: 0.62, muur: '#d5c7a4', dak: '#7c4b2e', wieken: true },
 
     steengroeve: { muurH: 0.34, stijl: 'schuin', dakH: 0.4,  muur: '#b0a894', dak: '#6a5a44' },

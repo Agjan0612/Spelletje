@@ -64,6 +64,17 @@
 
       raid: { fase: 'rust', timer: 90, kracht: 0, nummer: 0 },
 
+      /* The field army: how often it beat a raiding party, and whether a
+         sortie is ordered for the raid that is on its way. */
+      leger: { overwinningen: 0, uitval: false },
+
+      /* How compactly the town is built around its square (0..1, derived). */
+      samenhorigheid: 0,
+
+      /* The village register: named inhabitants, kept in step with the
+         headcount by core/dorpelingen.js. Flavour only, never authoritative. */
+      dorpelingen: [],
+
       /* Morale: the swing that raids, feasts, contracts and events write to.
          population.js reads it as part of the happiness target and lets it
          fade back to zero on its own. */
@@ -205,6 +216,33 @@
     s.bevolking.werkend = werkend;
     s.bevolking.soldaten = soldaten;
     s.bevolking.werkloos = Math.max(0, s.bevolking.totaal - werkend);
+
+    s.samenhorigheid = S.samenhorigheid(s);
+  };
+
+  /* How much the town reads as one whole rather than scattered outposts:
+     the share of buildings clustered around the town square. Rewards a
+     compact, lived-in village and feeds a happiness bonus. Plain 0..1. */
+  S.SAMEN_STRAAL = 8;
+  S.samenhorigheid = function (s) {
+    var plein = null;
+    for (var i = 0; i < s.gebouwen.length; i++) {
+      if (s.gebouwen[i].type === 'dorpsplein') { plein = s.gebouwen[i]; break; }
+    }
+    if (!plein) return 0;
+    var cx = plein.x + 1, cy = plein.y + 1, straal2 = S.SAMEN_STRAAL * S.SAMEN_STRAAL;
+    var totaal = 0, dichtbij = 0;
+    for (var j = 0; j < s.gebouwen.length; j++) {
+      var g = s.gebouwen[j];
+      if (!g.gebouwd || g.type === 'dorpsplein') continue;
+      var d = S.def(g);
+      totaal++;
+      var gx = g.x + (d.grootte - 1) / 2, gy = g.y + (d.grootte - 1) / 2;
+      var dx = gx - cx, dy = gy - cy;
+      if (dx * dx + dy * dy <= straal2) dichtbij++;
+    }
+    if (totaal < 3) return 0;   /* too small to speak of a town yet */
+    return Game.util.clamp(dichtbij / totaal, 0, 1);
   };
 
   /* Adds a resource, respecting the storage cap, and books it as gathered.

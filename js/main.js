@@ -214,6 +214,7 @@
     Game.core.handel.tick(s, dt);
     Game.core.opdrachten.tick(s, dt);
     Game.core.gebeurtenissen.tick(s, dt);
+    Game.core.dorpelingen.tick(s);
     Game.ui.quests.controleer(s);
     Game.core.ages.controleerOverwinning(s);
   }

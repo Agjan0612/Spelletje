@@ -155,6 +155,23 @@
       verbetering: { naar: 'bergfried', tijdperk: 3, kosten: { steen: 110, ijzer: 30 } },
       beschrijving: 'Uitkijkpost tegen rovers. Voegt 18 verdediging toe — het meest waard dicht bij waar de rovers binnenvallen.'
     },
+    {
+      id: 'haven', naam: 'Haven', emoji: '⚓', tijdperk: 2, grootte: 2,
+      kosten: { hout: 120, steen: 60 }, bouwtijd: 24, muur: '#b0a184', dak: '#3f5a6a',
+      banen: { aantal: 3, baan: 'schipper' },
+      maakt: { in: { hout: 0.06 }, uit: { munten: 0.26 } },
+      visserijBonus: 0.35, visserijStraal: 6,
+      tevredenheid: 4,
+      plaats: { nabij: { node: 'vis', straal: 2 } },
+      beschrijving: 'Kades aan het water. Schippers drijven handel over zee (munten) en vissershutten binnen 6 tegels vangen 35% meer.'
+    },
+    {
+      id: 'oefenveld', naam: 'Oefenveld', emoji: '🎯', tijdperk: 2, grootte: 2,
+      kosten: { hout: 70, steen: 40 }, bouwtijd: 18, muur: '#a7a488', dak: '#6a5a3a',
+      banen: { aantal: 4, baan: 'soldaat' },
+      verdPerWerker: 9,
+      beschrijving: 'Hier oefent de dorpsmilitie met boog en speer. Een vroeg begin van je leger, lang vóór de kazerne.'
+    },
 
     /* ================= Tijdperk 3 — Handelsstad ================= */
     {
@@ -184,6 +201,12 @@
       kosten: { steen: 45 }, bouwtijd: 6, muur: '#9aa0a6', dak: '#7e848a',
       verdediging: 6, dekking: { straal: 3 },
       beschrijving: 'Een muursegment. Beschermt vooral het stuk waar het staat — zet ze op de weg die rovers nemen.'
+    },
+    {
+      id: 'poort', naam: 'Stadspoort', emoji: '🚪', tijdperk: 3, grootte: 1,
+      kosten: { steen: 90, hout: 30, ijzer: 20 }, bouwtijd: 16, max: 4, muur: '#8f8578', dak: '#6a3b2c',
+      verdediging: 30, dekking: { straal: 4 },
+      beschrijving: 'Een zwaar bewaakte poort. Verreweg de sterkste muurschakel — zet hem pal op de route die de rovers nemen.'
     },
     {
       id: 'herberg', naam: 'Herberg', emoji: '🍺', tijdperk: 3, grootte: 1,

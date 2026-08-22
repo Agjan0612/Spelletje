@@ -18,6 +18,8 @@
     return [g.id, g.type, g.werkers, g.gebouwd ? 1 : 0, Math.round(g.voortgang * 4),
       g.uit ? 1 : 0, g.waarschuwing, s.bevolking.werkloos,
       Math.round(s.tevredenheid), s.seizoen, s.tijdperk,
+      Math.round((s.samenhorigheid || 0) * 100), s.bevolking.soldaten,
+      s.raid.fase, s.leger ? (s.leger.uitval ? 1 : 0) + ':' + s.leger.overwinningen : '-',
       Game.core.construction.kanVerbeteren(s, g).ok ? 1 : 0].join('|');
   }
 
@@ -154,9 +156,44 @@
       el.appendChild(Game.util.el('div', 'waarschuwing', '⚠️ ' + g.waarschuwing));
     }
 
+    if (g.type === 'dorpsplein') dorpsleven(el, s);
+
     verbeterBlok(el, s, g, d);
     el.appendChild(knoppen(s, g, d));
   };
+
+  /* The town square doubles as the seat of village life: how close-knit the
+     town is, and what your field army looks like. Feasts and the merchant
+     live in the Stadszaken card and the top bar. */
+  function dorpsleven(el, s) {
+    el.appendChild(Game.util.el('div', 'kop', '🤝 Dorpsleven'));
+    el.appendChild(regel('Samenhorigheid', Math.round((s.samenhorigheid || 0) * 100) + '%'));
+    el.appendChild(Game.util.el('div', 'beschrijving',
+      'Bouw dicht om het plein: een compact dorp is een gelukkiger dorp.'));
+
+    if (s.tijdperk < 2) return;
+
+    var leger = Game.core.raids.legerStatus(s);
+    el.appendChild(Game.util.el('div', 'kop', '⚔️ Leger'));
+    el.appendChild(regel('Legerkracht', leger.kracht));
+    el.appendChild(regel('Soldaten', leger.soldaten));
+    el.appendChild(regel('Bendes verslagen', leger.overwinningen));
+
+    if (Game.core.raids.uitvalMogelijk(s)) {
+      var rij = Game.util.el('div', 'knoprij');
+      var uit = Game.util.el('button', leger.uitval ? '' : 'primair',
+        leger.uitval ? '⚔️ Uitval bevolen — trek terug' : '⚔️ Uitval bevelen');
+      uit.addEventListener('click', function () {
+        Game.core.raids.zetUitval(s);
+        P.ververs(s, true);
+      });
+      rij.appendChild(uit);
+      el.appendChild(rij);
+    } else if (leger.kracht <= 0) {
+      el.appendChild(Game.util.el('div', 'beschrijving',
+        'Bouw een oefenveld, kazerne of kasteel en zet er soldaten op om een leger te vormen.'));
+    }
+  }
 
   /* The upgrade offer: a building that can grow into a bigger version of
      itself says so right here, with what it would become and what it costs. */

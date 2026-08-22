@@ -80,6 +80,10 @@
     s.opdracht = s.opdracht || { actief: null, rust: 200, gedaan: 0, gefaald: 0, laatste: null };
     s.gebeurtenis = s.gebeurtenis || { timer: 280, actief: null, ctx: null, gedaan: 0, laatste: null };
     s.onderzoek = s.onderzoek || {};
+    s.leger = s.leger || { overwinningen: 0, uitval: false };
+    if (typeof s.leger.overwinningen !== 'number') s.leger.overwinningen = 0;
+    s.leger.uitval = !!s.leger.uitval;
+    s.dorpelingen = Array.isArray(s.dorpelingen) ? s.dorpelingen : [];
     s.kaartmaat = s.kaartmaat || 'normaal';
     s.moeilijkheid = s.moeilijkheid || 'normaal';
     s.questsGedaan = s.questsGedaan || {};
