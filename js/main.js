@@ -40,6 +40,7 @@
     Game.ui.quests.init(spel);
     Game.ui.stad.init(spel);
     Game.ui.onderzoek.init(spel);
+    Game.ui.lagen.init(spel);
     Game.ui.overlay.init(spel);
     if (Game.render.minimap) Game.render.minimap.init(spel);
 
@@ -134,6 +135,51 @@
     Game.ui.panel.ververs(spel.state, true);
   };
 
+  /* ------------------------------------------------- ongedaan maken ------ */
+
+  /* A short memory of what was just put down, so a misclick costs nothing.
+     Kept out of Game.state on purpose: it is a comfort for the person at the
+     keyboard, not part of the town, and it has no business in a save. */
+  var ongedaan = [];
+  var ONGEDAAN_MAX = 20;
+
+  spel.onthoud = function (item) {
+    ongedaan.push(item);
+    if (ongedaan.length > ONGEDAAN_MAX) ongedaan.shift();
+  };
+
+  spel.ongedaan = function () {
+    var s = spel.state;
+    if (!s || !ongedaan.length) { Game.ui.toast('Niets om ongedaan te maken'); return; }
+    var item = ongedaan.pop();
+
+    if (item.weg) {
+      var t = Game.core.map.tegel(s.kaart, item.weg.x, item.weg.y);
+      if (t) {
+        /* Laying and lifting are the same action, so undoing either is the
+           other one — and legWeg already handles the refund both ways. */
+        Game.core.construction.legWeg(s, Game.config.gebouw('straat'), item.weg.x, item.weg.y);
+      }
+      Game.render.renderer.verversGebouwen(s);
+      Game.ui.toast('↩️ Straatje teruggedraaid');
+      return;
+    }
+
+    var g = Game.core.state.gebouw(s, item.gebouwId);
+    if (!g) { spel.ongedaan(); return; }        /* already gone — try the one before */
+    if (g.gebouwd) {
+      Game.ui.toast('⚠️ ' + Game.config.gebouw(g.type).naam + ' staat al — sloop hem in het paneel');
+      return;
+    }
+    var naam = Game.config.gebouw(g.type).naam;
+    Game.core.construction.annuleer(s, g);
+    if (spel.geselecteerd === g.id) spel.geselecteerd = null;
+    Game.render.renderer.verversGebouwen(s);
+    Game.ui.buildmenu.ververs(s, true);
+    Game.ui.panel.ververs(s, true);
+    Game.ui.toast('↩️ ' + naam + ' teruggedraaid');
+  };
+
   /* ------------------------------------------------------------- de loop -- */
 
   var vorigeTijd = 0;
@@ -209,12 +255,16 @@
     Game.core.construction.tick(s, dt);
     Game.core.economy.tick(s, dt);
     Game.core.population.tick(s, dt);
+    Game.core.demografie.tick(s, dt);
+    Game.core.standen.tick(s, dt);
     Game.core.raids.tick(s, dt);
     Game.core.feesten.tick(s, dt);
     Game.core.handel.tick(s, dt);
     Game.core.opdrachten.tick(s, dt);
     Game.core.gebeurtenissen.tick(s, dt);
-    Game.core.dorpelingen.tick(s);
+    Game.core.buren.tick(s, dt);
+    Game.core.arbeid.tick(s, dt);
+    Game.core.dorpelingen.tick(s, dt);
     Game.ui.quests.controleer(s);
     Game.core.ages.controleerOverwinning(s);
   }
@@ -326,8 +376,17 @@
 
       if (ev.key === 'Escape') {
         if (Game.ui.overlay.isOpen()) return;
+        if (Game.ui.lagen.uit()) return;
         if (spel.plaatsType) spel.kiesBouw(null);
         else { spel.geselecteerd = null; Game.ui.panel.ververs(spel.state); }
+      }
+      /* One key steps through the map overlays and back off again. */
+      if (ev.key.toLowerCase() === 'l' && !ev.shiftKey && !ev.ctrlKey && !ev.metaKey) {
+        Game.ui.lagen.volgende();
+      }
+      if (ev.key.toLowerCase() === 'z' && (ev.ctrlKey || ev.metaKey)) {
+        ev.preventDefault();
+        spel.ongedaan();
       }
       if (ev.key === ' ') {
         ev.preventDefault();
@@ -384,6 +443,8 @@
       if (!uitkomst.ok) {
         Game.ui.toast('⚠️ ' + uitkomst.reden, 1600);
       } else {
+        if (uitkomst.weg) spel.onthoud({ weg: { x: tegelPos.x, y: tegelPos.y } });
+        else if (uitkomst.gebouw) spel.onthoud({ gebouwId: uitkomst.gebouw.id });
         Game.render.renderer.verversGebouwen(s);
         Game.ui.buildmenu.ververs(s);
         /* Keep the building selected so you can place a row of houses; with
@@ -417,18 +478,30 @@
     var aantal = Math.max(Math.abs(lijn.x1 - lijn.x0), Math.abs(lijn.y1 - lijn.y0)) + 1;
     var gezet = 0;
 
+    /* A street may also be *lifted* by dragging over it, and lifting refunds
+       rather than costs — so let plaats() judge each tile instead of stopping
+       the whole row on an empty purse. */
+    var isWeg = !!Game.config.gebouw(spel.plaatsType).weg;
+
     for (var i = 0; i < aantal; i++) {
       var x = lijn.x0 + stapX * i, y = lijn.y0 + stapY * i;
-      if (!Game.core.state.kanBetalen(s, Game.config.gebouw(spel.plaatsType).kosten)) break;
-      if (Game.core.construction.plaats(s, spel.plaatsType, x, y).ok) gezet++;
+      if (!isWeg && !Game.core.state.kanBetalen(s, Game.config.gebouw(spel.plaatsType).kosten)) break;
+      var r = Game.core.construction.plaats(s, spel.plaatsType, x, y);
+      if (r.ok) {
+        gezet++;
+        if (r.weg) spel.onthoud({ weg: { x: x, y: y } });
+        else if (r.gebouw) spel.onthoud({ gebouwId: r.gebouw.id });
+      }
     }
 
     if (gezet) {
       Game.render.renderer.verversGebouwen(s);
       Game.ui.buildmenu.ververs(s, true);
-      Game.ui.toast('🏗️ ' + Game.util.telwoord(gezet, 'gebouw geplaatst', 'gebouwen geplaatst'));
+      Game.ui.toast(isWeg
+        ? '🛣️ ' + Game.util.telwoord(gezet, 'tegel straat', 'tegels straat')
+        : '🏗️ ' + Game.util.telwoord(gezet, 'gebouw geplaatst', 'gebouwen geplaatst'));
     }
-    if (!Game.core.state.kanBetalen(s, Game.config.gebouw(spel.plaatsType).kosten)) spel.kiesBouw(null);
+    if (!isWeg && !Game.core.state.kanBetalen(s, Game.config.gebouw(spel.plaatsType).kosten)) spel.kiesBouw(null);
   }
 
   /* Little label that follows the cursor while placing. */

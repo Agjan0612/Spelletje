@@ -511,3 +511,97 @@ ul.overzicht li.slecht { border-left-color: var(--bloed); }
   #logbox { width: 232px; }
   #log-toggle { left: 248px; }
 }
+
+/* ===== Kaartlagen ==========================================================
+   De balk met kaartlagen staat onderin het speelveld, tussen het logboek
+   (linksonder) en de minimap (rechtsonder) in, met de legenda erboven. */
+#lagenbalk {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: 10px;
+  z-index: 10; display: flex; gap: 4px;
+  background: rgba(26, 18, 11, .82); padding: 4px;
+  border: 1px solid var(--rand); border-radius: 6px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, .4);
+}
+.laagknop {
+  display: flex; align-items: center; gap: 5px;
+  padding: 4px 9px; font-size: 12px; cursor: pointer;
+  background: var(--hout); color: var(--perkament-dof);
+  border: 1px solid var(--rand); border-radius: 4px;
+}
+.laagknop:hover { background: var(--hout-licht); color: var(--perkament); }
+.laagknop.actief {
+  background: var(--goud); color: #2b1d12; font-weight: 700;
+  border-color: var(--goud-licht);
+}
+.laagknop .ico { font-size: 14px; line-height: 1; }
+
+#lagen-legenda {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: 50px;
+  z-index: 10; max-width: 540px; padding: 6px 10px;
+  background: rgba(26, 18, 11, .9); border: 1px solid var(--rand);
+  border-left: 3px solid var(--goud); border-radius: 0 5px 5px 0;
+  font-size: 12px; line-height: 1.4; color: var(--perkament-dof);
+}
+#lagen-legenda b { color: var(--goud-licht); }
+#lagen-legenda .schaal { display: inline-flex; gap: 0; margin-left: 8px; vertical-align: middle; }
+#lagen-legenda .schaal i { width: 22px; height: 8px; display: inline-block; }
+#lagen-legenda .schaal .slecht { background: rgba(214, 60, 70, .8); border-radius: 3px 0 0 3px; }
+#lagen-legenda .schaal .matig  { background: rgba(214, 190, 70, .8); }
+#lagen-legenda .schaal .goed   { background: rgba(64, 190, 70, .8); border-radius: 0 3px 3px 0; }
+
+/* Op smalle schermen zou de balk over het logboek heen vallen. */
+@media (max-width: 900px) {
+  .laagknop .lbl { display: none; }
+  #lagen-legenda { max-width: 70vw; }
+}
+
+/* ===== De roversbalk =======================================================
+   Tijdens de 45 seconden waarschuwing (en tijdens een beleg) staan hier de
+   opmars, wat je torens er al af hebben geschoten, en de vier dingen die je
+   eraan kunt doen. */
+.raidbalk {
+  margin: 5px 0 3px; height: 5px; border-radius: 3px;
+  background: rgba(0, 0, 0, .35); overflow: hidden;
+}
+.raidbalk i {
+  display: block; height: 100%;
+  background: linear-gradient(90deg, #a63a2a, #d8683f);
+  transition: width .25s linear;
+}
+.raidknoppen { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.raidknoppen button {
+  flex: 1 1 auto; padding: 4px 8px; font-size: 11px; cursor: pointer;
+  background: var(--hout); color: var(--perkament);
+  border: 1px solid var(--rand); border-radius: 4px; white-space: nowrap;
+}
+.raidknoppen button:hover:not(:disabled) { background: var(--hout-licht); border-color: var(--goud); }
+.raidknoppen button.armed { background: var(--bloed); border-color: #d8683f; font-weight: 700; }
+.raidknoppen button:disabled { opacity: .45; cursor: not-allowed; }
+
+/* Een buurstad in de Stadszaken-kaart. */
+.stadblok.buur { border-left-color: #7fa8c9; }
+.stadregel.klein { font-size: 11px; opacity: .75; }
+.scenariorij .keuzeknop { min-width: 120px; }
+
+/* Arbeidsbeleid op het dorpsplein: één rij per soort werk. */
+.arbeidrij {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 6px; padding: 2px 0; font-size: 12px;
+}
+.arbeidnaam { color: var(--perkament-dof); }
+.arbeidknoppen { display: flex; gap: 2px; }
+.arbeidknoppen button {
+  min-width: 26px; padding: 2px 4px; font-size: 11px; line-height: 1.1;
+  background: var(--hout); color: var(--perkament-dof);
+  border: 1px solid var(--rand); border-radius: 3px; cursor: pointer;
+}
+.arbeidknoppen button:hover { background: var(--hout-licht); color: var(--perkament); }
+.arbeidknoppen button.gekozen {
+  background: var(--goud); color: #2b1d12; font-weight: 700; border-color: var(--goud-licht);
+}
+
+/* De problemenlijst in de Stadszaken-kaart. */
+.stadblok.problemen { border-left-color: var(--bloed); }
+.stadregel.probleem { line-height: 1.35; }
+.stadregel.klikbaar { cursor: pointer; text-decoration: underline dotted transparent; }
+.stadregel.klikbaar:hover { color: var(--goud-licht); text-decoration-color: var(--goud); }

@@ -96,8 +96,41 @@
     return lijst;
   };
 
+  /* A scenario has its own ending: its own goal, its own way to lose, and
+     sometimes a clock. Checked before the standard victory so a scenario
+     never quietly falls back on "build a cathedral". */
+  A.controleerScenario = function (s) {
+    if (s.gewonnen || s.scenarioAf) return false;
+    var sc = Game.config.scenario(s.scenario);
+    if (!sc || !sc.doel) return false;
+
+    if (sc.doel.klaar(s)) {
+      s.scenarioAf = true;
+      s.gewonnen = true;
+      Game.ui.log.schrijf(s, '👑 ' + sc.emoji + ' ' + sc.naam + ' volbracht!', 'goed');
+      Game.ui.overlay.overwinning(s, sc);
+      if (Game.ui.audio) Game.ui.audio.zege();
+      return true;
+    }
+
+    var verloren = (sc.doel.faal && sc.doel.faal(s)) ||
+      (sc.tijdslimiet && s.jaar > sc.tijdslimiet);
+    if (verloren) {
+      s.scenarioAf = true;
+      s.scenarioVerloren = true;
+      Game.ui.log.schrijf(s, '⌛ ' + sc.naam + ' is niet gelukt. Je kunt gewoon doorspelen.', 'slecht');
+      Game.ui.overlay.overwinning(s, sc, true);
+      return true;
+    }
+    return false;
+  };
+
   A.controleerOverwinning = function (s) {
+    if (A.controleerScenario(s)) return;
     if (s.gewonnen || s.tijdperk < 4) return;
+    /* A scenario with its own goal does not also win the standard way. */
+    var sc2 = Game.config.scenario(s.scenario);
+    if (sc2 && sc2.doel) return;
     var lijst = A.eindDoelLijst(s);
     for (var i = 0; i < lijst.length; i++) if (!lijst[i].klaar) return;
     s.gewonnen = true;

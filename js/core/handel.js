@@ -80,7 +80,8 @@
     });
 
     var arm = kandidaten.slice().sort(function (a, b) {
-      return (s.res[a] / (s.capaciteit || 1)) - (s.res[b] / (s.capaciteit || 1));
+      return (s.res[a] / (Game.core.state.plafond(s, a) || 1)) -
+             (s.res[b] / (Game.core.state.plafond(s, b) || 1));
     });
     var rijk = arm.slice().reverse();
 
@@ -135,7 +136,7 @@
     var naam = Game.config.resources[a.res].naam.toLowerCase();
 
     if (a.soort === 'verkoopt') {
-      var ruimte = s.capaciteit - s.res[a.res];
+      var ruimte = Game.core.state.plafond(s, a.res) - s.res[a.res];
       if (ruimte < a.aantal * 0.5) {
         Game.ui.toast('📦 Je opslag voor ' + naam + ' is te vol voor deze koop');
         return false;

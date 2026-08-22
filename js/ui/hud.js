@@ -20,13 +20,22 @@
 
     bouwResourceRij();
 
-    /* Delegated so the sortie toggle keeps working through the ~1x/sec
-       rebuilds of the countdown. */
+    /* Bound once, here — the countdown rebuilds its innerHTML several times a
+       second, so the handler has to be delegated rather than per-button. */
     els.raid.addEventListener('click', function (ev) {
-      if (!ev.target.closest('#raid-sally')) return;
-      if (!spel.state) return;
-      Game.core.raids.zetUitval(spel.state);
-      H.ververs(spel.state);
+      var knop = ev.target.closest('[data-raid]');
+      if (!knop || !spel.state) return;
+      var s = spel.state;
+      var RA = Game.core.raids;
+      switch (knop.dataset.raid) {
+        case 'uitval':      RA.zetUitval(s); break;
+        case 'evacuatie':   RA.zetEvacuatie(s); break;
+        case 'burgerwacht': RA.zetBurgerwacht(s); break;
+        case 'schatting':
+          if (!RA.betaalSchatting(s)) Game.ui.toast('⚠️ Je hebt niet genoeg munten voor de schatting');
+          break;
+      }
+      H.ververs(s);
     });
 
     var knoppen = document.querySelectorAll('#speeds .spd');
@@ -73,10 +82,11 @@
         e.delta.textContent = '';
       }
 
-      e.wrap.classList.toggle('vol', waarde >= s.capaciteit - 0.5);
+      var plafond = Game.core.state.plafond(s, e.id);
+      e.wrap.classList.toggle('vol', waarde >= plafond - 0.5);
       e.wrap.classList.toggle('leeg', waarde < 1 && stroom < 0);
       e.wrap.title = Game.config.resources[id].naam + ': ' +
-        Math.floor(waarde) + ' / ' + s.capaciteit;
+        Math.floor(waarde) + ' / ' + plafond;
     });
 
     els.pop.textContent = s.bevolking.totaal + ' (' + s.bevolking.werkloos + ' vrij)';
@@ -103,39 +113,76 @@
     var raid = Game.core.raids.statusTekst(s);
     if (raid) {
       els.raid.classList.remove('hidden');
-      /* Effective defence is what actually meets the raiders in their corridor;
-         if it is below the town total, show both so the player learns why. */
-      var verd = raid.verdediging < raid.totaal
-        ? raid.verdediging + ' <span style="opacity:.7">(van ' + raid.totaal + ')</span>'
-        : raid.verdediging;
-      var html = '⚔️ Rovers vallen aan over ' + raid.seconden + 's' +
-        '<span class="klein">Hun kracht: ~' + raid.kracht +
-        ' · verdediging op hun route: ' + verd +
-        (raid.leger > 0 ? ' · leger: ' + raid.leger : '') + '</span>';
-      /* Your army can meet them in the field instead of holding the walls. */
-      if (raid.kanUitval) {
-        html += '<button id="raid-sally" class="' + (raid.uitval ? 'armed' : '') + '">' +
-          (raid.uitval ? '⚔️ Uitval bevolen — trek terug' : '⚔️ Uitval bevelen (val aan)') + '</button>';
-      }
-      els.raid.innerHTML = html;
+      var nieuw = raid.fase === 'beleg' ? belegHtml(raid) : aanvalHtml(raid);
+      /* Only touch the DOM when something actually changed: the buttons must
+         not be ripped out from under the cursor five times a second. */
+      if (nieuw !== els.raidHtml) { els.raid.innerHTML = nieuw; els.raidHtml = nieuw; }
     } else {
+      els.raidHtml = '';
       els.raid.classList.add('hidden');
     }
 
-    /* Delegated so the sortie toggle keeps working through the ~1x/sec
-       rebuilds of the countdown. */
-    els.raid.addEventListener('click', function (ev) {
-      if (!ev.target.closest('#raid-sally')) return;
-      if (!spel.state) return;
-      Game.core.raids.zetUitval(spel.state);
-      H.ververs(spel.state);
-    });
-
+    /* The raid buttons are bound once in init(); binding them here would add
+       a fresh listener on every refresh, so a single click would fire dozens
+       of times. */
     var knoppen = document.querySelectorAll('#speeds .spd');
     Array.prototype.forEach.call(knoppen, function (k) {
       k.classList.toggle('active', parseInt(k.dataset.speed, 10) === s.snelheid);
     });
   };
+
+  /* The 45 seconds while a band is on its way: how far they have come, how
+     much your towers already took off them, and the four things you can do
+     about it. */
+  function aanvalHtml(raid) {
+    var html = '⚔️ ' + raid.naam + ' valt aan over ' + raid.seconden + 's';
+
+    html += '<div class="raidbalk"><i style="width:' +
+      Math.round(raid.voortgang * 100) + '%"></i></div>';
+
+    html += '<span class="klein">Nog ~' + raid.kracht + ' man';
+    if (raid.afgeslagen > 0) html += ' <b>(−' + raid.afgeslagen + ' door je torens)</b>';
+    html += ' · jouw verdediging: ' + raid.verdediging;
+    if (raid.wachtendeDekking > 0) html += ' · dekking die nog moet vuren: ' + raid.wachtendeDekking;
+    html += '</span>';
+
+    html += '<div class="raidknoppen">';
+    if (raid.kanUitval) {
+      html += knop('uitval', raid.uitval, raid.uitval ? '⚔️ Uitval bevolen' : '⚔️ Uitval',
+        'Trek het veld in. Win je, dan is de bende vernietigd; verlies je, dan sta je zonder mannen op de muur.');
+    }
+    html += knop('evacuatie', raid.evacuatie, '🏃 Ontruimen',
+      'De buitenwijken naar binnen. Daar ligt het werk stil, maar er valt veel minder te roven en er komt niemand om.');
+    html += knop('burgerwacht', raid.burgerwacht,
+      '🔱 Burgerwacht' + (raid.burgerwachtKracht ? ' (+' + raid.burgerwachtKracht + ')' : ''),
+      'Iedereen zonder werk op de muur. Er wordt niets gebouwd zolang ze daar staan.');
+    html += knop('schatting', false, '💰 Schatting ' + raid.schatting,
+      'Koop ze af. Ze trekken meteen weg — en komen sneller en sterker terug.',
+      !raid.kanSchatting);
+    html += '</div>';
+    return html;
+  }
+
+  function belegHtml(raid) {
+    var html = '🏕️ ' + raid.naam + ' belegert je stad — nog ' + raid.seconden + 's';
+    html += '<span class="klein">Hun kracht: ~' + raid.kracht +
+      ' · jouw leger: ' + raid.leger +
+      ' · alles buiten de stad ligt stil</span>';
+    html += '<div class="raidknoppen">';
+    if (raid.kanUitval) {
+      html += knop('uitval', raid.uitval, '⚔️ Beleg breken',
+        'Val het kamp aan. Is je leger sterk genoeg, dan is het beleg meteen voorbij.');
+    }
+    html += knop('schatting', false, '💰 Schatting ' + raid.schatting,
+      'Koop het beleg af.', !raid.kanSchatting);
+    html += '</div>';
+    return html;
+  }
+
+  function knop(id, actief, tekst, uitleg, uit) {
+    return '<button data-raid="' + id + '" title="' + uitleg + '"' +
+      (uit ? ' disabled' : '') + ' class="' + (actief ? 'armed' : '') + '">' + tekst + '</button>';
+  }
 
   function tevredenheidUitleg(s) {
     var d = Game.core.population.tevredenheidDetail(s);
@@ -145,7 +192,12 @@
       'Voedselvoorraad ' + n(d.voedsel) + '\n' +
       'Afwisseling in eten ' + n(d.variatie) + '\n' +
       'Woonruimte ' + n(d.wonen) + '\n' +
-      'Voorzieningen ' + n(d.diensten) + '\n' +
+      'Voorzieningen ' + n(d.diensten) + ' (' + Math.round((d.dekking || 0) * 100) + '% van je huizen bereikt ze)\n' +
+      'Aantrekkelijke buurt ' + n(d.sfeer) + '\n' +
+      'Kinderen en ouderen ' + n(d.generaties) + '\n' +
+      (d.stand ? 'Standen krijgen niet wat ze vragen ' + n(d.stand) + '\n' : '') +
+      (d.koude ? 'GEEN BRANDHOUT ' + n(d.koude) + '\n' : '') +
+      (d.tarief ? 'Belastingtarief ' + n(d.tarief) + '\n' : '') +
       'Samenhorigheid ' + n(d.samen) + '\n' +
       (d.onderzoek ? 'Onderzoek ' + n(d.onderzoek) + '\n' : '') +
       (d.honger ? 'HONGER ' + n(d.honger) + '\n' : '') +

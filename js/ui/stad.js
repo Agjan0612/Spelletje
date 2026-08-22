@@ -45,6 +45,18 @@
     (s.handel.aanbod || []).forEach(function (a, i) {
       stukken.push(i + (a.gedaan ? 'x' : (Game.core.handel.kanHandelen(s, i) ? 'k' : 'n')));
     });
+    /* Neighbours only reshape the card when a request appears or a route is
+       opened or cut — the countdowns inside it tick without a rebuild. */
+    (s.buren || []).forEach(function (b) {
+      stukken.push(b.id + (b.route ? 'r' : '-') + (b.verzoek ? 'v' + b.verzoek.res : '') +
+        (b.onderbroken > 0 ? 'x' : ''));
+    });
+    stukken.push(s.tijdperk);
+    /* Only the shape of the problem list, not the numbers inside it: the
+       card must not be rebuilt out from under the cursor every tick. */
+    var probl = S.problemen(s);
+    stukken.push(probl.length + ':' + probl.slice(0, S.PROBLEMEN_MAX)
+      .map(function (p) { return p.tekst; }).join('/'));
     return stukken.join('|');
   }
 
@@ -75,6 +87,95 @@
     if (s.feest.resterend > 0) bouwFeest(s);
     if (s.handel.fase === 'aanwezig') bouwHandel(s);
     if (s.opdracht.actief) bouwOpdracht(s);
+    bouwBuren(s);
+    bouwProblemen(s);
+  }
+
+  /* The towns beyond the map edge: a request to answer, a route to open, or
+     a route already running. Only shown once there is something to do with
+     them, so the card does not fill up with idle rows. */
+  function bouwBuren(s) {
+    if (s.tijdperk < 2 || !s.buren || !s.buren.length) return;
+    var lijst = Game.core.buren.overzicht(s);
+
+    lijst.forEach(function (b) {
+      var heeftIets = b.verzoek || b.route || b.kanRoute.ok || b.onderbroken;
+      if (!heeftIets) return;
+
+      var el = blok('buur', b.soort.emoji + ' ' + b.naam);
+      el.appendChild(Game.util.el('div', 'stadregel',
+        b.soort.naam + ' · aanzien ' + b.reputatie + '/100'));
+
+      if (b.onderbroken) {
+        var wacht = Game.util.el('div', 'stadregel slecht');
+        el.appendChild(wacht);
+        volg(wacht, function (st) {
+          var nu = (st.buren || []).filter(function (x) { return x.id === b.id; })[0];
+          return '🐎 De weg is onveilig — nog ' +
+            tijdTekst(nu ? nu.onderbroken : 0);
+        });
+      } else if (b.route) {
+        el.appendChild(Game.util.el('div', 'stadregel' + (b.leegloop ? ' slecht' : ''),
+          b.leegloop
+            ? '⚠️ Je levert te weinig ' + Game.config.resources[b.soort.vraagt].naam.toLowerCase() +
+              ' — de karren rijden half leeg'
+            : '🐎 Route loopt: ' + b.opbrengst + ' ' +
+              Game.config.resources[b.soort.levert].naam.toLowerCase() + '/min'));
+      }
+
+      if (b.verzoek) {
+        el.appendChild(Game.util.el('div', 'stadregel', b.verzoek.tekst));
+        var klok = Game.util.el('div', 'stadregel klein');
+        el.appendChild(klok);
+        volg(klok, function (st) {
+          var nu = (st.buren || []).filter(function (x) { return x.id === b.id; })[0];
+          return nu && nu.verzoek ? 'Nog ' + tijdTekst(nu.verzoek.resterend) : '';
+        });
+
+        var rij = Game.util.el('div', 'knoprij');
+        var kan = s.res[b.verzoek.res] >= b.verzoek.aantal;
+        var help = Game.util.el('button', kan ? 'primair' : '', '🤝 Helpen');
+        help.disabled = !kan;
+        help.addEventListener('click', function () {
+          var doel = echteBuur(spel.state, b.id);
+          if (doel) Game.core.buren.help(spel.state, doel);
+          S.ververs(spel.state, true);
+        });
+        var nee = Game.util.el('button', '', '🚪 Afwijzen');
+        nee.addEventListener('click', function () {
+          var doel = echteBuur(spel.state, b.id);
+          if (doel) Game.core.buren.weiger(spel.state, doel);
+          S.ververs(spel.state, true);
+        });
+        rij.appendChild(help); rij.appendChild(nee);
+        el.appendChild(rij);
+      }
+
+      if (!b.route && b.kanRoute.ok) {
+        var kosten = Game.config.buren.routeKosten;
+        var prijs = Object.keys(kosten).map(function (r) {
+          return Game.config.resources[r].emoji + ' ' + kosten[r];
+        }).join(' ');
+        var open = Game.util.el('button', 'primair', '🐎 Handelsroute openen (' + prijs + ')');
+        open.title = 'Kost eenmalig een wagen en een beurs, en levert daarna elke dag ' +
+          Game.config.resources[b.soort.levert].naam.toLowerCase() + ' en munten op — ' +
+          'zolang jij ' + Game.config.resources[b.soort.vraagt].naam.toLowerCase() + ' blijft leveren.';
+        open.addEventListener('click', function () {
+          var doel = echteBuur(spel.state, b.id);
+          if (doel) Game.core.buren.openRoute(spel.state, doel);
+          S.ververs(spel.state, true);
+        });
+        var rij2 = Game.util.el('div', 'knoprij');
+        rij2.appendChild(open);
+        el.appendChild(rij2);
+      }
+    });
+  }
+
+  /* overzicht() hands out snapshots; the actions need the real record. */
+  function echteBuur(s, id) {
+    for (var i = 0; i < (s.buren || []).length; i++) if (s.buren[i].id === id) return s.buren[i];
+    return null;
   }
 
   function tijdTekst(sec) {
@@ -264,6 +365,87 @@
     }, [{ tekst: '← Terug', primair: true, actie: function () { Game.ui.overlay.sluit(); } }]);
   };
 
+  /* ------------------------------------------------------------ problemen */
+
+  /* The log scrolls away and the overview is behind a button, so the things
+     that are actually stuck were easy to miss. This is the short version:
+     at most three, sorted by urgency, and clicking one takes you there. */
+  S.PROBLEMEN_MAX = 3;
+
+  S.problemen = function (s) {
+    var lijst = [];
+
+    var dagen = Game.core.population.voedselDagen(s);
+    if (dagen < 3 && s.bevolking.totaal > 3) {
+      lijst.push({ ernst: 3, tekst: '🍞 Nog ' + dagen.toFixed(1) + ' dagen voedsel' });
+    }
+    if (s.koud) {
+      lijst.push({ ernst: 3, tekst: '🥶 Geen brandhout — je dorpelingen zitten in de kou' });
+    }
+    if (s.voedselTekort > 1e-6) {
+      lijst.push({ ernst: 3, tekst: '💀 Er wordt honger geleden' });
+    }
+
+    /* Buildings that are stuck, each with the spot to jump to. */
+    for (var i = 0; i < s.gebouwen.length; i++) {
+      var g = s.gebouwen[i];
+      if (!g.gebouwd || g.uit) continue;
+      var d = Game.core.state.def(g);
+      if (d.banen && g.werkers === 0) {
+        lijst.push({ ernst: 1, tekst: '👥 ' + d.naam + ' staat zonder werkers', x: g.x, y: g.y });
+      } else if (g.waarschuwing) {
+        lijst.push({ ernst: 2, tekst: '⚠️ ' + d.naam + ': ' + g.waarschuwing, x: g.x, y: g.y });
+      }
+    }
+
+    var vol = Game.config.resourceOrder.filter(function (r) {
+      return s.res[r] >= Game.core.state.plafond(s, r) - 0.5;
+    });
+    if (vol.length) {
+      lijst.push({
+        ernst: 2,
+        tekst: '📦 Opslag vol: ' + vol.map(function (r) { return Game.config.resources[r].naam; }).join(', ')
+      });
+    }
+
+    if (s.bevolking.ruimte - s.bevolking.totaal <= 0 && s.bevolking.totaal > 4) {
+      lijst.push({ ernst: 1, tekst: '🛏️ Geen bed vrij — je dorp kan niet groeien' });
+    }
+
+    lijst.sort(function (a, b) { return b.ernst - a.ernst; });
+    return lijst;
+  };
+
+  function bouwProblemen(s) {
+    var lijst = S.problemen(s);
+    if (!lijst.length) return;
+
+    var el = blok('problemen', '❗ Vraagt aandacht');
+    lijst.slice(0, S.PROBLEMEN_MAX).forEach(function (p) {
+      var regel = Game.util.el('div', 'stadregel probleem' + (p.ernst >= 3 ? ' slecht' : ''));
+      regel.textContent = p.tekst;
+      if (p.x !== undefined) {
+        regel.classList.add('klikbaar');
+        regel.title = 'Klik om er in beeld naartoe te gaan';
+        regel.addEventListener('click', function () {
+          spel.cam.centreerOpTegel(p.x, p.y);
+          spel.cam.begrens(spel.state.kaart);
+          var tegel = Game.core.map.tegel(spel.state.kaart, p.x, p.y);
+          if (tegel && tegel.b) {
+            spel.geselecteerd = tegel.b;
+            Game.ui.panel.ververs(spel.state, true);
+          }
+        });
+      }
+      el.appendChild(regel);
+    });
+    if (lijst.length > S.PROBLEMEN_MAX) {
+      var meer = Game.util.el('div', 'stadregel klein',
+        'en nog ' + (lijst.length - S.PROBLEMEN_MAX) + ' — zie 📋 Overzicht');
+      el.appendChild(meer);
+    }
+  }
+
   /* ------------------------------------------------------------- overzicht */
 
   /* Everything that is stuck, in one list. The per-building warnings already
@@ -314,7 +496,9 @@
     if (uit) regels.push({ soort: 'let-op', tekst: '⏸ ' + uit + ' gebouw(en) handmatig stilgelegd' });
     if (inAanbouw) regels.push({ soort: '', tekst: '🏗️ ' + inAanbouw + ' gebouw(en) in aanbouw' });
 
-    var vol = Game.config.resourceOrder.filter(function (r) { return s.res[r] >= s.capaciteit - 0.5; });
+    var vol = Game.config.resourceOrder.filter(function (r) {
+      return s.res[r] >= Game.core.state.plafond(s, r) - 0.5;
+    });
     if (vol.length) {
       regels.push({
         soort: 'let-op',
