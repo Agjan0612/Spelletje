@@ -54,7 +54,9 @@
       if (d.wint) {
         var w = d.wint;
         var tempo = w.tempo * g.werkers * mult * s.bonus.mijnbouw;
+        if (Game.config.resources[w.res].voedsel) tempo *= (s.bonus.voedsel || 1);
         if (d.seizoensgevoelig) tempo *= seizoen.factor(s, 'jacht');
+        if (g.type === 'vissershut') tempo *= havenBonus(s, g);
 
         var wil = tempo * dt;
         var gehaald = 0;
@@ -109,7 +111,8 @@
               flux[inRes2] -= op / dt;
             }
             for (var uitRes in d.maakt.uit) {
-              var maak = d.maakt.uit[uitRes] * factor * deel * dt;
+              var voedselBonus = Game.config.resources[uitRes].voedsel ? (s.bonus.voedsel || 1) : 1;
+              var maak = d.maakt.uit[uitRes] * factor * deel * dt * voedselBonus;
               var werkelijk = Game.core.state.voegToe(s, uitRes, maak);
               flux[uitRes] += werkelijk / dt;
             }
@@ -154,6 +157,21 @@
       var dx = g.x - boerderij.x, dy = g.y - boerderij.y;
       if (dx * dx + dy * dy <= d.boerderijStraal * d.boerderijStraal) {
         bonus = Math.max(bonus, 1 + d.boerderijBonus);
+      }
+    }
+    return bonus;
+  }
+
+  /* A harbour within range makes nearby fishing huts land a bigger catch. */
+  function havenBonus(s, vissershut) {
+    var bonus = 1;
+    for (var i = 0; i < s.gebouwen.length; i++) {
+      var g = s.gebouwen[i];
+      if (g.type !== 'haven' || !g.gebouwd || g.uit) continue;
+      var d = Game.core.state.def(g);
+      var dx = g.x - vissershut.x, dy = g.y - vissershut.y;
+      if (dx * dx + dy * dy <= d.visserijStraal * d.visserijStraal) {
+        bonus = Math.max(bonus, 1 + d.visserijBonus);
       }
     }
     return bonus;

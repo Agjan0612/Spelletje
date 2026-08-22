@@ -76,13 +76,46 @@
     {
       id: 'verdediging',
       tekst: 'Bouw een Wachttoren voordat de rovers komen',
-      hint: 'Vanaf tijdperk 2 duiken er bandieten op.',
+      hint: 'Vanaf tijdperk 2 duiken er bandieten op. Zet hem op de route die ze nemen.',
       klaar: function (s) { return telGebouw(s, 'wachttoren') >= 1; }
+    },
+    {
+      id: 'haven',
+      tekst: 'Bouw een Haven aan het water',
+      hint: 'Een haven drijft handel over zee en laat vissershutten dichtbij meer vangen.',
+      klaar: function (s) { return telGebouw(s, 'haven') >= 1; },
+      beloning: { munten: 40 }
+    },
+    {
+      id: 'leger',
+      tekst: 'Vorm een leger op een Oefenveld',
+      hint: 'Bouw een oefenveld en zet er soldaten op. Een leger kan rovers verslaan in plaats van alleen tegenhouden.',
+      klaar: function (s) { return telGebouw(s, 'oefenveld') >= 1 && (s.bevolking.soldaten || 0) >= 1; }
+    },
+    {
+      id: 'feest',
+      tekst: 'Geef een feest in je dorp',
+      hint: 'Klik op de 🎉-knop rechtsboven en kies een feest. Het tilt het humeur van het hele dorp op.',
+      klaar: function (s) { return !!(s.feest && s.feest.aantal >= 1); }
     },
     {
       id: 'tijdperk3',
       tekst: 'Bereik tijdperk 3: de Handelsstad',
       klaar: function (s) { return s.tijdperk >= 3; }
+    },
+    {
+      id: 'rovers_verslagen',
+      tekst: 'Versla een roversbende met je leger',
+      hint: 'Met genoeg legerkracht win je beslissend — of beveel een uitval tijdens de aanval.',
+      klaar: function (s) { return !!(s.leger && s.leger.overwinningen >= 1); },
+      beloning: { munten: 60 }
+    },
+    {
+      id: 'samen',
+      tekst: 'Bouw een hecht dorp (70% samenhorigheid)',
+      hint: 'Bouw dicht om het dorpsplein heen in plaats van verspreid over de kaart.',
+      klaar: function (s) { return (s.samenhorigheid || 0) >= 0.7; },
+      beloning: { munten: 40 }
     },
     {
       id: 'gereedschap',

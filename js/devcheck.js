@@ -35,6 +35,18 @@
       if (d.banen && !Game.config.jobs[d.banen.baan]) {
         fouten.push(d.id + ': onbekende baan ' + d.banen.baan);
       }
+      if (d.verbetering) {
+        var doel = Game.config.gebouw(d.verbetering.naar);
+        if (!doel) {
+          fouten.push(d.id + ': verbetert naar onbekend gebouw ' + d.verbetering.naar);
+        } else {
+          if (!doel.verborgen) fouten.push(d.id + ': verbeterdoel ' + doel.id + ' hoort verborgen te zijn');
+          if (doel.grootte !== d.grootte) {
+            fouten.push(d.id + ': verbeterdoel ' + doel.id + ' heeft een andere voetafdruk');
+          }
+          controleerResources(fouten, d.id + '.verbetering.kosten', d.verbetering.kosten, res);
+        }
+      }
     });
 
     /* Every age requirement must be reachable with what is unlocked by then. */

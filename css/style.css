@@ -141,8 +141,17 @@ button {
   display: flex; flex-direction: column; gap: 10px;
   max-height: calc(100% - 20px); overflow-y: auto;
   z-index: 10;
+  scrollbar-width: thin;
 }
+#right-col::-webkit-scrollbar { width: 8px; }
+#right-col::-webkit-scrollbar-thumb { background: var(--hout-licht); border-radius: 4px; }
+#right-col::-webkit-scrollbar-track { background: transparent; }
 
+.advies {
+  font-size: 12px; line-height: 1.35; margin: 0 0 8px; padding: 7px 9px;
+  background: rgba(196, 160, 90, .14); border-left: 3px solid var(--goud);
+  border-radius: 5px; color: var(--perkament);
+}
 #age-reqs, #quest-list { list-style: none; margin: 0; padding: 0; font-size: 12.5px; }
 #age-reqs li, #quest-list li {
   display: flex; gap: 6px; align-items: flex-start;
@@ -162,6 +171,16 @@ button {
   0%, 100% { box-shadow: 0 0 0 rgba(215, 169, 75, 0); }
   50% { box-shadow: 0 0 14px rgba(215, 169, 75, .85); }
 }
+
+/* Dorpsboek: de inwonerslijst in het menu */
+ul.dorpsboek { list-style: none; margin: 8px 0 0; padding: 0; max-height: 44vh; overflow-y: auto; }
+ul.dorpsboek li {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 5px 2px; border-bottom: 1px solid var(--rand); font-size: 13px;
+}
+ul.dorpsboek .naam { font-weight: 600; color: var(--perkament); flex: 1; }
+ul.dorpsboek .baan { color: var(--goud-licht); }
+ul.dorpsboek .sinds { color: var(--perkament-dof); font-size: 11px; min-width: 92px; text-align: right; }
 
 /* Selectiepaneel links */
 #panel {
@@ -201,6 +220,14 @@ button {
 .waarschuwing { color: #e8a37a; font-size: 12px; margin-top: 6px; line-height: 1.35; }
 
 /* Log linksonder */
+#log-toggle {
+  position: absolute; left: 346px; bottom: 10px; z-index: 10;
+  width: 22px; height: 22px; padding: 0; line-height: 1;
+  background: rgba(20, 14, 9, .8); color: var(--perkament-dof);
+  border: 1px solid var(--rand); border-radius: 4px; font-size: 12px;
+}
+#log-toggle:hover { color: var(--goud-licht); border-color: var(--goud); }
+
 #logbox {
   position: absolute; left: 10px; bottom: 10px; width: 330px;
   display: flex; flex-direction: column-reverse; gap: 3px;
@@ -243,6 +270,13 @@ button {
   z-index: 14; animation: klop 1s ease-in-out infinite; text-align: center;
 }
 #raid-warning .klein { display: block; font-size: 11.5px; font-weight: 400; opacity: .85; }
+#raid-sally {
+  display: block; margin: 7px auto 0; padding: 5px 14px; cursor: pointer;
+  font-size: 12.5px; font-weight: 700; color: #fbe7d6;
+  background: rgba(40, 16, 12, .6); border: 1.5px solid #e5b06a; border-radius: 6px;
+}
+#raid-sally:hover { background: rgba(70, 28, 20, .8); }
+#raid-sally.armed { background: #b5892f; border-color: #ffe4a8; color: #1c130a; }
 @keyframes klop { 0%, 100% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) scale(1.04); } }
 
 /* Toast */
@@ -296,6 +330,10 @@ button {
 .bouwkaart .ks { font-size: 10.5px; color: var(--perkament-dof); line-height: 1.35; }
 .bouwkaart .ks .mist { color: #e08a7a; }
 .bouwkaart .slot { position: absolute; top: 3px; right: 5px; font-size: 12px; }
+.bouwkaart .hk {
+  position: absolute; top: 3px; left: 5px; font-size: 9.5px;
+  color: var(--perkament-dof); opacity: .65; letter-spacing: -.3px;
+}
 
 /* Tooltip voor bouwkaarten */
 .tip {
@@ -343,6 +381,124 @@ button {
 #overlay-actions button.primair { background: var(--goud); color: #2b1d12; font-weight: 700; }
 
 /* ==========================================================================
+   Stadszaken (feest, koopman, opdracht) + de dialogen daarvan
+   ========================================================================== */
+
+#stad-inhoud { display: flex; flex-direction: column; gap: 8px; }
+.stadblok { border-left: 2px solid var(--goud); padding-left: 7px; }
+.stadblok.opdracht { border-left-color: var(--mos); }
+.stadblok.feest { border-left-color: var(--goud-licht); }
+.stadkop { font-size: 12px; font-weight: 700; color: var(--goud-licht); margin-bottom: 2px; }
+.stadregel { font-size: 12px; line-height: 1.35; margin: 1px 0; }
+.stadregel.dof { color: var(--perkament-dof); font-size: 11.5px; }
+.stadregel.cursief { font-style: italic; color: var(--perkament-dof); }
+.stadregel .nadruk { color: var(--goud-licht); font-weight: 700; }
+
+button.handelknop {
+  display: block; width: 100%; margin-top: 4px; padding: 5px 7px;
+  font-size: 11.5px; text-align: left; border-radius: 5px;
+  background: rgba(0, 0, 0, .3); border: 1px solid var(--rand);
+}
+button.handelknop:hover:not(:disabled) { background: var(--goud); color: #2b1d12; border-color: var(--goud-licht); }
+button.handelknop:disabled { opacity: .45; cursor: not-allowed; }
+button.handelknop.gedaan { opacity: .35; }
+
+ul.keuzes { list-style: none; margin: 10px 0 0; padding: 0; }
+ul.keuzes li {
+  font-size: 12.5px; line-height: 1.45; padding: 5px 0 5px 9px;
+  border-left: 2px solid var(--rand); margin: 4px 0; color: var(--perkament-dof);
+}
+ul.keuzes li b { color: var(--perkament); }
+.mist { color: #e08a7a; }
+
+.feestkaart {
+  border: 1px solid var(--rand); border-radius: 7px; padding: 9px 11px;
+  margin-top: 9px; background: rgba(0, 0, 0, .22);
+}
+.feestkaart.kan-niet { opacity: .55; }
+.feestkop { font-size: 15px; color: var(--goud-licht); font-weight: 700; }
+.feestinfo { font-size: 12px; margin-top: 4px; }
+button.feestknop {
+  margin-top: 7px; width: 100%; padding: 7px; border-radius: 6px;
+  background: var(--hout-licht); border: 1px solid var(--goud); font-size: 13px;
+}
+button.feestknop:hover:not(:disabled) { background: var(--goud); color: #2b1d12; }
+button.feestknop:disabled { background: #4a3a26; border-color: var(--rand); color: #9c8a70; cursor: not-allowed; }
+
+.verbeterblok {
+  margin-top: 10px; padding: 8px 9px; border: 1px solid var(--goud);
+  border-radius: 6px; background: rgba(215, 169, 75, .1);
+}
+.verbeterblok.kan-niet { opacity: .6; border-color: var(--rand); background: rgba(0, 0, 0, .2); }
+.verbeterblok .kop { margin: 0 0 3px; }
+.verbeternaam { font-size: 14px; font-weight: 700; color: var(--goud-licht); }
+.verbeterwinst { font-size: 12px; color: var(--mos); margin: 3px 0 2px; }
+button.verbeterknop {
+  margin-top: 6px; width: 100%; padding: 6px; border-radius: 5px; font-size: 12.5px;
+  background: var(--hout-licht); border: 1px solid var(--goud);
+}
+button.verbeterknop:hover:not(:disabled) { background: var(--goud); color: #2b1d12; }
+button.verbeterknop:disabled { background: #4a3a26; border-color: var(--rand); color: #9c8a70; cursor: not-allowed; }
+
+.naamrij { display: flex; gap: 6px; margin-top: 4px; }
+.naamrij input {
+  flex: 1; padding: 7px 9px; font-family: inherit; font-size: 14px;
+  background: #150e07; color: var(--perkament);
+  border: 1px solid var(--rand); border-radius: 5px;
+}
+.naamrij input:focus { outline: none; border-color: var(--goud); }
+button.kleineknop {
+  padding: 6px 10px; border-radius: 5px; font-size: 15px;
+  background: var(--hout-licht); border: 1px solid var(--goud);
+}
+button.kleineknop:hover { background: var(--goud); color: #2b1d12; }
+
+.keuzerij { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+button.keuzeknop {
+  flex: 1 1 150px; display: flex; flex-direction: column; gap: 3px; text-align: left;
+  padding: 8px 10px; border-radius: 6px; font-size: 12px; line-height: 1.35;
+  background: rgba(0, 0, 0, .25); border: 1px solid var(--rand); color: var(--perkament-dof);
+}
+button.keuzeknop b { font-size: 13.5px; color: var(--perkament); }
+button.keuzeknop:hover { border-color: var(--goud); }
+button.keuzeknop.gekozen { border-color: var(--goud); background: rgba(215, 169, 75, .18); }
+button.keuzeknop.gekozen b { color: var(--goud-licht); }
+
+.scoreblok {
+  text-align: center; margin: 10px 0 14px; padding: 10px;
+  border: 1px solid var(--goud); border-radius: 8px; background: rgba(215, 169, 75, .12);
+}
+.scorepunten { font-size: 26px; font-weight: 700; color: var(--goud-licht); }
+.scorerang { font-size: 13px; color: var(--perkament-dof); font-style: italic; }
+.stattabel { display: flex; flex-direction: column; gap: 2px; }
+.statrij {
+  display: flex; justify-content: space-between; gap: 10px;
+  padding: 3px 6px; border-bottom: 1px dotted rgba(255, 255, 255, .08); font-size: 13px;
+}
+.statrij .v { font-weight: 700; color: var(--goud-licht); }
+p.midden { text-align: center; font-size: 15px; }
+
+.onderzoekkaart {
+  border: 1px solid var(--rand); border-radius: 7px; padding: 8px 11px;
+  margin-top: 8px; background: rgba(0, 0, 0, .22);
+}
+.onderzoekkaart.kan-niet { opacity: .55; }
+.onderzoekkaart.gedaan { border-color: var(--mos); background: rgba(108, 138, 74, .14); }
+.onderzoekkop { font-size: 14.5px; color: var(--goud-licht); font-weight: 700; }
+.onderzoekinfo { font-size: 12px; margin-top: 3px; color: var(--perkament-dof); }
+.onderzoekklaar { margin-top: 5px; color: var(--mos); font-weight: 700; font-size: 13px; }
+
+ul.overzicht { list-style: none; margin: 0; padding: 0; }
+ul.overzicht li {
+  font-size: 13px; line-height: 1.45; padding: 5px 9px; margin: 4px 0;
+  border-left: 3px solid var(--rand); background: rgba(0, 0, 0, .2); border-radius: 0 5px 5px 0;
+}
+ul.overzicht li.goed { border-left-color: var(--mos); }
+ul.overzicht li.let-op { border-left-color: var(--goud); }
+ul.overzicht li.slecht { border-left-color: var(--bloed); }
+.stadcijfers { margin-top: 12px; text-align: center; font-size: 13px; color: var(--perkament-dof); }
+
+/* ==========================================================================
    Smalle schermen
    ========================================================================== */
 
@@ -353,4 +509,5 @@ button {
   #right-col { width: 200px; }
   #panel { width: 232px; }
   #logbox { width: 232px; }
+  #log-toggle { left: 248px; }
 }

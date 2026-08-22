@@ -21,7 +21,8 @@
 
   function eten(s, dt) {
     var nodig = s.bevolking.totaal * HONGER * dt;
-    if (s.seizoen === 3) nodig *= 1.3;             /* winter: extra brandstof */
+    /* Winter costs extra fuel; the wintervoorraad study softens that. */
+    if (s.seizoen === 3) nodig *= 1 + 0.3 * (s.bonus.winter === undefined ? 1 : s.bonus.winter);
     if (nodig <= 0) { s.voedselTekort = 0; return; }
 
     var soorten = Game.config.voedselSoorten;
@@ -126,13 +127,18 @@
     var punten = P.dienstenPunten(s);
     var diensten = Math.min(40, punten * 30 / Game.util.clamp(s.bevolking.totaal, 20, 160));
 
+    /* A close-knit, compactly built town lifts everyone's spirits a little. */
+    var samen = (s.samenhorigheid || 0) * 8;
+
     var honger = s.voedselTekort > 1e-6 ? -22 : 0;
     var moreel = s.moreel || 0;
+    var onderzoek = s.bonus.tevredenheid || 0;
 
     return {
       basis: 20, voedsel: voedsel, variatie: variatie, wonen: wonen,
-      diensten: diensten, honger: honger, moreel: moreel,
-      doel: Game.util.clamp(20 + voedsel + variatie + wonen + diensten + honger + moreel, 0, 100)
+      diensten: diensten, samen: samen, honger: honger, moreel: moreel, onderzoek: onderzoek,
+      doel: Game.util.clamp(20 + voedsel + variatie + wonen + diensten + samen +
+        honger + moreel + onderzoek, 0, 100)
     };
   };
 

@@ -5,6 +5,9 @@
   var spel = null;
   var tabsEl, lijstEl, tipEl = null;
   var actieveTab = 1;
+  /* Ids of the cards you can actually click, in the order they are shown —
+     that order is what Shift+1..9 selects from. */
+  var zichtbaar = [];
 
   BM.init = function (hetSpel) {
     spel = hetSpel;
@@ -35,7 +38,7 @@
   function handtekening(s) {
     var stukken = [actieveTab, s.tijdperk, spel.plaatsType];
     Game.config.buildingList.forEach(function (d) {
-      if (d.tijdperk !== actieveTab) return;
+      if (d.verborgen || d.tijdperk !== actieveTab) return;
       stukken.push(Game.core.state.kanBetalen(s, d.kosten) ? 1 : 0);
       if (d.max) stukken.push(Game.core.construction.aantalGepland(s, d.id));
     });
@@ -56,8 +59,10 @@
     });
 
     lijstEl.innerHTML = '';
+    zichtbaar = [];
     Game.config.buildingList.forEach(function (d) {
-      if (d.tijdperk !== actieveTab) return;
+      /* Upgrade targets are reached through the panel, never placed. */
+      if (d.verborgen || d.tijdperk !== actieveTab) return;
 
       var vergrendeld = d.tijdperk > s.tijdperk;
       var opMax = d.max && Game.core.construction.aantalGepland(s, d.id) >= d.max;
@@ -103,6 +108,10 @@
         kaart.addEventListener('click', function () {
           spel.kiesBouw(spel.plaatsType === d.id ? null : d.id);
         });
+        zichtbaar.push(d.id);
+        if (zichtbaar.length <= 9) {
+          kaart.appendChild(Game.util.el('div', 'hk', '⇧' + zichtbaar.length));
+        }
       }
 
       kaart.addEventListener('mouseenter', function (ev) { toonTip(d, s, ev.currentTarget); });
@@ -110,6 +119,13 @@
 
       lijstEl.appendChild(kaart);
     });
+  };
+
+  /* Shift + number: pick the n-th clickable building in the open tab. */
+  BM.kiesIndex = function (i) {
+    var id = zichtbaar[i];
+    if (!id) return;
+    spel.kiesBouw(spel.plaatsType === id ? null : id);
   };
 
   /* --------------------------------------------------------------- tooltip */
@@ -158,6 +174,7 @@
     if (d.verdPerWerker) regels.push(['Verdediging', '+' + d.verdPerWerker + ' per werker']);
     if (d.productieBonus) regels.push(['Bonus', '+' + Math.round(d.productieBonus * 100) + '% op alle productie']);
     if (d.boerderijBonus) regels.push(['Bonus', '+' + Math.round(d.boerderijBonus * 100) + '% graan voor boerderijen binnen ' + d.boerderijStraal + ' tegels']);
+    if (d.visserijBonus) regels.push(['Bonus', '+' + Math.round(d.visserijBonus * 100) + '% vis voor vissershutten binnen ' + d.visserijStraal + ' tegels']);
     if (d.onderhoud) {
       var onder = [];
       for (var orr in d.onderhoud) {

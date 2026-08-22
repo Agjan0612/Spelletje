@@ -62,8 +62,7 @@
     }
     knoppen.push({
       tekst: '🌱 Nieuw dorp stichten', primair: !erIsEenSave, actie: function () {
-        spel.nieuwSpel();
-        O.sluit();
+        O.nieuwSpelScherm();
       }
     });
     knoppen.push({ tekst: '❓ Hoe speel ik dit?', actie: function () { O.help(true); } });
@@ -79,6 +78,8 @@
         '<li>Klik op een gebouw om er werkers aan toe te wijzen.</li>' +
         '<li>Houd je dorpelingen gevoed en tevreden — dan groeit je dorp vanzelf.</li>' +
         '<li>Leg voorraad aan vóór de winter, en bouw verdediging vóór de rovers komen.</li>' +
+        '<li>Er komen kooplieden, opdrachten van de heer en gebeurtenissen langs ' +
+        'waar je iets mee moet. Kijk in de balk rechtsboven.</li>' +
         '</ul>';
     }, knoppen, false);
   };
@@ -95,6 +96,29 @@
         '<li><b>Klik</b> op een gebouw: paneel met werkers en opbrengst</li>' +
         '<li><b>Escape</b>: plaatsen annuleren of paneel sluiten</li>' +
         '<li><b>Spatie</b>: pauzeren en hervatten · <b>1 2 3</b>: snelheid</li>' +
+        '<li><b>Shift + 1…9</b>: het zoveelste gebouw uit het open tabblad kiezen</li>' +
+        '<li><b>Shift + slepen</b>: een hele rij neerzetten (muren, straatjes)</li>' +
+        '<li><b>✋ Verplaatsen</b> in het paneel: een gebouw oppakken en ergens ' +
+        'anders neerzetten voor een vijfde van de bouwkosten</li>' +
+        '</ul>' +
+        '<h4>De knoppen rechtsboven</h4>' +
+        '<ul>' +
+        '<li>🎉 <b>Feest</b> — voorraad omzetten in een flinke portie tevredenheid</li>' +
+        '<li>📚 <b>Onderzoek</b> — munten omzetten in blijvende bonussen ' +
+        '(vanaf een gildehuis)</li>' +
+        '<li>📋 <b>Overzicht</b> — wat staat er stil? Alles in één lijst</li>' +
+        '</ul>' +
+        '<h4>Er gebeurt van alles</h4>' +
+        '<ul>' +
+        '<li><b>De koopman</b> komt af en toe langs met eenmalige deals. ' +
+        'Zo krijg je waar je te weinig van hebt — en raak je je overschot kwijt.</li>' +
+        '<li><b>De heer</b> stuurt opdrachten met een deadline. Leveren geeft ' +
+        'munten en een blijer dorp; te laat is een streep door de rekening.</li>' +
+        '<li><b>Gebeurtenissen</b> zoals brand, vorst of vluchtelingen vragen om ' +
+        'een keuze. Er is bijna altijd een goedkope en een goede optie.</li>' +
+        '<li><b>Uitbouwen</b>: huisjes, boerderijen, groeven, de waterput en de ' +
+        'wachttoren kunnen vanaf tijdperk 3 uitgroeien tot iets groters. ' +
+        'Klik het gebouw aan en kijk in het paneel.</li>' +
         '</ul>' +
         '<h4>De vijf dingen die er echt toe doen</h4>' +
         '<ul>' +
@@ -146,6 +170,9 @@
         Game.ui.toast('📥 Save geladen');
         O.sluit();
       } },
+      { tekst: '📖 Dorpsboek', actie: function () { O.dorpsboek(); } },
+      { tekst: '📊 Statistieken', actie: function () { O.statistieken(); } },
+      { tekst: '📷 Plaatje maken', actie: function () { O.plaatje(); } },
       { tekst: '❓ Uitleg', actie: function () { O.help(false); } },
       { tekst: '🌱 Nieuw spel', actie: function () {
         O.bevestigNieuw();
@@ -156,12 +183,188 @@
 
   O.bevestigNieuw = function () {
     O.open('Nieuw spel beginnen?', '<p>Je huidige dorp gaat verloren. Weet je het zeker?</p>', [
-      { tekst: 'Ja, nieuw dorp', primair: true, actie: function () {
-        spel.nieuwSpel();
-        O.sluit();
-      } },
+      { tekst: 'Ja, nieuw dorp', primair: true, actie: function () { O.nieuwSpelScherm(); } },
       { tekst: 'Nee, terug', actie: function () { O.menu(); } }
     ]);
+  };
+
+  /* ------------------------------------------------------- nieuw spel --- */
+
+  /* The set-up screen: name your village, pick how much world you want and
+     how rough the bandits are. The seed is optional — fill in the same number
+     and you get exactly the same map back. */
+  O.nieuwSpelScherm = function () {
+    var keuze = {
+      naam: spel.verzinNaam(),
+      kaart: 'normaal',
+      moeilijkheid: 'normaal',
+      seed: ''
+    };
+
+    function knoprij(el, lijst, veld) {
+      var rij = Game.util.el('div', 'keuzerij');
+      lijst.forEach(function (item) {
+        var k = Game.util.el('button', 'keuzeknop' + (keuze[veld] === item.id ? ' gekozen' : ''));
+        k.innerHTML = '<b>' + item.emoji + ' ' + item.naam + '</b>' +
+          '<span>' + item.beschrijving + '</span>';
+        k.addEventListener('click', function () {
+          keuze[veld] = item.id;
+          Array.prototype.forEach.call(rij.children, function (kk) { kk.classList.remove('gekozen'); });
+          k.classList.add('gekozen');
+        });
+        rij.appendChild(k);
+      });
+      el.appendChild(rij);
+    }
+
+    O.open('🌱 Een nieuw dorp stichten', function (el) {
+      el.appendChild(Game.util.el('h4', '', 'Naam van je dorp'));
+      var naamRij = Game.util.el('div', 'naamrij');
+      var invoer = document.createElement('input');
+      invoer.type = 'text';
+      invoer.maxLength = 24;
+      invoer.value = keuze.naam;
+      invoer.addEventListener('input', function () { keuze.naam = invoer.value; });
+      naamRij.appendChild(invoer);
+      var dobbel = Game.util.el('button', 'kleineknop', '🎲');
+      dobbel.title = 'Verzin een naam';
+      dobbel.addEventListener('click', function () {
+        keuze.naam = spel.verzinNaam();
+        invoer.value = keuze.naam;
+      });
+      naamRij.appendChild(dobbel);
+      el.appendChild(naamRij);
+
+      el.appendChild(Game.util.el('h4', '', 'Grootte van de kaart'));
+      knoprij(el, Game.config.kaartmaten, 'kaart');
+
+      el.appendChild(Game.util.el('h4', '', 'Hoe zwaar mag het zijn?'));
+      knoprij(el, Game.config.moeilijkheden, 'moeilijkheid');
+
+      el.appendChild(Game.util.el('h4', '', 'Kaartnummer (optioneel)'));
+      var seedRij = Game.util.el('div', 'naamrij');
+      var seedInvoer = document.createElement('input');
+      seedInvoer.type = 'text';
+      seedInvoer.placeholder = 'leeg = een willekeurige wereld';
+      seedInvoer.addEventListener('input', function () { keuze.seed = seedInvoer.value; });
+      seedRij.appendChild(seedInvoer);
+      el.appendChild(seedRij);
+      el.appendChild(Game.util.el('div', 'cursief',
+        'Hetzelfde kaartnummer geeft altijd dezelfde wereld — handig om een mooi dorp opnieuw te spelen.'));
+    }, [
+      {
+        tekst: '🌱 Stichten', primair: true, actie: function () {
+          var seed = parseInt(String(keuze.seed).replace(/\D/g, ''), 10);
+          spel.nieuwSpel({
+            naam: (keuze.naam || '').trim() || spel.verzinNaam(),
+            seed: isNaN(seed) || seed <= 0 ? undefined : seed,
+            kaart: keuze.kaart,
+            moeilijkheid: keuze.moeilijkheid
+          });
+          O.sluit();
+        }
+      },
+      { tekst: '← Terug', actie: function () { O.welkom(); } }
+    ], false);
+  };
+
+  /* -------------------------------------------------------- dorpsboek -- */
+
+  /* Who actually lives here: names, trades and the year they arrived. Pure
+     flavour on top of the headcount — see js/core/dorpelingen.js. */
+  O.dorpsboek = function () {
+    var s = spel.state;
+    O.open('📖 Het dorpsboek van ' + s.dorpsnaam, function (el) {
+      var boek = Game.core.dorpelingen.boek(s);
+      if (!boek.length) {
+        el.innerHTML = '<p>Er woont nog niemand in je dorp.</p>';
+        return;
+      }
+      el.appendChild(Game.util.el('p', '', boek.length +
+        ' inwoners noemen ' + s.dorpsnaam + ' hun thuis:'));
+
+      var ul = Game.util.el('ul');
+      ul.className = 'dorpsboek';
+      boek.forEach(function (m) {
+        var li = Game.util.el('li');
+        li.appendChild(Game.util.el('span', 'naam', m.naam));
+        li.appendChild(Game.util.el('span', 'baan', m.baan));
+        li.appendChild(Game.util.el('span', 'sinds', 'sinds jaar ' + m.sinds));
+        ul.appendChild(li);
+      });
+      el.appendChild(ul);
+    }, [
+      { tekst: '← Terug naar het menu', primair: true, actie: function () { O.menu(); } }
+    ]);
+  };
+
+  /* -------------------------------------------------- statistieken ------ */
+
+  /* Everything the town has done so far, with a score and a title. Available
+     from the menu at any time, not just when you have won. */
+  O.statistiekLijst = function (s) {
+    var st = Game.core.state.statistiek(s);
+    return [
+      ['👥 Inwoners', st.bevolking],
+      ['🏠 Gebouwen', st.gebouwen],
+      ['😀 Tevredenheid', st.tevredenheid + '%'],
+      ['📅 Jaren verstreken', st.jaar],
+      ['📦 Totaal verzameld', Game.util.fmt(st.verzameld)],
+      ['📚 Onderzoek afgerond', st.onderzoek + ' / ' + Game.config.onderzoek.length],
+      ['📜 Opdrachten geleverd', st.opdrachten],
+      ['⚔️ Rooftochten doorstaan', st.rooftochten],
+      ['🪵 Hout verzameld', Game.util.fmt(Math.round(s.verzameld.hout))],
+      ['🪨 Steen verzameld', Game.util.fmt(Math.round(s.verzameld.steen))],
+      ['💎 Edelstenen gedolven', Game.util.fmt(Math.round(s.verzameld.edelsteen))]
+    ];
+  };
+
+  function statistiekBlok(el, s) {
+    var st = Game.core.state.statistiek(s);
+
+    var score = Game.util.el('div', 'scoreblok');
+    score.innerHTML = '<div class="scorepunten">' + st.punten + ' punten</div>' +
+      '<div class="scorerang">' + st.rang + '</div>';
+    el.appendChild(score);
+
+    var tabel = Game.util.el('div', 'stattabel');
+    O.statistiekLijst(s).forEach(function (rij) {
+      var r = Game.util.el('div', 'statrij');
+      r.appendChild(Game.util.el('span', 'k', rij[0]));
+      r.appendChild(Game.util.el('span', 'v', String(rij[1])));
+      tabel.appendChild(r);
+    });
+    el.appendChild(tabel);
+  }
+
+  O.statistieken = function () {
+    O.open('📊 ' + spel.state.dorpsnaam + ' in cijfers', function (el) {
+      statistiekBlok(el, spel.state);
+    }, [
+      { tekst: '← Terug', primair: true, actie: function () { O.menu(); } },
+      { tekst: 'Verder spelen', actie: function () { O.sluit(); } }
+    ]);
+  };
+
+  /* ------------------------------------------------------------ plaatje -- */
+
+  /* Saves the current view as a PNG. Handy for showing off a town — and it
+     works from file:// because the canvas never loads a cross-origin image. */
+  O.plaatje = function () {
+    var canvas = document.getElementById('canvas');
+    try {
+      var url = canvas.toDataURL('image/png');
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = (spel.state.dorpsnaam || 'dorp').replace(/[^\w-]+/g, '_') + '.png';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      Game.ui.toast('📷 Plaatje opgeslagen');
+      O.sluit();
+    } catch (e) {
+      Game.ui.toast('📷 Dat lukte niet in deze browser');
+    }
   };
 
   /* ---------------------------------------------------------- tijdperk -- */
@@ -177,21 +380,16 @@
 
   O.overwinning = function (s) {
     O.open('👑 ' + s.dorpsnaam + ' is een stad!', function (el) {
-      el.innerHTML =
-        '<p style="text-align:center;font-size:16px">Van één boerderij tot een stad met kathedraal, ' +
-        'kasteel en universiteit. Dat heb je knap gedaan.</p>' +
-        '<h4>Je stad in cijfers</h4>' +
-        '<ul>' +
-        '<li>Inwoners: <b>' + s.bevolking.totaal + '</b></li>' +
-        '<li>Gebouwen: <b>' + s.gebouwen.length + '</b></li>' +
-        '<li>Jaren verstreken: <b>' + s.jaar + '</b></li>' +
-        '<li>Tevredenheid: <b>' + Math.round(s.tevredenheid) + '%</b></li>' +
-        '<li>Hout verzameld: <b>' + Math.round(s.verzameld.hout) + '</b></li>' +
-        '<li>Steen verzameld: <b>' + Math.round(s.verzameld.steen) + '</b></li>' +
-        '<li>Edelstenen gedolven: <b>' + Math.round(s.verzameld.edelsteen) + '</b></li>' +
-        '</ul>' +
-        '<p>Je kunt gewoon doorspelen en je stad nog verder uitbouwen.</p>';
-    }, [{ tekst: 'Doorspelen', primair: true, actie: function () { O.sluit(); } }]);
+      el.appendChild(Game.util.el('p', 'midden',
+        'Van één boerderij tot een stad met kathedraal, kasteel en universiteit. ' +
+        'Dat heb je knap gedaan.'));
+      statistiekBlok(el, s);
+      el.appendChild(Game.util.el('p', '',
+        'Je kunt gewoon doorspelen en je stad nog verder uitbouwen — je score blijft meelopen.'));
+    }, [
+      { tekst: 'Doorspelen', primair: true, actie: function () { O.sluit(); } },
+      { tekst: '📷 Plaatje maken', actie: function () { O.plaatje(); } }
+    ]);
   };
 
   Game.ui.overlay = O;

@@ -19,6 +19,9 @@
  *   plaats          placement rule { nabij: {node, straal}, opRuwTerrein }
  *                   opRuwTerrein lets mines and quarries stand in the rocks
  *   max             maximum number of copies
+ *   verbetering     { naar, kosten, tijdperk } upgrade into another building
+ *   verborgen       true = never in the build menu; only reachable as an
+ *                   upgrade target (same footprint as what it grows out of)
  */
 (function (Game) {
 
@@ -37,6 +40,7 @@
       id: 'huisje', naam: 'Huisje', emoji: '🏠', tijdperk: 1, grootte: 1,
       kosten: { hout: 30 }, bouwtijd: 8, muur: '#d8c39a', dak: '#7c4b2e',
       woonruimte: 4,
+      verbetering: { naar: 'vakwerkhuis', tijdperk: 3, kosten: { hout: 45, steen: 35 } },
       beschrijving: 'Een eenvoudige hut van leem en riet. Biedt onderdak aan vier dorpelingen.'
     },
     {
@@ -46,6 +50,7 @@
       maakt: { in: {}, uit: { graan: 0.55 } },
       seizoensgevoelig: true,
       plaats: { nabij: { node: 'vruchtbaar', straal: 3 } },
+      verbetering: { naar: 'hoeve', tijdperk: 3, kosten: { hout: 70, steen: 45 } },
       beschrijving: 'Verbouwt graan op vruchtbare grond. Levert niets in de winter — leg dus voorraad aan.'
     },
     {
@@ -54,6 +59,7 @@
       banen: { aantal: 3, baan: 'houthakker' },
       wint: { node: 'hout', straal: 6, res: 'hout', tempo: 0.45 },
       plaats: { nabij: { node: 'hout', straal: 6 } },
+      verbetering: { naar: 'houtzagerij', tijdperk: 3, kosten: { hout: 60, gereedschap: 12 } },
       beschrijving: 'Kapt bomen in de omliggende bossen. Bossen groeien langzaam weer aan.'
     },
     {
@@ -79,6 +85,7 @@
       banen: { aantal: 3, baan: 'steenhouwer' },
       wint: { node: 'steen', straal: 5, res: 'steen', tempo: 0.24 },
       plaats: { nabij: { node: 'steen', straal: 5 }, opRuwTerrein: true },
+      verbetering: { naar: 'steenhouwerij', tijdperk: 3, kosten: { hout: 70, gereedschap: 12 } },
       beschrijving: 'Hakt bouwsteen uit de rotsen. Gereedschap maakt de groeve een stuk sneller.'
     },
     {
@@ -91,6 +98,7 @@
       id: 'waterput', naam: 'Waterput', emoji: '💧', tijdperk: 1, grootte: 1,
       kosten: { hout: 20, steen: 30 }, bouwtijd: 10, muur: '#9aa0a6', dak: '#6d5a44',
       tevredenheid: 6,
+      verbetering: { naar: 'fontein', tijdperk: 3, kosten: { steen: 70, munten: 50 } },
       beschrijving: 'Schoon drinkwater vlakbij huis. Maakt je dorpelingen merkbaar tevredener.'
     },
 
@@ -144,7 +152,25 @@
       id: 'wachttoren', naam: 'Wachttoren', emoji: '🗼', tijdperk: 2, grootte: 1,
       kosten: { hout: 60, steen: 80 }, bouwtijd: 18, muur: '#a49a8c', dak: '#7a3b2c',
       verdediging: 18, dekking: { straal: 6 },
+      verbetering: { naar: 'bergfried', tijdperk: 3, kosten: { steen: 110, ijzer: 30 } },
       beschrijving: 'Uitkijkpost tegen rovers. Voegt 18 verdediging toe — het meest waard dicht bij waar de rovers binnenvallen.'
+    },
+    {
+      id: 'haven', naam: 'Haven', emoji: '⚓', tijdperk: 2, grootte: 2,
+      kosten: { hout: 120, steen: 60 }, bouwtijd: 24, muur: '#b0a184', dak: '#3f5a6a',
+      banen: { aantal: 3, baan: 'schipper' },
+      maakt: { in: { hout: 0.06 }, uit: { munten: 0.26 } },
+      visserijBonus: 0.35, visserijStraal: 6,
+      tevredenheid: 4,
+      plaats: { nabij: { node: 'vis', straal: 2 } },
+      beschrijving: 'Kades aan het water. Schippers drijven handel over zee (munten) en vissershutten binnen 6 tegels vangen 35% meer.'
+    },
+    {
+      id: 'oefenveld', naam: 'Oefenveld', emoji: '🎯', tijdperk: 2, grootte: 2,
+      kosten: { hout: 70, steen: 40 }, bouwtijd: 18, muur: '#a7a488', dak: '#6a5a3a',
+      banen: { aantal: 4, baan: 'soldaat' },
+      verdPerWerker: 9,
+      beschrijving: 'Hier oefent de dorpsmilitie met boog en speer. Een vroeg begin van je leger, lang vóór de kazerne.'
     },
 
     /* ================= Tijdperk 3 — Handelsstad ================= */
@@ -175,6 +201,12 @@
       kosten: { steen: 45 }, bouwtijd: 6, muur: '#9aa0a6', dak: '#7e848a',
       verdediging: 6, dekking: { straal: 3 },
       beschrijving: 'Een muursegment. Beschermt vooral het stuk waar het staat — zet ze op de weg die rovers nemen.'
+    },
+    {
+      id: 'poort', naam: 'Stadspoort', emoji: '🚪', tijdperk: 3, grootte: 1,
+      kosten: { steen: 90, hout: 30, ijzer: 20 }, bouwtijd: 16, max: 4, muur: '#8f8578', dak: '#6a3b2c',
+      verdediging: 30, dekking: { straal: 4 },
+      beschrijving: 'Een zwaar bewaakte poort. Verreweg de sterkste muurschakel — zet hem pal op de route die de rovers nemen.'
     },
     {
       id: 'herberg', naam: 'Herberg', emoji: '🍺', tijdperk: 3, grootte: 1,
@@ -266,6 +298,55 @@
       banen: { aantal: 8, baan: 'soldaat' },
       verdediging: 90, verdPerWerker: 18, tevredenheid: 6, opslag: 400,
       beschrijving: 'Een machtige burcht. Rovers wagen zich niet graag aan een stad met een kasteel.'
+    },
+
+    /* ============ Verbeteringen — niet in het bouwmenu ============
+       Deze staan nooit in de bouwbalk: je groeit ernaartoe met de
+       verbeterknop in het paneel van het gebouw waar ze uit voortkomen.
+       De voetafdruk (grootte) moet dus gelijk zijn aan die van het
+       oorspronkelijke gebouw, anders klopt de plattegrond niet meer. */
+    {
+      id: 'vakwerkhuis', naam: 'Vakwerkhuis', emoji: '🏡', tijdperk: 3, grootte: 1, verborgen: true,
+      kosten: { hout: 75, steen: 35 }, bouwtijd: 12, muur: '#e6d9bb', dak: '#6b3f28',
+      woonruimte: 8, tevredenheid: 1,
+      beschrijving: 'Een huisje met een verdieping erop: balken, witte vakken en plek voor acht mensen.'
+    },
+    {
+      id: 'hoeve', naam: 'Hoeve', emoji: '🚜', tijdperk: 3, grootte: 2, verborgen: true,
+      kosten: { hout: 115, steen: 45 }, bouwtijd: 20, muur: '#d6c096', dak: '#8a5c33',
+      banen: { aantal: 4, baan: 'boer' },
+      maakt: { in: {}, uit: { graan: 0.64 } },
+      seizoensgevoelig: true,
+      plaats: { nabij: { node: 'vruchtbaar', straal: 3 } },
+      beschrijving: 'Een boerderij met schuur en stallen. Meer akkers, meer handen, meer graan.'
+    },
+    {
+      id: 'houtzagerij', naam: 'Houtzagerij', emoji: '🪚', tijdperk: 3, grootte: 1, verborgen: true,
+      kosten: { hout: 85, gereedschap: 12 }, bouwtijd: 14, muur: '#c1a077', dak: '#5f3a20',
+      banen: { aantal: 4, baan: 'houthakker' },
+      wint: { node: 'hout', straal: 7, res: 'hout', tempo: 0.58 },
+      plaats: { nabij: { node: 'hout', straal: 6 } },
+      beschrijving: 'Met zaagbok en span ossen haal je veel meer uit hetzelfde bos.'
+    },
+    {
+      id: 'steenhouwerij', naam: 'Steenhouwerij', emoji: '🪏', tijdperk: 3, grootte: 1, verborgen: true,
+      kosten: { hout: 130, gereedschap: 12 }, bouwtijd: 18, muur: '#b0a598', dak: '#5f5851',
+      banen: { aantal: 4, baan: 'steenhouwer' },
+      wint: { node: 'steen', straal: 6, res: 'steen', tempo: 0.32 },
+      plaats: { nabij: { node: 'steen', straal: 5 }, opRuwTerrein: true },
+      beschrijving: 'Een groeve met hijskranen en houwersloodsen. Steen komt er in blokken uit.'
+    },
+    {
+      id: 'fontein', naam: 'Fontein', emoji: '⛲', tijdperk: 3, grootte: 1, verborgen: true,
+      kosten: { steen: 100, munten: 50 }, bouwtijd: 16, muur: '#cfd4d8', dak: '#8fa3ad',
+      tevredenheid: 13,
+      beschrijving: 'Stromend water midden op het plein. Het pronkstuk waar iedereen elkaar treft.'
+    },
+    {
+      id: 'bergfried', naam: 'Bergfried', emoji: '🏯', tijdperk: 3, grootte: 1, verborgen: true,
+      kosten: { steen: 190, ijzer: 30 }, bouwtijd: 26, muur: '#b3aa9c', dak: '#5f3229',
+      verdediging: 34, dekking: { straal: 7 },
+      beschrijving: 'Een zware stenen toren met kantelen. Wie hier langs wil, betaalt de prijs.'
     }
   ];
 

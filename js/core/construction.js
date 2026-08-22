@@ -17,15 +17,20 @@
   };
 
   /* Full placement check. Returns { ok, reden } — `reden` is shown to the
-     player in Dutch under the cursor. */
-  C.controleer = function (s, type, x, y) {
+     player in Dutch under the cursor.
+
+     `opties` is used when moving an existing building: { negeerId } lets the
+     building's own tiles (and its copy limit) pass, and { negeerKosten } skips
+     the price of a fresh build. */
+  C.controleer = function (s, type, x, y, opties) {
+    opties = opties || {};
     var d = Game.config.gebouw(type);
     if (!d) return { ok: false, reden: 'Onbekend gebouw' };
 
     if (d.tijdperk > s.tijdperk) {
       return { ok: false, reden: 'Vergrendeld tot tijdperk ' + d.tijdperk };
     }
-    if (d.max && C.aantalGepland(s, type) >= d.max) {
+    if (d.max && !opties.negeerId && C.aantalGepland(s, type) >= d.max) {
       return { ok: false, reden: 'Je mag er maar ' + d.max + ' hebben' };
     }
 
@@ -38,7 +43,9 @@
         if (t.t === 'rots' && !(d.plaats && d.plaats.opRuwTerrein)) {
           return { ok: false, reden: 'De grond is te rotsachtig — alleen mijnbouw kan hier staan' };
         }
-        if (t.b !== null && t.b !== undefined) return { ok: false, reden: 'Hier staat al iets' };
+        if (t.b !== null && t.b !== undefined && t.b !== opties.negeerId) {
+          return { ok: false, reden: 'Hier staat al iets' };
+        }
       }
     }
 
@@ -50,7 +57,8 @@
       }
     }
 
-    if (!Game.core.state.kanBetalen(s, d.kosten)) {
+    var kosten = opties.negeerKosten ? (opties.kosten || {}) : d.kosten;
+    if (!Game.core.state.kanBetalen(s, kosten)) {
       return { ok: false, reden: 'Te weinig grondstoffen' };
     }
 
@@ -131,7 +139,7 @@
     if (!sites.length) return;
 
     var bouwers = Math.min(8, s.bevolking.werkloos);
-    var snelheid = (0.5 + bouwers * 0.55) / sites.length;
+    var snelheid = (0.5 + bouwers * 0.55) * (s.bonus.bouw || 1) / sites.length;
 
     for (var j = 0; j < sites.length; j++) {
       var g = sites[j];
@@ -145,6 +153,95 @@
         Game.core.population.autoBemannen(s, g);
       }
     }
+  };
+
+  /* --------------------------------------------------------- verplaatsen -- */
+
+  /* Moving a finished building costs a fifth of what it cost to build — the
+     material you lose taking it apart — instead of demolishing at half loss
+     and paying full price again. */
+  C.verplaatsKosten = function (type) {
+    var d = Game.config.gebouw(type);
+    var kosten = {};
+    for (var r in d.kosten) {
+      var deel = Math.ceil(d.kosten[r] * 0.2);
+      if (deel > 0) kosten[r] = deel;
+    }
+    return kosten;
+  };
+
+  C.controleerVerplaatsing = function (s, g, x, y) {
+    if (g.type === 'dorpsplein') return { ok: false, reden: 'Het dorpsplein blijft waar het is' };
+    var kosten = C.verplaatsKosten(g.type);
+    return C.controleer(s, g.type, x, y, { negeerId: g.id, negeerKosten: true, kosten: kosten });
+  };
+
+  C.verplaats = function (s, g, x, y) {
+    var check = C.controleerVerplaatsing(s, g, x, y);
+    if (!check.ok) return { ok: false, reden: check.reden };
+
+    Game.core.state.betaal(s, C.verplaatsKosten(g.type));
+    C.wisTegels(s, g);
+    g.x = x; g.y = y;
+    C.markeerTegels(s, g);
+    Game.core.state.herbereken(s);
+
+    var d = Game.config.gebouw(g.type);
+    if (Game.render.particles) {
+      Game.render.particles.stof((x + d.grootte / 2) * 40, (y + d.grootte / 2) * 40, 6);
+    }
+    Game.ui.log.schrijf(s, d.emoji + ' ' + d.naam + ' is verplaatst.');
+    return { ok: true };
+  };
+
+  /* --------------------------------------------------------- verbeteren -- */
+
+  /* An upgrade swaps one building for a bigger version of itself on the same
+     spot. The footprint is identical by design (see buildings.js), so the tiles
+     it occupies never change — only what stands on them. */
+  C.kanVerbeteren = function (s, g) {
+    var d = Game.config.gebouw(g.type);
+    var v = d.verbetering;
+    if (!v) return { ok: false };
+    var naar = Game.config.gebouw(v.naar);
+    if (!naar) return { ok: false };
+
+    if (!g.gebouwd) return { ok: false, reden: 'Eerst afbouwen', naar: naar, kosten: v.kosten };
+    if (s.tijdperk < v.tijdperk) {
+      return { ok: false, reden: 'Vanaf tijdperk ' + v.tijdperk, naar: naar, kosten: v.kosten };
+    }
+    if (!Game.core.state.kanBetalen(s, v.kosten)) {
+      return { ok: false, reden: 'Te weinig grondstoffen', naar: naar, kosten: v.kosten };
+    }
+    return { ok: true, naar: naar, kosten: v.kosten };
+  };
+
+  C.verbeter = function (s, g) {
+    var check = C.kanVerbeteren(s, g);
+    if (!check.ok) return false;
+
+    var oud = Game.config.gebouw(g.type);
+    Game.core.state.betaal(s, check.kosten);
+
+    C.wisTegels(s, g);
+    g.type = check.naar.id;
+    C.markeerTegels(s, g);
+
+    /* The new building may have fewer or more slots than the old one. */
+    var banen = check.naar.banen ? check.naar.banen.aantal : 0;
+    g.werkers = Math.min(g.werkers, banen);
+    g.waarschuwing = '';
+
+    Game.core.state.herbereken(s);
+    Game.core.population.corrigeer(s);
+
+    if (Game.render.particles) {
+      Game.render.particles.stof((g.x + check.naar.grootte / 2) * 40,
+        (g.y + check.naar.grootte / 2) * 40, 8);
+    }
+    Game.ui.log.schrijf(s, check.naar.emoji + ' ' + oud.naam + ' is uitgebouwd tot ' +
+      check.naar.naam + '.', 'goed');
+    return true;
   };
 
   C.sloop = function (s, g) {

@@ -15,9 +15,12 @@
      under the player's cursor, so we only redraw when something changed. */
   function handtekening(s, g) {
     if (!g) return 'leeg';
-    return [g.id, g.werkers, g.gebouwd ? 1 : 0, Math.round(g.voortgang * 4),
+    return [g.id, g.type, g.werkers, g.gebouwd ? 1 : 0, Math.round(g.voortgang * 4),
       g.uit ? 1 : 0, g.waarschuwing, s.bevolking.werkloos,
-      Math.round(s.tevredenheid), s.seizoen].join('|');
+      Math.round(s.tevredenheid), s.seizoen, s.tijdperk,
+      Math.round((s.samenhorigheid || 0) * 100), s.bevolking.soldaten,
+      s.raid.fase, s.leger ? (s.leger.uitval ? 1 : 0) + ':' + s.leger.overwinningen : '-',
+      Game.core.construction.kanVerbeteren(s, g).ok ? 1 : 0].join('|');
   }
 
   P.ververs = function (s, forceer) {
@@ -153,8 +156,104 @@
       el.appendChild(Game.util.el('div', 'waarschuwing', '⚠️ ' + g.waarschuwing));
     }
 
+    if (g.type === 'dorpsplein') dorpsleven(el, s);
+
+    verbeterBlok(el, s, g, d);
     el.appendChild(knoppen(s, g, d));
   };
+
+  /* The town square doubles as the seat of village life: how close-knit the
+     town is, and what your field army looks like. Feasts and the merchant
+     live in the Stadszaken card and the top bar. */
+  function dorpsleven(el, s) {
+    el.appendChild(Game.util.el('div', 'kop', '🤝 Dorpsleven'));
+    el.appendChild(regel('Samenhorigheid', Math.round((s.samenhorigheid || 0) * 100) + '%'));
+    el.appendChild(Game.util.el('div', 'beschrijving',
+      'Bouw dicht om het plein: een compact dorp is een gelukkiger dorp.'));
+
+    if (s.tijdperk < 2) return;
+
+    var leger = Game.core.raids.legerStatus(s);
+    el.appendChild(Game.util.el('div', 'kop', '⚔️ Leger'));
+    el.appendChild(regel('Legerkracht', leger.kracht));
+    el.appendChild(regel('Soldaten', leger.soldaten));
+    el.appendChild(regel('Bendes verslagen', leger.overwinningen));
+
+    if (Game.core.raids.uitvalMogelijk(s)) {
+      var rij = Game.util.el('div', 'knoprij');
+      var uit = Game.util.el('button', leger.uitval ? '' : 'primair',
+        leger.uitval ? '⚔️ Uitval bevolen — trek terug' : '⚔️ Uitval bevelen');
+      uit.addEventListener('click', function () {
+        Game.core.raids.zetUitval(s);
+        P.ververs(s, true);
+      });
+      rij.appendChild(uit);
+      el.appendChild(rij);
+    } else if (leger.kracht <= 0) {
+      el.appendChild(Game.util.el('div', 'beschrijving',
+        'Bouw een oefenveld, kazerne of kasteel en zet er soldaten op om een leger te vormen.'));
+    }
+  }
+
+  /* The upgrade offer: a building that can grow into a bigger version of
+     itself says so right here, with what it would become and what it costs. */
+  function verbeterBlok(el, s, g, d) {
+    if (!d.verbetering) return;
+    var check = Game.core.construction.kanVerbeteren(s, g);
+    if (!check.naar) return;
+
+    var blok = Game.util.el('div', 'verbeterblok' + (check.ok ? '' : ' kan-niet'));
+    blok.appendChild(Game.util.el('div', 'kop', '⬆️ Uitbouwen'));
+
+    var kop = Game.util.el('div', 'verbeternaam', check.naar.emoji + ' ' + check.naar.naam);
+    blok.appendChild(kop);
+    blok.appendChild(Game.util.el('div', 'beschrijving', check.naar.beschrijving));
+
+    var winst = verschillen(d, check.naar);
+    if (winst.length) blok.appendChild(Game.util.el('div', 'verbeterwinst', winst.join(' · ')));
+
+    var knop = Game.util.el('button', 'verbeterknop',
+      check.ok ? 'Uitbouwen (' + Game.ui.stad.kostenTekst(d.verbetering.kosten) + ')' : check.reden);
+    knop.disabled = !check.ok;
+    knop.addEventListener('click', function () {
+      Game.core.construction.verbeter(s, g);
+      Game.render.renderer.verversGebouwen(s);
+      Game.ui.buildmenu.ververs(s, true);
+      P.ververs(s, true);
+    });
+    blok.appendChild(knop);
+    el.appendChild(blok);
+  }
+
+  /* What the player actually gains, in their own terms. */
+  function verschillen(oud, nieuw) {
+    var uit = [];
+    if ((nieuw.woonruimte || 0) !== (oud.woonruimte || 0)) {
+      uit.push('🛏️ ' + (oud.woonruimte || 0) + ' → ' + (nieuw.woonruimte || 0));
+    }
+    if (nieuw.banen && oud.banen && nieuw.banen.aantal !== oud.banen.aantal) {
+      uit.push('👥 ' + oud.banen.aantal + ' → ' + nieuw.banen.aantal);
+    }
+    if (nieuw.wint && oud.wint && nieuw.wint.tempo !== oud.wint.tempo) {
+      uit.push(Game.config.resources[nieuw.wint.res].emoji + ' ' +
+        (oud.wint.tempo * 60).toFixed(0) + ' → ' + (nieuw.wint.tempo * 60).toFixed(0) + ' /min');
+    }
+    if (nieuw.maakt && oud.maakt) {
+      for (var r in nieuw.maakt.uit) {
+        if (oud.maakt.uit[r] && oud.maakt.uit[r] !== nieuw.maakt.uit[r]) {
+          uit.push(Game.config.resources[r].emoji + ' ' + (oud.maakt.uit[r] * 60).toFixed(0) +
+            ' → ' + (nieuw.maakt.uit[r] * 60).toFixed(0) + ' /min');
+        }
+      }
+    }
+    if ((nieuw.tevredenheid || 0) !== (oud.tevredenheid || 0)) {
+      uit.push('😀 ' + (oud.tevredenheid || 0) + ' → ' + (nieuw.tevredenheid || 0));
+    }
+    if ((nieuw.verdediging || 0) !== (oud.verdediging || 0)) {
+      uit.push('🛡️ ' + (oud.verdediging || 0) + ' → ' + (nieuw.verdediging || 0));
+    }
+    return uit;
+  }
 
   function regel(k, v) {
     var r = Game.util.el('div', 'regel');
@@ -177,6 +276,12 @@
     }
 
     if (d.id !== 'dorpsplein') {
+      var verzet = Game.util.el('button', '', '✋ Verplaatsen');
+      verzet.title = 'Kost een vijfde van de bouwkosten: ' +
+        Game.ui.stad.kostenTekst(Game.core.construction.verplaatsKosten(g.type));
+      verzet.addEventListener('click', function () { spel.startVerplaatsen(g); });
+      rij.appendChild(verzet);
+
       var sloop = Game.util.el('button', 'gevaar', '🔥 Slopen');
       sloop.addEventListener('click', function () {
         Game.core.construction.sloop(s, g);
