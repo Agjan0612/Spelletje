@@ -96,6 +96,9 @@
 
   /* ---------------------------------------------------------- tevredenheid */
 
+  /* Town-wide service total. Kept for the overview screens; the happiness
+     calculation itself uses the *local* coverage from core/buurt.js, because
+     a chapel only comforts the people who can walk to it. */
   P.dienstenPunten = function (s) {
     var perType = {};
     for (var i = 0; i < s.gebouwen.length; i++) {
@@ -121,14 +124,26 @@
     var over = s.bevolking.ruimte - s.bevolking.totaal;
     var wonen = over >= 0 ? Math.min(8, over * 1.5) : Math.max(-30, over * 4);
 
-    /* Services have to keep up with the city: the same chapel means less in a
-       town of 200 than in a hamlet of 20. The scaling is gentle enough that a
-       well-built city can still reach the top of the range. */
-    var punten = P.dienstenPunten(s);
-    var diensten = Math.min(40, punten * 30 / Game.util.clamp(s.bevolking.totaal, 20, 160));
+    /* Services count where they stand. core/buurt.js walks every home, adds
+       up what it can reach, and averages that over the town weighted by how
+       many people live in each house. A city therefore scales naturally: the
+       further it sprawls, the harder its edges are to serve.
+       Falls back to the live computation for a state that has not been
+       through herbereken yet. */
+    var dekking = typeof s.dienstdekking === 'number'
+      ? s.dienstdekking : Game.core.buurt.dekking(s).diensten;
+    var diensten = dekking * 40;
 
-    /* A close-knit, compactly built town lifts everyone's spirits a little. */
-    var samen = (s.samenhorigheid || 0) * 8;
+    /* And how pleasant those homes stand: a fountain on the square lifts the
+       street, a tannery or a quarry at the end of it does the opposite. */
+    var sfeerWaarde = typeof s.sfeer === 'number'
+      ? s.sfeer : Game.core.buurt.dekking(s).aantrekkelijkheid;
+    var sfeer = Game.util.clamp(sfeerWaarde * 0.6, -12, 10);
+
+    /* A close-knit, compactly built town lifts everyone's spirits a little.
+       Worth less than it was: local services now do most of that work, and
+       counting compactness twice would double-charge the same virtue. */
+    var samen = (s.samenhorigheid || 0) * 5;
 
     var honger = s.voedselTekort > 1e-6 ? -22 : 0;
     var moreel = s.moreel || 0;
@@ -136,8 +151,10 @@
 
     return {
       basis: 20, voedsel: voedsel, variatie: variatie, wonen: wonen,
-      diensten: diensten, samen: samen, honger: honger, moreel: moreel, onderzoek: onderzoek,
-      doel: Game.util.clamp(20 + voedsel + variatie + wonen + diensten + samen +
+      diensten: diensten, sfeer: sfeer, samen: samen, honger: honger,
+      moreel: moreel, onderzoek: onderzoek,
+      dekking: dekking,
+      doel: Game.util.clamp(20 + voedsel + variatie + wonen + diensten + sfeer + samen +
         honger + moreel + onderzoek, 0, 100)
     };
   };

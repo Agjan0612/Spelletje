@@ -305,6 +305,10 @@
     /* --- roads, drawn under the buildings --- */
     if (Game.render.paths && p > 12) Game.render.paths.teken(ctx, cam, s, p);
 
+    /* --- map overlay: tints the ground to answer one question at a time.
+       Above the roads, below everything that stands up. --- */
+    if (Game.render.lagen) Game.render.lagen.teken(ctx, cam, s, p);
+
     /* --- placement grid --- */
     if (ui.plaatsType && p > 14) {
       ctx.strokeStyle = 'rgba(255,255,255,.10)';

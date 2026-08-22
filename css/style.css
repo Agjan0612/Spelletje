@@ -511,3 +511,46 @@ ul.overzicht li.slecht { border-left-color: var(--bloed); }
   #logbox { width: 232px; }
   #log-toggle { left: 248px; }
 }
+
+/* ===== Kaartlagen ==========================================================
+   De balk met kaartlagen staat onderin het speelveld, tussen het logboek
+   (linksonder) en de minimap (rechtsonder) in, met de legenda erboven. */
+#lagenbalk {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: 10px;
+  z-index: 10; display: flex; gap: 4px;
+  background: rgba(26, 18, 11, .82); padding: 4px;
+  border: 1px solid var(--rand); border-radius: 6px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, .4);
+}
+.laagknop {
+  display: flex; align-items: center; gap: 5px;
+  padding: 4px 9px; font-size: 12px; cursor: pointer;
+  background: var(--hout); color: var(--perkament-dof);
+  border: 1px solid var(--rand); border-radius: 4px;
+}
+.laagknop:hover { background: var(--hout-licht); color: var(--perkament); }
+.laagknop.actief {
+  background: var(--goud); color: #2b1d12; font-weight: 700;
+  border-color: var(--goud-licht);
+}
+.laagknop .ico { font-size: 14px; line-height: 1; }
+
+#lagen-legenda {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: 50px;
+  z-index: 10; max-width: 540px; padding: 6px 10px;
+  background: rgba(26, 18, 11, .9); border: 1px solid var(--rand);
+  border-left: 3px solid var(--goud); border-radius: 0 5px 5px 0;
+  font-size: 12px; line-height: 1.4; color: var(--perkament-dof);
+}
+#lagen-legenda b { color: var(--goud-licht); }
+#lagen-legenda .schaal { display: inline-flex; gap: 0; margin-left: 8px; vertical-align: middle; }
+#lagen-legenda .schaal i { width: 22px; height: 8px; display: inline-block; }
+#lagen-legenda .schaal .slecht { background: rgba(214, 60, 70, .8); border-radius: 3px 0 0 3px; }
+#lagen-legenda .schaal .matig  { background: rgba(214, 190, 70, .8); }
+#lagen-legenda .schaal .goed   { background: rgba(64, 190, 70, .8); border-radius: 0 3px 3px 0; }
+
+/* Op smalle schermen zou de balk over het logboek heen vallen. */
+@media (max-width: 900px) {
+  .laagknop .lbl { display: none; }
+  #lagen-legenda { max-width: 70vw; }
+}

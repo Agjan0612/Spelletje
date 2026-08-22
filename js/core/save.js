@@ -92,6 +92,12 @@
     s.tevredenheid = typeof s.tevredenheid === 'number' ? s.tevredenheid : 60;
     s.snelheid = s.snelheid || 1;
 
+    /* Local services and desirability, added later: both are derived, so an
+       older save only needs the fields to exist — herbereken below fills
+       them in with the real numbers. */
+    s.dienstdekking = typeof s.dienstdekking === 'number' ? s.dienstdekking : 0;
+    s.sfeer = typeof s.sfeer === 'number' ? s.sfeer : 0;
+
     /* Relief layer: saves from before it lack per-tile height. Recompute it
        from the seed so old towns get relief too, without breaking pure JSON. */
     if (s.kaart.seed != null && (!s.kaart.tegels[0] || typeof s.kaart.tegels[0].h !== 'number')) {

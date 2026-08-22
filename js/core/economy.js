@@ -82,7 +82,7 @@
       if (d.maakt) {
         var factor = g.werkers * mult;
         if (d.seizoensgevoelig) factor *= seizoen.factor(s, 'akker');
-        if (g.type === 'boerderij') factor *= molenBonus(s, g);
+        if (isAkker(d)) factor *= molenBonus(s, g) * akkerBonus(s, g, d);
 
         if (factor > 0) {
           /* Scale the recipe down to what the inputs allow. */
@@ -147,7 +147,14 @@
       ' zit vol (' + Math.round(s.capaciteit) + '). Bouw een voorraadschuur of pakhuis.');
   }
 
-  /* A windmill within range makes nearby farms noticeably more productive. */
+  /* Does this building grow grain in the open field? Both the farm and the
+     hall it upgrades into do, and both care about the lie of the land. */
+  function isAkker(d) {
+    return !!(d.seizoensgevoelig && d.maakt && d.maakt.uit && d.maakt.uit.graan);
+  }
+
+  /* A windmill within range makes nearby farms noticeably more productive —
+     and a mill on a rise catches far more wind than one in a hollow. */
   function molenBonus(s, boerderij) {
     var bonus = 1;
     for (var i = 0; i < s.gebouwen.length; i++) {
@@ -155,12 +162,27 @@
       if (g.type !== 'molen' || !g.gebouwd || g.uit) continue;
       var d = Game.core.state.def(g);
       var dx = g.x - boerderij.x, dy = g.y - boerderij.y;
-      if (dx * dx + dy * dy <= d.boerderijStraal * d.boerderijStraal) {
-        bonus = Math.max(bonus, 1 + d.boerderijBonus);
-      }
+      if (dx * dx + dy * dy > d.boerderijStraal * d.boerderijStraal) continue;
+      var wind = 1 + 0.5 * Game.core.buurt.relief(s, g.x, g.y);
+      bonus = Math.max(bonus, 1 + d.boerderijBonus * wind);
     }
     return bonus;
   }
+
+  /* The lie of the land under a field. Low, well-watered ground irrigates
+     itself; a field carved into a hillside is thin and dries out. The floor
+     keeps a badly placed farm workable — never worthless. */
+  E.AKKER_WATER = 0.15;
+  E.AKKER_HELLING = 0.18;
+  function akkerBonus(s, g, d) {
+    var mid = (d.grootte - 1) / 2;
+    var f = 1;
+    if (Game.core.buurt.bijWater(s, g.x + mid, g.y + mid, 5)) f += E.AKKER_WATER;
+    f -= E.AKKER_HELLING * Game.core.buurt.relief(s, g.x + mid, g.y + mid);
+    return Math.max(0.7, f);
+  }
+  E.akkerBonus = akkerBonus;
+  E.isAkker = isAkker;
 
   /* A harbour within range makes nearby fishing huts land a bigger catch. */
   function havenBonus(s, vissershut) {

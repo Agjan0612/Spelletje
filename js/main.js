@@ -40,6 +40,7 @@
     Game.ui.quests.init(spel);
     Game.ui.stad.init(spel);
     Game.ui.onderzoek.init(spel);
+    Game.ui.lagen.init(spel);
     Game.ui.overlay.init(spel);
     if (Game.render.minimap) Game.render.minimap.init(spel);
 
@@ -326,8 +327,13 @@
 
       if (ev.key === 'Escape') {
         if (Game.ui.overlay.isOpen()) return;
+        if (Game.ui.lagen.uit()) return;
         if (spel.plaatsType) spel.kiesBouw(null);
         else { spel.geselecteerd = null; Game.ui.panel.ververs(spel.state); }
+      }
+      /* One key steps through the map overlays and back off again. */
+      if (ev.key.toLowerCase() === 'l' && !ev.shiftKey && !ev.ctrlKey && !ev.metaKey) {
+        Game.ui.lagen.volgende();
       }
       if (ev.key === ' ') {
         ev.preventDefault();

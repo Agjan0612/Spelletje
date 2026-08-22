@@ -71,6 +71,12 @@
       /* How compactly the town is built around its square (0..1, derived). */
       samenhorigheid: 0,
 
+      /* Derived in herbereken from core/buurt.js: the share of the town's
+         homes that has services within reach (0..1), and the average
+         desirability of the spots they stand on. */
+      dienstdekking: 0,
+      sfeer: 0,
+
       /* The village register: named inhabitants, kept in step with the
          headcount by core/dorpelingen.js. Flavour only, never authoritative. */
       dorpelingen: [],
@@ -218,6 +224,13 @@
     s.bevolking.werkloos = Math.max(0, s.bevolking.totaal - werkend);
 
     s.samenhorigheid = S.samenhorigheid(s);
+
+    /* How well the town's homes are served by what stands near them, and how
+       pleasant those spots are. Both are derived in core/buurt.js and only
+       recomputed when a building actually moved. */
+    var buurt = Game.core.buurt.dekking(s);
+    s.dienstdekking = buurt.diensten;
+    s.sfeer = buurt.aantrekkelijkheid;
   };
 
   /* How much the town reads as one whole rather than scattered outposts:

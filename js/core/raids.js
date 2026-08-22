@@ -164,7 +164,7 @@
         if (d.dekking && d.dekking.straal) {
           if (!cor) { positioneel += d.verdediging; continue; }
           var bx = g.x + d.grootte / 2, by = g.y + d.grootte / 2;
-          if (R.afstandTotCorridor(cor, bx, by) <= d.dekking.straal + cor.breedte * 0.5) {
+          if (R.afstandTotCorridor(cor, bx, by) <= R.dekkingStraal(s, g, d) + cor.breedte * 0.5) {
             positioneel += d.verdediging;
           }
         } else {
@@ -174,6 +174,16 @@
     }
     var o = Game.core.onderzoek ? Game.core.onderzoek.bonus(s).verdediging : 1;
     return { garnizoen: garnizoen * o, positioneel: positioneel * o };
+  };
+
+  /* How far a tower or wall segment actually watches. A watchtower on high
+     ground sees half again as far as one down in the valley — the height map
+     was already there for the hillshade, this makes it matter. */
+  R.dekkingStraal = function (s, g, d) {
+    d = d || Game.core.state.def(g);
+    if (!d.dekking || !d.dekking.straal) return 0;
+    var mid = (d.grootte - 1) / 2;
+    return d.dekking.straal * (1 + 0.5 * Game.core.buurt.relief(s, g.x + mid, g.y + mid));
   };
 
   R.effectieveVerdediging = function (s) {

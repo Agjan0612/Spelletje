@@ -19,6 +19,7 @@
       g.uit ? 1 : 0, g.waarschuwing, s.bevolking.werkloos,
       Math.round(s.tevredenheid), s.seizoen, s.tijdperk,
       Math.round((s.samenhorigheid || 0) * 100), s.bevolking.soldaten,
+      Math.round((s.dienstdekking || 0) * 100), Math.round(s.sfeer || 0),
       s.raid.fase, s.leger ? (s.leger.uitval ? 1 : 0) + ':' + s.leger.overwinningen : '-',
       Game.core.construction.kanVerbeteren(s, g).ok ? 1 : 0].join('|');
   }
@@ -156,11 +157,50 @@
       el.appendChild(Game.util.el('div', 'waarschuwing', '⚠️ ' + g.waarschuwing));
     }
 
+    buurtBlok(el, s, g, d);
+
     if (g.type === 'dorpsplein') dorpsleven(el, s);
 
     verbeterBlok(el, s, g, d);
     el.appendChild(knoppen(s, g, d));
   };
+
+  /* What this spot on the map is like: what a household here can reach on
+     foot, and how pleasant it is to stand. Only shown where it changes a
+     decision — for homes, and for anything that colours the neighbourhood. */
+  function buurtBlok(el, s, g, d) {
+    var toontDienst = !!d.woonruimte;
+    var toontSfeer = !!(d.woonruimte || d.aantrekkelijkheid);
+    if (!toontDienst && !toontSfeer) return;
+
+    var mid = (d.grootte - 1) / 2;
+    el.appendChild(Game.util.el('div', 'kop', '🏘️ De buurt hier'));
+
+    if (toontDienst) {
+      var punten = Game.core.buurt.dienstenOp(s, g.x + mid, g.y + mid);
+      var deel = Math.round(Game.util.clamp(punten / Game.core.buurt.VOLLEDIG, 0, 1) * 100);
+      el.appendChild(regel('Voorzieningen', deel + '%'));
+      if (deel < 60) {
+        el.appendChild(Game.util.el('div', 'beschrijving',
+          'Deze bewoners hebben weinig binnen loopafstand. Een waterput, kapel of herberg dichterbij tilt hun humeur op.'));
+      }
+    }
+
+    if (toontSfeer) {
+      var sfeer = Game.core.buurt.aantrekkelijkOp(s, g.x + mid, g.y + mid);
+      el.appendChild(regel('Aantrekkelijkheid', Math.round(sfeer)));
+    }
+
+    if (d.aantrekkelijkheid) {
+      el.appendChild(Game.util.el('div', 'beschrijving',
+        d.aantrekkelijkheid > 0
+          ? 'Dit gebouw maakt de omgeving prettiger om te wonen (+' + d.aantrekkelijkheid + ').'
+          : 'Rook, herrie en stof: dit maakt de omgeving minder prettig (' + d.aantrekkelijkheid + '). Zet het aan de rand van je stad.'));
+    }
+
+    el.appendChild(Game.util.el('div', 'beschrijving',
+      'Druk op L voor de kaartlagen om dit over je hele stad te zien.'));
+  }
 
   /* The town square doubles as the seat of village life: how close-knit the
      town is, and what your field army looks like. Feasts and the merchant
@@ -168,8 +208,10 @@
   function dorpsleven(el, s) {
     el.appendChild(Game.util.el('div', 'kop', '🤝 Dorpsleven'));
     el.appendChild(regel('Samenhorigheid', Math.round((s.samenhorigheid || 0) * 100) + '%'));
+    el.appendChild(regel('Huizen met voorzieningen', Math.round((s.dienstdekking || 0) * 100) + '%'));
+    el.appendChild(regel('Gemiddelde buurt', Math.round(s.sfeer || 0)));
     el.appendChild(Game.util.el('div', 'beschrijving',
-      'Bouw dicht om het plein: een compact dorp is een gelukkiger dorp.'));
+      'Bouw dicht om het plein, en zorg dat elk huis een put, kapel of herberg binnen loopafstand heeft.'));
 
     if (s.tijdperk < 2) return;
 

@@ -57,6 +57,19 @@
       }
     }
 
+    /* Some buildings are only put up where people want to live. */
+    if (d.plaats && d.plaats.aantrekkelijkheid) {
+      var mx2 = x + (d.grootte - 1) / 2, my2 = y + (d.grootte - 1) / 2;
+      var hier = Game.core.buurt.aantrekkelijkOp(s, mx2, my2);
+      if (hier < d.plaats.aantrekkelijkheid) {
+        return {
+          ok: false,
+          reden: 'De buurt is hier niet deftig genoeg (' + Math.round(hier) +
+            ' van ' + d.plaats.aantrekkelijkheid + ')'
+        };
+      }
+    }
+
     var kosten = opties.negeerKosten ? (opties.kosten || {}) : d.kosten;
     if (!Game.core.state.kanBetalen(s, kosten)) {
       return { ok: false, reden: 'Te weinig grondstoffen' };
@@ -209,6 +222,20 @@
     if (!g.gebouwd) return { ok: false, reden: 'Eerst afbouwen', naar: naar, kosten: v.kosten };
     if (s.tijdperk < v.tijdperk) {
       return { ok: false, reden: 'Vanaf tijdperk ' + v.tijdperk, naar: naar, kosten: v.kosten };
+    }
+    /* A cottage only grows into a half-timbered house on a street worth
+       living on. This is where building nicely pays off. */
+    if (v.aantrekkelijkheid) {
+      var mid = (d.grootte - 1) / 2;
+      var hier = Game.core.buurt.aantrekkelijkOp(s, g.x + mid, g.y + mid);
+      if (hier < v.aantrekkelijkheid) {
+        return {
+          ok: false,
+          reden: 'De buurt is nog niet aantrekkelijk genoeg (' + Math.round(hier) +
+            ' van ' + v.aantrekkelijkheid + ')',
+          naar: naar, kosten: v.kosten, sfeerTekort: true
+        };
+      }
     }
     if (!Game.core.state.kanBetalen(s, v.kosten)) {
       return { ok: false, reden: 'Te weinig grondstoffen', naar: naar, kosten: v.kosten };

@@ -35,6 +35,27 @@
       if (d.banen && !Game.config.jobs[d.banen.baan]) {
         fouten.push(d.id + ': onbekende baan ' + d.banen.baan);
       }
+      /* Since core/buurt.js made services local, happiness points without a
+         reach would silently never arrive anywhere. */
+      if (d.tevredenheid && !d.bereik) {
+        fouten.push(d.id + ': heeft tevredenheid maar geen bereik — die punten bereiken geen enkel huis');
+      }
+      if (d.bereik && !d.tevredenheid) {
+        fouten.push(d.id + ': heeft bereik maar geen tevredenheid');
+      }
+      if (d.bereik !== undefined && (typeof d.bereik !== 'number' || d.bereik <= 0)) {
+        fouten.push(d.id + ': ongeldig bereik ' + d.bereik);
+      }
+      if (d.aantrekkelijkheid !== undefined && typeof d.aantrekkelijkheid !== 'number') {
+        fouten.push(d.id + ': aantrekkelijkheid moet een getal zijn');
+      }
+      if (d.sfeerStraal !== undefined && !d.aantrekkelijkheid) {
+        fouten.push(d.id + ': sfeerStraal zonder aantrekkelijkheid doet niets');
+      }
+      if (d.plaats && d.plaats.aantrekkelijkheid !== undefined &&
+          typeof d.plaats.aantrekkelijkheid !== 'number') {
+        fouten.push(d.id + ': plaats.aantrekkelijkheid moet een getal zijn');
+      }
       if (d.verbetering) {
         var doel = Game.config.gebouw(d.verbetering.naar);
         if (!doel) {
@@ -45,6 +66,10 @@
             fouten.push(d.id + ': verbeterdoel ' + doel.id + ' heeft een andere voetafdruk');
           }
           controleerResources(fouten, d.id + '.verbetering.kosten', d.verbetering.kosten, res);
+          if (d.verbetering.aantrekkelijkheid !== undefined &&
+              typeof d.verbetering.aantrekkelijkheid !== 'number') {
+            fouten.push(d.id + ': verbetering.aantrekkelijkheid moet een getal zijn');
+          }
         }
       }
     });

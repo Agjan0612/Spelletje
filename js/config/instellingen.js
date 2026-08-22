@@ -20,16 +20,16 @@
 
   Game.config.moeilijkheden = [
     {
-      id: 'rustig', naam: 'Rustig', emoji: '🌤️', raid: 0.65, raidRust: 1.35,
-      beschrijving: 'Rovers zijn zwakker en komen minder vaak langs. Bouwen zonder zorgen.'
+      id: 'rustig', naam: 'Rustig', emoji: '🌤️', raid: 0.65, raidRust: 1.35, bereik: 1.35,
+      beschrijving: 'Rovers zijn zwakker en komen minder vaak langs, en voorzieningen dragen verder. Bouwen zonder zorgen.'
     },
     {
-      id: 'normaal', naam: 'Normaal', emoji: '⚖️', raid: 1, raidRust: 1,
-      beschrijving: 'Het spel zoals het bedoeld is: je moet op tijd verdediging bouwen.'
+      id: 'normaal', naam: 'Normaal', emoji: '⚖️', raid: 1, raidRust: 1, bereik: 1,
+      beschrijving: 'Het spel zoals het bedoeld is: je moet op tijd verdediging bouwen én je stad netjes indelen.'
     },
     {
-      id: 'pittig', naam: 'Pittig', emoji: '⚔️', raid: 1.4, raidRust: 0.75,
-      beschrijving: 'Sterkere bendes, vaker. Een muur en een kazerne zijn geen luxe meer.'
+      id: 'pittig', naam: 'Pittig', emoji: '⚔️', raid: 1.4, raidRust: 0.75, bereik: 0.85,
+      beschrijving: 'Sterkere bendes, vaker, en voorzieningen dragen minder ver. Een muur, een kazerne en een strak stratenplan zijn geen luxe meer.'
     }
   ];
 

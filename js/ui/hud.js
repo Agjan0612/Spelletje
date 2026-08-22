@@ -145,7 +145,8 @@
       'Voedselvoorraad ' + n(d.voedsel) + '\n' +
       'Afwisseling in eten ' + n(d.variatie) + '\n' +
       'Woonruimte ' + n(d.wonen) + '\n' +
-      'Voorzieningen ' + n(d.diensten) + '\n' +
+      'Voorzieningen ' + n(d.diensten) + ' (' + Math.round((d.dekking || 0) * 100) + '% van je huizen bereikt ze)\n' +
+      'Aantrekkelijke buurt ' + n(d.sfeer) + '\n' +
       'Samenhorigheid ' + n(d.samen) + '\n' +
       (d.onderzoek ? 'Onderzoek ' + n(d.onderzoek) + '\n' : '') +
       (d.honger ? 'HONGER ' + n(d.honger) + '\n' : '') +

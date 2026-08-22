@@ -224,6 +224,7 @@ js/core/              De simulatie
   population.js         Eten, tevredenheid, groei, banen
   seasons.js            Dagen, seizoenen, jaren
   raids.js              Roversaanvallen
+  buurt.js              Wat er per plek in de buurt staat (voorzieningen, sfeer)
   ages.js               Tijdperkovergang en overwinning
   feesten.js            Feesten en het moreel
   handel.js             De reizende koopman
@@ -239,10 +240,12 @@ js/render/            Tekenen op het canvas
   props.js              Erf rond de gebouwen (houtstapels, kramen, hekken)
   wildlife.js           Schapen en springende vissen
   floaters.js           Zwevende opbrengstcijfers
+  lagen.js              De vier kaartlagen
   raiders.js  minimap.js
 
 js/ui/                De schermelementen
   hud.js  buildmenu.js  panel.js  quests.js  log.js  overlay.js
+  lagen.js              De knoppenbalk voor de kaartlagen
   stad.js               Stadszaken: feest, koopman, opdracht, overzicht
   onderzoek.js          Het onderzoeksscherm
   audio.js              Geluid (volledig gesynthetiseerd)
