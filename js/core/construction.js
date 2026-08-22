@@ -30,6 +30,11 @@
     if (d.tijdperk > s.tijdperk) {
       return { ok: false, reden: 'Vergrendeld tot tijdperk ' + d.tijdperk };
     }
+    /* A scenario may simply forbid something — no farmland on a frozen coast. */
+    var regels = (Game.config.scenario(s.scenario) || {}).regels;
+    if (regels && regels.verboden && regels.verboden.indexOf(type) >= 0) {
+      return { ok: false, reden: 'In dit scenario kun je dat niet bouwen' };
+    }
 
     /* A street is a flag on a tile, not a building, so it plays by its own
        short set of rules: laying one on an existing street takes it up. */
@@ -183,6 +188,8 @@
       voortgang: 0,
       gebouwd: false,
       uit: false,
+      ervaring: 0,
+      bouwPrio: 0,
       waarschuwing: ''
     };
     s.gebouwen.push(g);
@@ -192,18 +199,44 @@
     return { ok: true, gebouw: g };
   };
 
-  /* Idle villagers work on every building site at once; more idlers means
-     faster construction, up to a sensible cap. */
-  C.tick = function (s, dt) {
+  /* How many sites the crew works on at once. Everything used to be built
+     simultaneously, so placing ten buildings meant ten crawling pits and
+     nothing finished for ages. A queue is both more legible and a real
+     decision: what do you want standing first? */
+  C.PLOEGEN = 3;
+
+  /* The sites, in the order they will be worked on. Anything the player moved
+     to the front comes first; the rest follow in the order they were placed. */
+  C.wachtrij = function (s) {
     var sites = [];
     for (var i = 0; i < s.gebouwen.length; i++) {
       if (!s.gebouwen[i].gebouwd) sites.push(s.gebouwen[i]);
     }
-    if (!sites.length) return;
+    sites.sort(function (a, b) {
+      var pa = a.bouwPrio || 0, pb = b.bouwPrio || 0;
+      if (pa !== pb) return pb - pa;
+      return a.id - b.id;
+    });
+    return sites;
+  };
+
+  /* Move a site to the front of the queue (or back into the row). */
+  C.zetVoorrang = function (s, g, aan) {
+    if (g.gebouwd) return false;
+    g.bouwPrio = aan === false ? 0 : (aan == null && g.bouwPrio ? 0 : 1);
+    return true;
+  };
+
+  /* Idle villagers work on the first few sites in the queue; more idlers
+     means faster construction, up to a sensible cap. */
+  C.tick = function (s, dt) {
+    var wachtrij = C.wachtrij(s);
+    if (!wachtrij.length) return;
 
     /* Nothing gets raised while the militia is standing on the wall. */
     if (Game.core.raids.bouwStilgelegd(s)) return;
 
+    var sites = wachtrij.slice(0, C.PLOEGEN);
     var bouwers = Math.min(8, s.bevolking.werkloos);
     var snelheid = (0.5 + bouwers * 0.55) * (s.bonus.bouw || 1) / sites.length;
 
@@ -321,6 +354,20 @@
     }
     Game.ui.log.schrijf(s, check.naar.emoji + ' ' + oud.naam + ' is uitgebouwd tot ' +
       check.naar.naam + '.', 'goed');
+    return true;
+  };
+
+  /* Cancelling a site that has not been finished: everything back, no loss.
+     Demolishing a *standing* building still costs you half — that is a
+     decision you already made. This is for the misclick. */
+  C.annuleer = function (s, g) {
+    if (!g || g.gebouwd) return false;
+    var d = Game.config.gebouw(g.type);
+    for (var r in d.kosten) Game.core.state.voegToe(s, r, d.kosten[r]);
+    C.wisTegels(s, g);
+    var i = s.gebouwen.indexOf(g);
+    if (i >= 0) s.gebouwen.splice(i, 1);
+    Game.core.state.herbereken(s);
     return true;
   };
 

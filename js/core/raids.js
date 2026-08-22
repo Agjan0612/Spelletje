@@ -290,6 +290,11 @@
   function zwaarte(s) { return Game.config.moeilijkheid(s.moeilijkheid); }
 
   function volgendeRust(s) {
+    /* A scenario may want them far more often than usual. */
+    var regels = (Game.config.scenario(s.scenario) || {}).regels || {};
+    if (regels.roverTempo) {
+      return (340 - s.tijdperk * 30 + Math.random() * 90) * regels.roverTempo;
+    }
     var basis = 340 - s.tijdperk * 30;
     basis += Math.min(140, (s.leger ? s.leger.overwinningen : 0) * 12);
     return (basis + Math.random() * 90) * zwaarte(s).raidRust;
@@ -503,6 +508,10 @@
     Game.ui.log.schrijf(s, tekst, 'slecht');
     Game.ui.toast('🔥 De rovers hebben toegeslagen!');
     s.moreel = (s.moreel || 0) - 12;
+    /* And the roads out of town are not safe for a while, so every trade
+       route stops earning. A lost raid finally costs more than a pile of
+       stolen timber. */
+    if (Game.core.buren) Game.core.buren.onderbreek(s);
     /* Evacuated towns lose goods, not people. */
     if (!evac && s.bevolking.totaal > 4 && Math.random() < 0.5) {
       Game.core.population.verwijderDorpeling(s);

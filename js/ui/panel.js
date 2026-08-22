@@ -24,6 +24,10 @@
       s.bevolking.kinderen + ':' + s.bevolking.ouderen,
       s.wens && s.wens.actief ? s.wens.actief.gebouwId : '-',
       s.belastingtarief, s.koud ? 1 : 0,
+      g.bouwPrio || 0, s.arbeid ? (s.arbeid.auto ? 1 : 0) + ':' + s.arbeid.bouwers +
+        ':' + Object.keys(s.arbeid.prioriteit || {}).map(function (k2) {
+          return s.arbeid.prioriteit[k2];
+        }).join('') : '-',
       s.raid.fase, s.leger ? (s.leger.uitval ? 1 : 0) + ':' + s.leger.overwinningen : '-',
       Game.core.construction.kanVerbeteren(s, g).ok ? 1 : 0].join('|');
   }
@@ -168,8 +172,46 @@
     if (g.type === 'dorpsplein') dorpsleven(el, s);
 
     verbeterBlok(el, s, g, d);
+    if (!g.gebouwd) bouwrijBlok(el, s, g, d);
     el.appendChild(knoppen(s, g, d));
   };
+
+  /* Where this site sits in the queue, and the button to jump it to the
+     front. The crew only works on the first few at a time, so "what do you
+     want standing first" is a real question now. */
+  function bouwrijBlok(el, s, g, d) {
+    var rij = Game.core.construction.wachtrij(s);
+    var plek = rij.indexOf(g) + 1;
+    el.appendChild(Game.util.el('div', 'kop', '🏗️ In de bouwrij'));
+    el.appendChild(regel('Plek', plek + ' van ' + rij.length));
+    el.appendChild(regel('Voortgang', Math.round((g.voortgang / d.bouwtijd) * 100) + '%'));
+    if (plek > Game.core.construction.PLOEGEN) {
+      el.appendChild(Game.util.el('div', 'beschrijving',
+        'Je ploegen werken aan de eerste ' + Game.core.construction.PLOEGEN +
+        '. Hier wordt nog niets gedaan.'));
+    }
+
+    var knoprij = Game.util.el('div', 'knoprij');
+    var voor = Game.util.el('button', g.bouwPrio ? '' : 'primair',
+      g.bouwPrio ? '↓ Uit de voorrang halen' : '⬆️ Eerst dit bouwen');
+    voor.addEventListener('click', function () {
+      Game.core.construction.zetVoorrang(s, g);
+      P.ververs(s, true);
+    });
+    knoprij.appendChild(voor);
+
+    var weg = Game.util.el('button', '', '↩️ Annuleren (alles terug)');
+    weg.title = 'Een gebouw dat nog niet staat kun je kosteloos terugdraaien.';
+    weg.addEventListener('click', function () {
+      Game.core.construction.annuleer(s, g);
+      spel.geselecteerd = null;
+      Game.render.renderer.verversGebouwen(s);
+      Game.ui.buildmenu.ververs(s, true);
+      P.ververs(s, true);
+    });
+    knoprij.appendChild(weg);
+    el.appendChild(knoprij);
+  }
 
   /* Practised hands. Shown only once there is something to show, so a fresh
      building does not carry a row of zeroes. */
@@ -299,6 +341,8 @@
       }
     }
 
+    arbeidBlok(el, s);
+
     var wens = Game.core.dorpelingen.wens(s);
     if (wens) {
       el.appendChild(Game.util.el('div', 'kop', '🙋 Een verzoek'));
@@ -331,6 +375,72 @@
       el.appendChild(Game.util.el('div', 'beschrijving',
         'Bouw een oefenveld, kazerne of kasteel en zet er soldaten op om een leger te vormen.'));
     }
+  }
+
+  /* Labour policy. Clicking + on fifty buildings is not a decision, it is
+     typing; this is the decision. Deliberately only ever *fills* empty slots
+     unless the player asks for a full redeal, so it never fights the practice
+     bonus that rewards leaving a crew alone. */
+  function arbeidBlok(el, s) {
+    var A = Game.core.arbeid;
+    A.zorg(s);
+    var verdeling = A.verdeling(s);
+
+    el.appendChild(Game.util.el('div', 'kop', '👥 Arbeidsbeleid'));
+
+    var aanRij = Game.util.el('div', 'knoprij');
+    var aan = Game.util.el('button', s.arbeid.auto ? 'primair' : '',
+      s.arbeid.auto ? '✔️ Vanzelf verdelen staat aan' : '👥 Laat ze zichzelf verdelen');
+    aan.title = 'Vrije dorpelingen nemen om de paar seconden zelf een openstaande baan, ' +
+      'in de volgorde die je hieronder kiest. Er wordt nooit iemand weggehaald bij zijn werk.';
+    aan.addEventListener('click', function () {
+      s.arbeid.auto = !s.arbeid.auto;
+      if (s.arbeid.auto) Game.core.arbeid.vulAan(s);
+      P.ververs(s, true);
+    });
+    aanRij.appendChild(aan);
+    el.appendChild(aanRij);
+
+    A.SOORTEN.forEach(function (soort) {
+      var prio = s.arbeid.prioriteit[soort.id];
+      var d = verdeling[soort.id];
+      var rij = Game.util.el('div', 'arbeidrij');
+      rij.appendChild(Game.util.el('span', 'arbeidnaam',
+        soort.emoji + ' ' + soort.naam + ' (' + d.werkers + '/' + d.plekken + ')'));
+      var knoppen = Game.util.el('span', 'arbeidknoppen');
+      ['0', '1', '2', '3'].forEach(function (n, i) {
+        var k = Game.util.el('button', prio === i ? 'gekozen' : '', ['—', '·', '··', '•••'][i]);
+        k.title = ['Niet bemannen', 'Lage voorrang', 'Gewone voorrang', 'Eerst dit'][i];
+        k.addEventListener('click', function () {
+          s.arbeid.prioriteit[soort.id] = i;
+          P.ververs(s, true);
+        });
+        knoppen.appendChild(k);
+      });
+      rij.appendChild(knoppen);
+      el.appendChild(rij);
+    });
+
+    el.appendChild(regel('Bouwers vrijhouden', s.arbeid.bouwers));
+    var bouwRij = Game.util.el('div', 'knoprij');
+    [1, 3, 6].forEach(function (n) {
+      var k = Game.util.el('button', s.arbeid.bouwers === n ? 'primair' : '', n + ' bouwers');
+      k.title = 'Zoveel dorpelingen blijven zonder baan om te kunnen bouwen.';
+      k.addEventListener('click', function () { s.arbeid.bouwers = n; P.ververs(s, true); });
+      bouwRij.appendChild(k);
+    });
+    el.appendChild(bouwRij);
+
+    var herRij = Game.util.el('div', 'knoprij');
+    var her = Game.util.el('button', '', '🔄 Nu opnieuw verdelen');
+    her.title = 'Haalt iedereen van zijn werk en deelt de hele beroepsbevolking opnieuw uit. ' +
+      'Dat kost wel ervaring.';
+    her.addEventListener('click', function () {
+      Game.core.arbeid.herverdeel(s);
+      P.ververs(s, true);
+    });
+    herRij.appendChild(her);
+    el.appendChild(herRij);
   }
 
   /* The upgrade offer: a building that can grow into a bigger version of

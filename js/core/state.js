@@ -18,8 +18,12 @@
     seed = seed || Math.floor(Math.random() * 1e9);
     opties = opties || {};
 
-    var maat = Game.config.kaartmaat(opties.kaart);
-    var zwaarte = Game.config.moeilijkheid(opties.moeilijkheid);
+    /* A scenario may override the map size, the difficulty and the starting
+       position; everything else about the world is generated as always. */
+    var scenario = Game.config.scenario(opties.scenario);
+    var regels = scenario.regels || {};
+    var maat = Game.config.kaartmaat(regels.kaart || opties.kaart);
+    var zwaarte = Game.config.moeilijkheid(regels.moeilijkheid || opties.moeilijkheid);
 
     var kaart = Game.core.map.genereer(seed, maat.b, maat.h);
     var start = Game.core.map.kiesStartplek(kaart);
@@ -31,6 +35,9 @@
       dorpsnaam: dorpsnaam || 'Nieuw Dorp',
       kaartmaat: maat.id,
       moeilijkheid: zwaarte.id,
+      scenario: scenario.id,
+      /* Set once a scenario is decided, so the end screen knows which it was. */
+      scenarioAf: false, scenarioVerloren: false,
 
       tijd: 0,
       dag: 0,
@@ -133,6 +140,16 @@
          live on the map tiles as `t.weg`. */
       wegTeller: 0,
 
+      /* Labour policy: what kind of work gets the idle hands first, and how
+         many are kept free as builders (core/arbeid.js). */
+      arbeid: null,
+      arbeidTimer: 0,
+
+      /* Towns beyond the map edge: reputation, trade routes and requests.
+         Generated on the first tick by core/buren.js. */
+      buren: [],
+      burenTimer: 0,
+
       /* Purely cosmetic walkers on the map. */
       wandelaars: []
     };
@@ -152,7 +169,24 @@
     var huisPlek = zoekVrijePlek(s, start.x, start.y, 1, null);
     if (huisPlek) plaatsStart(s, 'huisje', huisPlek.x, huisPlek.y);
 
-    s.bevolking.totaal = 5;
+    /* --- scenario opening position --- */
+    var begin = scenario.start || {};
+    if (begin.tijdperk) s.tijdperk = begin.tijdperk;
+    if (begin.res) {
+      for (var br in begin.res) if (s.res[br] !== undefined) s.res[br] = begin.res[br];
+    }
+    (begin.gebouwen || []).forEach(function (type) {
+      var def = Game.config.gebouw(type);
+      if (!def) return;
+      var plek = zoekVrijePlek(s, start.x, start.y, def.grootte, function (x, y) {
+        if (!def.plaats || !def.plaats.nabij) return true;
+        return Game.core.map.nodeInBereik(s.kaart, x, y, def.plaats.nabij.node,
+          def.plaats.nabij.straal) > 0;
+      });
+      if (plek) plaatsStart(s, type, plek.x, plek.y);
+    });
+
+    s.bevolking.totaal = begin.bevolking || 5;
     S.herbereken(s);
 
     /* Give the farm two workers so the village is alive from the first second. */
@@ -173,6 +207,8 @@
       voortgang: def.bouwtijd,
       gebouwd: true,
       uit: false,
+      ervaring: 0,
+      bouwPrio: 0,
       waarschuwing: ''
     };
     s.gebouwen.push(g);

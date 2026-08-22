@@ -84,6 +84,17 @@
     s.koudeTimer = typeof s.koudeTimer === 'number' ? s.koudeTimer : 0;
     s.koud = !!s.koud;
     s.warenGeleverd = s.warenGeleverd || {};
+
+    /* Scenarios and neighbouring towns, added later. An older save is simply
+       a free game whose neighbours are generated on the next tick. */
+    s.scenario = s.scenario || 'vrij';
+    s.scenarioAf = !!s.scenarioAf;
+    s.scenarioVerloren = !!s.scenarioVerloren;
+    s.buren = Array.isArray(s.buren) ? s.buren : [];
+    s.burenTimer = typeof s.burenTimer === 'number' ? s.burenTimer : 0;
+
+    /* Labour policy, added later. core/arbeid.zorg fills in the defaults. */
+    if (Game.core.arbeid) Game.core.arbeid.zorg(s);
     s.bonus = s.bonus || { productie: 1, mijnbouw: 1 };
     s.raid = s.raid || { fase: 'rust', timer: 200, kracht: 0, nummer: 0 };
     /* The marching band, its choices and the captain were added later. An
@@ -147,6 +158,7 @@
       var g = s.gebouwen[j];
       if (!Game.config.gebouw(g.type)) { s.gebouwen.splice(j--, 1); continue; }
       if (typeof g.ervaring !== 'number') g.ervaring = 0;
+      if (typeof g.bouwPrio !== 'number') g.bouwPrio = 0;
       Game.core.construction.markeerTegels(s, g);
     }
 

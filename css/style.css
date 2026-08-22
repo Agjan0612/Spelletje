@@ -577,3 +577,31 @@ ul.overzicht li.slecht { border-left-color: var(--bloed); }
 .raidknoppen button:hover:not(:disabled) { background: var(--hout-licht); border-color: var(--goud); }
 .raidknoppen button.armed { background: var(--bloed); border-color: #d8683f; font-weight: 700; }
 .raidknoppen button:disabled { opacity: .45; cursor: not-allowed; }
+
+/* Een buurstad in de Stadszaken-kaart. */
+.stadblok.buur { border-left-color: #7fa8c9; }
+.stadregel.klein { font-size: 11px; opacity: .75; }
+.scenariorij .keuzeknop { min-width: 120px; }
+
+/* Arbeidsbeleid op het dorpsplein: één rij per soort werk. */
+.arbeidrij {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 6px; padding: 2px 0; font-size: 12px;
+}
+.arbeidnaam { color: var(--perkament-dof); }
+.arbeidknoppen { display: flex; gap: 2px; }
+.arbeidknoppen button {
+  min-width: 26px; padding: 2px 4px; font-size: 11px; line-height: 1.1;
+  background: var(--hout); color: var(--perkament-dof);
+  border: 1px solid var(--rand); border-radius: 3px; cursor: pointer;
+}
+.arbeidknoppen button:hover { background: var(--hout-licht); color: var(--perkament); }
+.arbeidknoppen button.gekozen {
+  background: var(--goud); color: #2b1d12; font-weight: 700; border-color: var(--goud-licht);
+}
+
+/* De problemenlijst in de Stadszaken-kaart. */
+.stadblok.problemen { border-left-color: var(--bloed); }
+.stadregel.probleem { line-height: 1.35; }
+.stadregel.klikbaar { cursor: pointer; text-decoration: underline dotted transparent; }
+.stadregel.klikbaar:hover { color: var(--goud-licht); text-decoration-color: var(--goud); }

@@ -140,6 +140,7 @@ verloren. Voortdurend mensen heen en weer schuiven kost je dus iets.
 | Gebouw kiezen met het toetsenbord | **Shift + 1…9** (het zoveelste gebouw in het open tabblad) |
 | Een hele rij neerzetten | **Shift + slepen** over de kaart (muren, straatjes) |
 | Gebouw verplaatsen | Klik het aan → **✋ Verplaatsen** (kost een vijfde van de bouwkosten) |
+| Laatste plaatsing terugdraaien | **Ctrl+Z** |
 | Gebouw uitbouwen | Klik het aan → **⬆️ Uitbouwen** (vanaf tijdperk 3) |
 | Pauzeren | **Spatie** |
 | Snelheid | **1** = normaal, **2** = snel, **3** = zeer snel |
@@ -254,6 +255,58 @@ rechts in beeld.
   diepere schachten, steigerbouw, wintervoorraad, pakhuisbeheer, wapenkunde,
   gildebrieven en dubbele boekhouding.
 
+## Minder klikken, meer beslissen
+
+- 👥 **Arbeidsbeleid.** Op het dorpsplein zeg je wélk werk voorrang heeft
+  (voedsel, grondstoffen, ambacht, handel, voorzieningen, leger) en hoeveel
+  bouwers je vrij wilt houden. Zet je *vanzelf verdelen* aan, dan nemen vrije
+  dorpelingen zelf een openstaande baan in die volgorde. Er wordt nooit iemand
+  wéggehaald bij zijn werk — dat zou je ervaring kosten. Wil je toch een
+  schone lei, dan is er een knop *Nu opnieuw verdelen*.
+- 🏗️ **Bouwrij.** Je ploegen werken aan drie bouwputten tegelijk in plaats van
+  aan alles. In het paneel van een gebouw in aanbouw zie je op welke plek het
+  staat, en zet je het met één knop vooraan.
+- ↩️ **Ongedaan maken.** Verkeerd geklikt? **Ctrl+Z** draait de laatste
+  plaatsing terug en je krijgt alles terug — ook straatjes. Een gebouw dat al
+  áf is sloop je gewoon in het paneel (dan houd je de helft over).
+- ❗ **Vraagt aandacht.** Rechts staat een kort lijstje met wat er nu vastloopt,
+  het ergste bovenaan. Klik erop en de camera springt naar het gebouw.
+
+## De wereld buiten je muren
+
+Aan de rand van de kaart liggen drie **buursteden**, elk met een eigen specialiteit
+en een eigen mening over je.
+
+- 🐎 **Handelsroutes.** Vanaf tijdperk 3 open je een vaste route naar een buurstad.
+  Dat kost eenmalig een wagen en een beurs, en levert daarna elke dag hun
+  specialiteit én munten op. Eindelijk iets om je munten in te *investeren* in
+  plaats van op te potten. Let op: ze willen er iets voor terug — lever je dat
+  niet, dan rijden de karren half leeg.
+- 🤝 **Aanzien.** Buursteden vragen af en toe hulp bij een misoogst of een brand.
+  Help je, dan stijgt je aanzien en wordt je route winstgevender; wijs je ze af
+  of laat je het verlopen, dan zakt het.
+- 🔥 **En een verloren overval kost je nu meer dan je voorraad:** rovers die
+  doorbreken maken de wegen onveilig, en al je routes liggen een tijd stil.
+
+## Scenario's: hetzelfde spel, een ander probleem
+
+Bij **Nieuw dorp stichten** kies je waar je aan begint:
+
+| Scenario | Wat het is |
+|---|---|
+| 🏞️ **Vrij spel** | Het spel zoals het bedoeld is. Geen klok, geen extra regels. |
+| ❄️ **Vijf winters aan de kust** | Geen akkerland. Alles moet van het water komen — en dat bevriest. |
+| ⛪ **De kathedraal van Sint-Alwin** | Bouw de kathedraal binnen twintig jaar. De klok loopt. |
+| 🐺 **Het jaar van de wolven** | Rovers, aan de lopende band. Versla er tien. |
+| 🧳 **De vluchtelingen** | Veertig monden, bijna niets om ze te voeden. Breng ze door de eerste jaren. |
+
+## De kroniek
+
+Via **☰ → 📜 De kroniek** schrijft het spel de geschiedenis van je stad uit: hoe ze
+begon, wie er woont, welke roverhoofdman er buiten wacht, met welke buursteden je
+handelt en wat er allemaal is voorgevallen. Je kunt hem als tekst kopiëren en
+bewaren of delen.
+
 ## Je eigen wereld kiezen
 
 Bij **Nieuw dorp stichten** kies je zelf de naam, de grootte van de kaart
@@ -263,7 +316,8 @@ dan krijg je precies dezelfde wereld terug: handig om een mooi dorp opnieuw te
 spelen of een kaart met een vriend te delen.
 
 Via **☰ → 📊 Statistieken** zie je je stad in cijfers, met een score en een
-titel. Met **📷 Plaatje maken** bewaar je het beeld als PNG.
+titel. Met **📷 Plaatje maken** bewaar je het beeld als PNG, en met
+**☰ → 📜 De kroniek** lees je het verhaal erachter.
 
 ---
 
@@ -301,6 +355,8 @@ js/config/            De speldata — hier pas je de balans aan
   handel.js             Wat de koopman voor je spullen geeft
   opdrachten.js         De opdrachten van de heer
   gebeurtenissen.js     De gebeurtenissen met een keuze
+  buursteden.js         De buursteden en wat een handelsroute doet
+  scenarios.js          De vijf scenario's met hun eigen doel
   onderzoek.js          De studies van gildehuis en universiteit
   rovers.js             De roverhoofdmannen en de knoppen van hun aanval
   standen.js            De drie standen en het tempo van een mensenleven
@@ -318,6 +374,9 @@ js/core/              De simulatie
   logistiek.js          Hoe ver het sjouwen is naar de dichtstbijzijnde opslag
   demografie.js         Kinderen, volwassenen en ouderen
   standen.js            Wat elke stand vraagt en aan belasting opbrengt
+  arbeid.js             Arbeidsbeleid: wie doet welk werk
+  buren.js              Buursteden, handelsroutes en aanzien
+  kroniek.js            Schrijft de geschiedenis van je stad
   ages.js               Tijdperkovergang en overwinning
   feesten.js            Feesten en het moreel
   handel.js             De reizende koopman
