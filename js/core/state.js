@@ -18,8 +18,12 @@
     seed = seed || Math.floor(Math.random() * 1e9);
     opties = opties || {};
 
-    var maat = Game.config.kaartmaat(opties.kaart);
-    var zwaarte = Game.config.moeilijkheid(opties.moeilijkheid);
+    /* A scenario may override the map size, the difficulty and the starting
+       position; everything else about the world is generated as always. */
+    var scenario = Game.config.scenario(opties.scenario);
+    var regels = scenario.regels || {};
+    var maat = Game.config.kaartmaat(regels.kaart || opties.kaart);
+    var zwaarte = Game.config.moeilijkheid(regels.moeilijkheid || opties.moeilijkheid);
 
     var kaart = Game.core.map.genereer(seed, maat.b, maat.h);
     var start = Game.core.map.kiesStartplek(kaart);
@@ -31,6 +35,9 @@
       dorpsnaam: dorpsnaam || 'Nieuw Dorp',
       kaartmaat: maat.id,
       moeilijkheid: zwaarte.id,
+      scenario: scenario.id,
+      /* Set once a scenario is decided, so the end screen knows which it was. */
+      scenarioAf: false, scenarioVerloren: false,
 
       tijd: 0,
       dag: 0,
@@ -50,19 +57,51 @@
       res: {},
       verzameld: {},
       capaciteit: Game.config.basisOpslag,
+      /* Per-resource ceilings, derived in herbereken from the storehouses. */
+      capaciteiten: {},
+      bederfRem: 0,
 
-      bevolking: { totaal: 0, werkend: 0, werkloos: 0, soldaten: 0, ruimte: 0 },
+      /* How hard the lord squeezes: an id from config/instellingen.js. */
+      belastingtarief: 'normaal',
+      /* Winter firewood: how long the town has been going without. */
+      koudeTimer: 0,
+      koud: false,
+
+      /* totaal stays the authority on how many mouths there are; the three
+         cohorts next to it say who they are (core/demografie.js). */
+      bevolking: {
+        totaal: 0, werkend: 0, werkloos: 0, soldaten: 0, ruimte: 0,
+        kinderen: 0, volwassenen: 0, ouderen: 0
+      },
+      /* Fractional accumulators for growing up, growing old and dying. */
+      leeftijd: { rijp: 0, oud: 0, dood: 0 },
+
+      /* Cached each tick by core/standen.js for the HUD and the happiness
+         formula: coins per second from taxes, and the share of townsfolk
+         whose standing is not being lived up to. */
+      belasting: 0,
+      standOntevreden: 0,
       groeiVoortgang: 0,
       tevredenheid: 60,
       hongerTimer: 0,
 
       /* Cached per-second flows, refreshed each tick for the HUD. */
       stroom: {},
-      bonus: { productie: 1, mijnbouw: 1, voedsel: 1, bouw: 1, winter: 1, tevredenheid: 0 },
+      bonus: { productie: 1, mijnbouw: 1, voedsel: 1, bouw: 1, winter: 1, tevredenheid: 0, arbeid: 1 },
       onderzoek: {},
       verdediging: 0,
 
-      raid: { fase: 'rust', timer: 90, kracht: 0, nummer: 0 },
+      raid: {
+        fase: 'rust', timer: 90, kracht: 0, nummer: 0,
+        /* Filled in when a band is on its way: how far it has marched, which
+           cover already fired at it, and what the player chose to do. */
+        voortgang: 0, beschoten: {}, afgeslagen: 0, beginKracht: 0,
+        keuze: { evacuatie: false, burgerwacht: false }
+      },
+
+      /* The bandit captain across the field and what he remembers about you.
+         Plain JSON; core/raids.js fills in the name on the first raid. */
+      rovers: { naam: '', wrok: 0, ontmoetingen: 0, schattingen: 0, verslagen: 0 },
 
       /* The field army: how often it beat a raiding party, and whether a
          sortie is ordered for the raid that is on its way. */
@@ -70,6 +109,12 @@
 
       /* How compactly the town is built around its square (0..1, derived). */
       samenhorigheid: 0,
+
+      /* Derived in herbereken from core/buurt.js: the share of the town's
+         homes that has services within reach (0..1), and the average
+         desirability of the spots they stand on. */
+      dienstdekking: 0,
+      sfeer: 0,
 
       /* The village register: named inhabitants, kept in step with the
          headcount by core/dorpelingen.js. Flavour only, never authoritative. */
@@ -90,6 +135,21 @@
       questsGedaan: {},
       log: [],
 
+      /* Bumped whenever a street is laid or lifted, so core/logistiek.js
+         knows its cached hauling distances went stale. The streets themselves
+         live on the map tiles as `t.weg`. */
+      wegTeller: 0,
+
+      /* Labour policy: what kind of work gets the idle hands first, and how
+         many are kept free as builders (core/arbeid.js). */
+      arbeid: null,
+      arbeidTimer: 0,
+
+      /* Towns beyond the map edge: reputation, trade routes and requests.
+         Generated on the first tick by core/buren.js. */
+      buren: [],
+      burenTimer: 0,
+
       /* Purely cosmetic walkers on the map. */
       wandelaars: []
     };
@@ -109,7 +169,24 @@
     var huisPlek = zoekVrijePlek(s, start.x, start.y, 1, null);
     if (huisPlek) plaatsStart(s, 'huisje', huisPlek.x, huisPlek.y);
 
-    s.bevolking.totaal = 5;
+    /* --- scenario opening position --- */
+    var begin = scenario.start || {};
+    if (begin.tijdperk) s.tijdperk = begin.tijdperk;
+    if (begin.res) {
+      for (var br in begin.res) if (s.res[br] !== undefined) s.res[br] = begin.res[br];
+    }
+    (begin.gebouwen || []).forEach(function (type) {
+      var def = Game.config.gebouw(type);
+      if (!def) return;
+      var plek = zoekVrijePlek(s, start.x, start.y, def.grootte, function (x, y) {
+        if (!def.plaats || !def.plaats.nabij) return true;
+        return Game.core.map.nodeInBereik(s.kaart, x, y, def.plaats.nabij.node,
+          def.plaats.nabij.straal) > 0;
+      });
+      if (plek) plaatsStart(s, type, plek.x, plek.y);
+    });
+
+    s.bevolking.totaal = begin.bevolking || 5;
     S.herbereken(s);
 
     /* Give the farm two workers so the village is alive from the first second. */
@@ -130,6 +207,8 @@
       voortgang: def.bouwtijd,
       gebouwd: true,
       uit: false,
+      ervaring: 0,
+      bouwPrio: 0,
       waarschuwing: ''
     };
     s.gebouwen.push(g);
@@ -177,6 +256,9 @@
   S.herbereken = function (s) {
     var ruimte = 0, opslag = Game.config.basisOpslag, verdediging = 0;
     var prodBonus = 1, werkend = 0, soldaten = 0;
+    /* Per storehouse, on top of whatever the general stores hold. */
+    var perSoort = { voedsel: 0, goed: 0, schat: 0 };
+    var bederfRem = 0;
 
     for (var i = 0; i < s.gebouwen.length; i++) {
       var g = s.gebouwen[i];
@@ -185,6 +267,11 @@
 
       ruimte += d.woonruimte || 0;
       opslag += d.opslag || 0;
+      if (d.opslagPer) {
+        for (var soort in d.opslagPer) perSoort[soort] = (perSoort[soort] || 0) + d.opslagPer[soort];
+      }
+      /* Several granaries do not stack to more than "nothing spoils". */
+      if (d.bederfRem) bederfRem = Math.max(bederfRem, d.bederfRem);
       verdediging += d.verdediging || 0;
       if (d.productieBonus && !g.uit) prodBonus += d.productieBonus;
 
@@ -202,6 +289,16 @@
 
     s.bevolking.ruimte = ruimte;
     s.capaciteit = Math.round(opslag * o.opslag);
+
+    /* Every resource gets its own ceiling: the general stores plus whatever
+       storehouse holds that kind of thing. Keeping s.capaciteit alongside it
+       means the older UI and the merchant keep reading a sensible number. */
+    s.capaciteiten = {};
+    Game.config.resourceOrder.forEach(function (r) {
+      var soort = Game.config.resSoort(r);
+      s.capaciteiten[r] = Math.round((opslag + (perSoort[soort] || 0)) * o.opslag);
+    });
+    s.bederfRem = bederfRem;
     s.verdediging = Math.round(verdediging * o.verdediging);
     s.bonus.productie = prodBonus * o.productie;
 
@@ -213,11 +310,26 @@
     s.bonus.winter = o.winter;
     s.bonus.tevredenheid = o.tevredenheid;
 
+    /* Cohorts must always add up to the headcount, whatever else changed it. */
+    Game.core.demografie.zorg(s);
+
     s.bevolking.werkend = werkend;
     s.bevolking.soldaten = soldaten;
-    s.bevolking.werkloos = Math.max(0, s.bevolking.totaal - werkend);
+    /* Children are mouths, not hands: only grown-ups can take a job, so the
+       idle pool (which is also the building crew) counts from the workforce. */
+    s.bevolking.handen = Game.core.demografie.arbeidskracht(s);
+    s.bevolking.werkloos = Math.max(0, s.bevolking.handen - werkend);
+    /* A greying town gets less done per pair of hands. */
+    s.bonus.arbeid = Game.core.demografie.arbeidFactor(s);
 
     s.samenhorigheid = S.samenhorigheid(s);
+
+    /* How well the town's homes are served by what stands near them, and how
+       pleasant those spots are. Both are derived in core/buurt.js and only
+       recomputed when a building actually moved. */
+    var buurt = Game.core.buurt.dekking(s);
+    s.dienstdekking = buurt.diensten;
+    s.sfeer = buurt.aantrekkelijkheid;
   };
 
   /* How much the town reads as one whole rather than scattered outposts:
@@ -247,9 +359,14 @@
 
   /* Adds a resource, respecting the storage cap, and books it as gathered.
      Returns how much actually fitted. */
+  S.plafond = function (s, res) {
+    if (s.capaciteiten && typeof s.capaciteiten[res] === 'number') return s.capaciteiten[res];
+    return s.capaciteit;
+  };
+
   S.voegToe = function (s, res, hoeveelheid) {
     if (hoeveelheid <= 0) return 0;
-    var ruimte = s.capaciteit - s.res[res];
+    var ruimte = S.plafond(s, res) - s.res[res];
     var werkelijk = Math.min(hoeveelheid, Math.max(0, ruimte));
     s.res[res] += werkelijk;
     s.verzameld[res] += werkelijk;

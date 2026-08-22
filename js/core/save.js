@@ -68,8 +68,51 @@
     });
 
     s.bevolking = s.bevolking || { totaal: 5 };
+    /* Cohorts, standing and practice were added later. demografie.zorg (called
+       from herbereken below) counts an older town as all grown-ups, which is
+       exactly what it was. */
+    s.leeftijd = s.leeftijd || { rijp: 0, oud: 0, dood: 0 };
+    s.belasting = typeof s.belasting === 'number' ? s.belasting : 0;
+    s.standOntevreden = typeof s.standOntevreden === 'number' ? s.standOntevreden : 0;
+    s.wens = s.wens || { actief: null, rust: 160, vervuld: 0 };
+
+    /* Storehouse categories, firewood and the tax dial, all added later.
+       s.capaciteiten is derived and refilled by herbereken below. */
+    s.capaciteiten = s.capaciteiten || {};
+    s.bederfRem = typeof s.bederfRem === 'number' ? s.bederfRem : 0;
+    s.belastingtarief = s.belastingtarief || 'normaal';
+    s.koudeTimer = typeof s.koudeTimer === 'number' ? s.koudeTimer : 0;
+    s.koud = !!s.koud;
+    s.warenGeleverd = s.warenGeleverd || {};
+
+    /* Scenarios and neighbouring towns, added later. An older save is simply
+       a free game whose neighbours are generated on the next tick. */
+    s.scenario = s.scenario || 'vrij';
+    s.scenarioAf = !!s.scenarioAf;
+    s.scenarioVerloren = !!s.scenarioVerloren;
+    s.buren = Array.isArray(s.buren) ? s.buren : [];
+    s.burenTimer = typeof s.burenTimer === 'number' ? s.burenTimer : 0;
+
+    /* Labour policy, added later. core/arbeid.zorg fills in the defaults. */
+    if (Game.core.arbeid) Game.core.arbeid.zorg(s);
     s.bonus = s.bonus || { productie: 1, mijnbouw: 1 };
     s.raid = s.raid || { fase: 'rust', timer: 200, kracht: 0, nummer: 0 };
+    /* The marching band, its choices and the captain were added later. An
+       older save simply starts its next raid with a clean slate. */
+    if (typeof s.raid.voortgang !== 'number') s.raid.voortgang = 0;
+    if (typeof s.raid.afgeslagen !== 'number') s.raid.afgeslagen = 0;
+    if (typeof s.raid.beginKracht !== 'number') s.raid.beginKracht = s.raid.kracht || 0;
+    if (!s.raid.beschoten || typeof s.raid.beschoten !== 'object') s.raid.beschoten = {};
+    if (!s.raid.keuze) s.raid.keuze = { evacuatie: false, burgerwacht: false };
+    /* A siege in progress needs its clock back, or it would never lift. */
+    if (s.raid.fase === 'beleg' && typeof s.raid.belegTimer !== 'number') {
+      s.raid.belegTimer = Game.config.rovers.belegDuur;
+    }
+    s.rovers = s.rovers || { naam: '', wrok: 0, ontmoetingen: 0, schattingen: 0, verslagen: 0 };
+    ['wrok', 'ontmoetingen', 'schattingen', 'verslagen'].forEach(function (k) {
+      if (typeof s.rovers[k] !== 'number') s.rovers[k] = 0;
+    });
+    if (typeof s.rovers.naam !== 'string') s.rovers.naam = '';
 
     /* City life, added after the first release: an older save simply starts
        with an empty calendar instead of breaking. */
@@ -92,6 +135,16 @@
     s.tevredenheid = typeof s.tevredenheid === 'number' ? s.tevredenheid : 60;
     s.snelheid = s.snelheid || 1;
 
+    /* Local services and desirability, added later: both are derived, so an
+       older save only needs the fields to exist — herbereken below fills
+       them in with the real numbers. */
+    s.dienstdekking = typeof s.dienstdekking === 'number' ? s.dienstdekking : 0;
+    s.sfeer = typeof s.sfeer === 'number' ? s.sfeer : 0;
+
+    /* Streets, added later: an older map simply has none. The flag lives on
+       the tiles, so nothing else needs restoring. */
+    s.wegTeller = typeof s.wegTeller === 'number' ? s.wegTeller : 0;
+
     /* Relief layer: saves from before it lack per-tile height. Recompute it
        from the seed so old towns get relief too, without breaking pure JSON. */
     if (s.kaart.seed != null && (!s.kaart.tegels[0] || typeof s.kaart.tegels[0].h !== 'number')) {
@@ -104,6 +157,8 @@
     for (var j = 0; j < s.gebouwen.length; j++) {
       var g = s.gebouwen[j];
       if (!Game.config.gebouw(g.type)) { s.gebouwen.splice(j--, 1); continue; }
+      if (typeof g.ervaring !== 'number') g.ervaring = 0;
+      if (typeof g.bouwPrio !== 'number') g.bouwPrio = 0;
       Game.core.construction.markeerTegels(s, g);
     }
 

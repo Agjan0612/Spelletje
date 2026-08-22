@@ -172,6 +172,7 @@
       } },
       { tekst: '📖 Dorpsboek', actie: function () { O.dorpsboek(); } },
       { tekst: '📊 Statistieken', actie: function () { O.statistieken(); } },
+      { tekst: '📜 De kroniek', actie: function () { O.kroniek(); } },
       { tekst: '📷 Plaatje maken', actie: function () { O.plaatje(); } },
       { tekst: '❓ Uitleg', actie: function () { O.help(false); } },
       { tekst: '🌱 Nieuw spel', actie: function () {
@@ -196,6 +197,7 @@
   O.nieuwSpelScherm = function () {
     var keuze = {
       naam: spel.verzinNaam(),
+      scenario: 'vrij',
       kaart: 'normaal',
       moeilijkheid: 'normaal',
       seed: ''
@@ -235,6 +237,31 @@
       naamRij.appendChild(dobbel);
       el.appendChild(naamRij);
 
+      el.appendChild(Game.util.el('h4', '', 'Wat voor spel wil je spelen?'));
+      var scenarioRij = Game.util.el('div', 'keuzerij scenariorij');
+      var uitleg = Game.util.el('div', 'cursief');
+      Game.config.scenarios.forEach(function (sc) {
+        var k = Game.util.el('button', 'keuzeknop' + (keuze.scenario === sc.id ? ' gekozen' : ''));
+        k.innerHTML = '<b>' + sc.emoji + ' ' + sc.naam + '</b><span>' + sc.korte + '</span>';
+        k.addEventListener('click', function () {
+          keuze.scenario = sc.id;
+          Array.prototype.forEach.call(scenarioRij.children, function (kk) { kk.classList.remove('gekozen'); });
+          k.classList.add('gekozen');
+          uitleg.textContent = sc.beschrijving;
+          /* A scenario that fixes the world takes those choices out of the
+             player's hands, so say so instead of silently overruling them. */
+          var vast = sc.regels || {};
+          vastMelding.textContent = (vast.kaart || vast.moeilijkheid)
+            ? 'Dit scenario legt de kaartgrootte en zwaarte zelf vast.' : '';
+        });
+        scenarioRij.appendChild(k);
+      });
+      el.appendChild(scenarioRij);
+      uitleg.textContent = Game.config.scenarios[0].beschrijving;
+      el.appendChild(uitleg);
+      var vastMelding = Game.util.el('div', 'cursief');
+      el.appendChild(vastMelding);
+
       el.appendChild(Game.util.el('h4', '', 'Grootte van de kaart'));
       knoprij(el, Game.config.kaartmaten, 'kaart');
 
@@ -258,6 +285,7 @@
           spel.nieuwSpel({
             naam: (keuze.naam || '').trim() || spel.verzinNaam(),
             seed: isNaN(seed) || seed <= 0 ? undefined : seed,
+            scenario: keuze.scenario,
             kaart: keuze.kaart,
             moeilijkheid: keuze.moeilijkheid
           });
@@ -378,16 +406,61 @@
 
   /* -------------------------------------------------------- overwinning -- */
 
-  O.overwinning = function (s) {
-    O.open('👑 ' + s.dorpsnaam + ' is een stad!', function (el) {
-      el.appendChild(Game.util.el('p', 'midden',
-        'Van één boerderij tot een stad met kathedraal, kasteel en universiteit. ' +
-        'Dat heb je knap gedaan.'));
+  /* The chronicle: everything the simulation quietly recorded, told back as
+     a few paragraphs. Generated on demand from the state (js/core/kroniek.js),
+     so it costs a save nothing and can be read at any moment. */
+  O.kroniek = function () {
+    var s = spel.state;
+    var k = Game.core.kroniek.schrijf(s);
+    O.open('📜 ' + k.titel, function (el) {
+      k.stukken.forEach(function (st) {
+        el.appendChild(Game.util.el('h4', '', st.kop));
+        if (st.tekst) el.appendChild(Game.util.el('p', '', st.tekst));
+        if (st.regels) {
+          var ul = Game.util.el('ul');
+          st.regels.forEach(function (r) { ul.appendChild(Game.util.el('li', '', r)); });
+          el.appendChild(ul);
+        }
+      });
+      el.appendChild(Game.util.el('p', 'midden', k.rang + ' — ' + k.punten + ' punten'));
+    }, [
+      {
+        tekst: '📋 Kopieer als tekst', primair: true, actie: function () {
+          var tekst = Game.core.kroniek.alsTekst(spel.state);
+          if (navigator.clipboard) {
+            navigator.clipboard.writeText(tekst).then(function () {
+              Game.ui.toast('📋 De kroniek staat op je klembord');
+            }, function () { Game.ui.toast('⚠️ Kopiëren is niet gelukt'); });
+          } else {
+            Game.ui.toast('⚠️ Kopiëren werkt hier niet');
+          }
+        }
+      },
+      { tekst: 'Sluiten', actie: function () { O.sluit(); } }
+    ]);
+  };
+
+  /* `sc` is the scenario that just ended, if any; `verloren` marks the ones
+     with a deadline you did not make. */
+  O.overwinning = function (s, sc, verloren) {
+    var titel = verloren
+      ? '⌛ ' + (sc ? sc.naam : 'Het doel') + ' niet gehaald'
+      : (sc && sc.doel ? '👑 ' + sc.emoji + ' ' + sc.naam + ' volbracht!'
+                       : '👑 ' + s.dorpsnaam + ' is een stad!');
+
+    O.open(titel, function (el) {
+      el.appendChild(Game.util.el('p', 'midden', verloren
+        ? 'Dit scenario is niet gelukt — maar je stad staat er nog. Speel gerust door.'
+        : (sc && sc.doel
+            ? sc.doel.tekst + ' — gehaald in jaar ' + s.jaar + '.'
+            : 'Van één boerderij tot een stad met kathedraal, kasteel en universiteit. ' +
+              'Dat heb je knap gedaan.')));
       statistiekBlok(el, s);
       el.appendChild(Game.util.el('p', '',
         'Je kunt gewoon doorspelen en je stad nog verder uitbouwen — je score blijft meelopen.'));
     }, [
       { tekst: 'Doorspelen', primair: true, actie: function () { O.sluit(); } },
+      { tekst: '📜 De kroniek', actie: function () { O.kroniek(); } },
       { tekst: '📷 Plaatje maken', actie: function () { O.plaatje(); } }
     ]);
   };

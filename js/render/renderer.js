@@ -119,7 +119,12 @@
       var d = Game.core.state.def(g);
       if (!d.banen || g.werkers <= 0) continue;
 
+      /* Crafters and gatherers alike haul to the depot the simulation says
+         they deliver to, so the carts you see on the street are the carts the
+         economy is actually paying for. */
       var doelX = pleinX, doelY = pleinY;
+      var bij = Game.core.logistiek.dichtstbijDepot(s, g);
+      if (bij && bij.depot) { doelX = Math.round(bij.depot.x); doelY = Math.round(bij.depot.y); }
       if (d.wint) {
         var t = map.zoekNode(s.kaart, g.x, g.y, d.wint.node, d.wint.straal);
         if (t) {
@@ -304,6 +309,10 @@
 
     /* --- roads, drawn under the buildings --- */
     if (Game.render.paths && p > 12) Game.render.paths.teken(ctx, cam, s, p);
+
+    /* --- map overlay: tints the ground to answer one question at a time.
+       Above the roads, below everything that stands up. --- */
+    if (Game.render.lagen) Game.render.lagen.teken(ctx, cam, s, p);
 
     /* --- placement grid --- */
     if (ui.plaatsType && p > 14) {
