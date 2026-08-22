@@ -40,6 +40,12 @@
       per[id] = { id: id, bewoners: 0, tevreden: 0, ontevreden: 0, munten: 0 };
     });
 
+    /* Goods the standings ask for, and whether the store can cover them.
+       Checked against stock first so a household is not called satisfied on
+       goods that are not there. */
+    var vraag = {};
+    var geleverd = s.warenGeleverd || {};
+
     for (var i = 0; i < s.gebouwen.length; i++) {
       var g = s.gebouwen[i];
       if (!g.gebouwd) continue;
@@ -58,6 +64,14 @@
       var voldaan = true;
       if (stand.eisen.variatie && variatie < stand.eisen.variatie) voldaan = false;
       if (stand.eisen.diensten && dekking < stand.eisen.diensten) voldaan = false;
+      /* Cloth on their backs and beer on the table: goods this class uses up.
+         What they want is tallied here and actually consumed in tick(). */
+      if (stand.eisen.waren) {
+        for (var waar in stand.eisen.waren) {
+          vraag[waar] = (vraag[waar] || 0) + stand.eisen.waren[waar] * bewoners;
+          if (!geleverd[waar]) voldaan = false;
+        }
+      }
 
       per[standId].bewoners += bewoners;
       per[standId][voldaan ? 'tevreden' : 'ontevreden'] += bewoners;
@@ -78,23 +92,39 @@
       per: per,
       bewoners: totaal,
       ontevredenDeel: totaal > 0 ? ontevreden / totaal : 0,
-      muntenPerSec: munten
+      muntenPerSec: munten,
+      vraag: vraag
     };
   };
 
   S.tick = function (s, dt) {
     var o = S.overzicht(s);
 
+    /* Consume what the standings asked for, and remember for the next tick
+       which of it the store could actually cover — that is what decides
+       whether they are satisfied. */
+    var geleverd = {};
+    for (var waar in o.vraag) {
+      var wil = o.vraag[waar] * dt;
+      if (wil <= 0) { geleverd[waar] = true; continue; }
+      var op = Math.min(s.res[waar], wil);
+      s.res[waar] -= op;
+      s.stroom[waar] = s.stroom[waar] * 0.8 + (-op / dt) * 0.2;
+      geleverd[waar] = op >= wil - 1e-9;
+    }
+    s.warenGeleverd = geleverd;
+
     /* Taxes. Booked through voegToe so the storage cap applies exactly as it
        does to every other income. */
+    var tarief = Game.config.belastingtarief(s.belastingtarief).factor;
     if (o.muntenPerSec > 0) {
-      var binnen = Game.core.state.voegToe(s, 'munten', o.muntenPerSec * dt);
+      var binnen = Game.core.state.voegToe(s, 'munten', o.muntenPerSec * tarief * dt);
       s.stroom.munten = s.stroom.munten * 0.8 + (binnen / dt) * 0.2;
     }
 
     /* Cached for the HUD and for population.tevredenheidDetail — recomputing
        this inside the happiness formula would walk every building twice. */
-    s.belasting = o.muntenPerSec;
+    s.belasting = o.muntenPerSec * tarief;
     s.standOntevreden = o.ontevredenDeel;
   };
 

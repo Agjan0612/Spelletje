@@ -314,7 +314,9 @@
     if (uit) regels.push({ soort: 'let-op', tekst: '⏸ ' + uit + ' gebouw(en) handmatig stilgelegd' });
     if (inAanbouw) regels.push({ soort: '', tekst: '🏗️ ' + inAanbouw + ' gebouw(en) in aanbouw' });
 
-    var vol = Game.config.resourceOrder.filter(function (r) { return s.res[r] >= s.capaciteit - 0.5; });
+    var vol = Game.config.resourceOrder.filter(function (r) {
+      return s.res[r] >= Game.core.state.plafond(s, r) - 0.5;
+    });
     if (vol.length) {
       regels.push({
         soort: 'let-op',

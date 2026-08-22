@@ -82,10 +82,11 @@
         e.delta.textContent = '';
       }
 
-      e.wrap.classList.toggle('vol', waarde >= s.capaciteit - 0.5);
+      var plafond = Game.core.state.plafond(s, e.id);
+      e.wrap.classList.toggle('vol', waarde >= plafond - 0.5);
       e.wrap.classList.toggle('leeg', waarde < 1 && stroom < 0);
       e.wrap.title = Game.config.resources[id].naam + ': ' +
-        Math.floor(waarde) + ' / ' + s.capaciteit;
+        Math.floor(waarde) + ' / ' + plafond;
     });
 
     els.pop.textContent = s.bevolking.totaal + ' (' + s.bevolking.werkloos + ' vrij)';
@@ -195,6 +196,8 @@
       'Aantrekkelijke buurt ' + n(d.sfeer) + '\n' +
       'Kinderen en ouderen ' + n(d.generaties) + '\n' +
       (d.stand ? 'Standen krijgen niet wat ze vragen ' + n(d.stand) + '\n' : '') +
+      (d.koude ? 'GEEN BRANDHOUT ' + n(d.koude) + '\n' : '') +
+      (d.tarief ? 'Belastingtarief ' + n(d.tarief) + '\n' : '') +
       'Samenhorigheid ' + n(d.samen) + '\n' +
       (d.onderzoek ? 'Onderzoek ' + n(d.onderzoek) + '\n' : '') +
       (d.honger ? 'HONGER ' + n(d.honger) + '\n' : '') +

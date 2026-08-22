@@ -76,7 +76,7 @@
         var tempo = w.tempo * g.werkers * mult * s.bonus.mijnbouw;
         if (Game.config.resources[w.res].voedsel) tempo *= (s.bonus.voedsel || 1);
         if (d.seizoensgevoelig) tempo *= seizoen.factor(s, 'jacht');
-        if (g.type === 'vissershut') tempo *= havenBonus(s, g);
+        if (g.type === 'vissershut') tempo *= havenBonus(s, g) * vorstBonus(s, g);
 
         var wil = tempo * dt;
         var gehaald = 0;
@@ -146,6 +146,8 @@
     }
 
     ervaringGroeit(s, dt);
+    brandhout(s, dt);
+    bederf(s, dt);
     E.natuurGroeit(s, dt);
     meldVolleOpslag(s, dt);
 
@@ -154,6 +156,66 @@
       s.stroom[r] = s.stroom[r] * 0.8 + flux[r] * 0.2;
     });
   };
+
+  /* Firewood. Every winter the town burns timber simply to stay alive, which
+     turns wood from a starter resource into a standing worry and makes autumn
+     the season you actually plan for. Running out is miserable and, in time,
+     deadly — but never instantly, so a bad winter is survivable. */
+  function brandhout(s, dt) {
+    var w = Game.config.winter;
+    if (s.seizoen !== 3 || s.bevolking.totaal <= 0) {
+      s.koud = false;
+      s.koudeTimer = Math.max(0, (s.koudeTimer || 0) - dt * 2);
+      return;
+    }
+
+    var nodig = s.bevolking.totaal * w.houtPerInwoner * dt * (s.bonus.winter === undefined ? 1 : s.bonus.winter);
+    var gestookt = Math.min(s.res.hout, nodig);
+    s.res.hout -= gestookt;
+
+    if (gestookt >= nodig - 1e-9) {
+      s.koud = false;
+      s.koudeTimer = Math.max(0, (s.koudeTimer || 0) - dt);
+      return;
+    }
+
+    s.koud = true;
+    s.koudeTimer = (s.koudeTimer || 0) + dt;
+    if (s.koudeTimer > w.koudeZiekteNa) {
+      s.koudeTimer = 0;
+      if (s.bevolking.totaal > 1) {
+        Game.core.population.verwijderDorpeling(s);
+        Game.ui.log.schrijf(s, '🥶 Iemand is bezweken aan de kou. Je hebt hout nodig om te stoken!', 'slecht');
+      }
+    } else if (!s.koudeGemeld || s.tijd - s.koudeGemeld > 60) {
+      s.koudeGemeld = s.tijd;
+      Game.ui.log.schrijf(s, '🥶 Er is geen hout meer om te stoken. Je dorpelingen zitten in de kou.', 'slecht');
+    }
+  }
+
+  /* Food does not keep. A granary stops most of it; without one a big autumn
+     harvest quietly bleeds away before the winter it was meant for. */
+  function bederf(s, dt) {
+    var w = Game.config.winter;
+    var tempo = w.bederfPerSec * (1 - (s.bederfRem || 0));
+    if (tempo <= 0) return;
+    if (s.seizoen === 1) tempo *= w.bederfZomer;   /* summer heat */
+    if (s.seizoen === 3) tempo *= 0.4;             /* the cold preserves */
+
+    var totaal = 0;
+    Game.config.voedselSoorten.forEach(function (r) {
+      var weg = s.res[r] * tempo * dt;
+      if (weg <= 0) return;
+      s.res[r] -= weg;
+      totaal += weg;
+    });
+
+    s.bedorven = (s.bedorven || 0) * 0.995 + totaal;
+    if (totaal > 0 && !s.bederfGemeld && s.bedorven > 40) {
+      s.bederfGemeld = true;
+      Game.ui.log.schrijf(s, '🪰 Er bederft voedsel in je voorraad. Bouw een graanschuur.', 'slecht');
+    }
+  }
 
   /* Practice. A workplace that keeps the same crew on the same job gets
      steadily better at it, up to ERVARING_BONUS. Pulling people off knocks it
@@ -230,6 +292,22 @@
   }
   E.akkerBonus = akkerBonus;
   E.isAkker = isAkker;
+
+  /* In winter the shallows freeze and the catch collapses — unless a harbour
+     nearby keeps a channel open. That is what turns the harbour from a nice
+     extra into the thing that carries your town through the cold. */
+  function vorstBonus(s, vissershut) {
+    if (s.seizoen !== 3) return 1;
+    var w = Game.config.winter;
+    for (var i = 0; i < s.gebouwen.length; i++) {
+      var g = s.gebouwen[i];
+      if (g.type !== 'haven' || !g.gebouwd || g.uit) continue;
+      var dx = g.x - vissershut.x, dy = g.y - vissershut.y;
+      if (dx * dx + dy * dy <= w.havenStraal * w.havenStraal) return 1;
+    }
+    return w.visVorst;
+  }
+  E.vorstBonus = vorstBonus;
 
   /* A harbour within range makes nearby fishing huts land a bigger catch. */
   function havenBonus(s, vissershut) {

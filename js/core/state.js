@@ -50,6 +50,15 @@
       res: {},
       verzameld: {},
       capaciteit: Game.config.basisOpslag,
+      /* Per-resource ceilings, derived in herbereken from the storehouses. */
+      capaciteiten: {},
+      bederfRem: 0,
+
+      /* How hard the lord squeezes: an id from config/instellingen.js. */
+      belastingtarief: 'normaal',
+      /* Winter firewood: how long the town has been going without. */
+      koudeTimer: 0,
+      koud: false,
 
       /* totaal stays the authority on how many mouths there are; the three
          cohorts next to it say who they are (core/demografie.js). */
@@ -211,6 +220,9 @@
   S.herbereken = function (s) {
     var ruimte = 0, opslag = Game.config.basisOpslag, verdediging = 0;
     var prodBonus = 1, werkend = 0, soldaten = 0;
+    /* Per storehouse, on top of whatever the general stores hold. */
+    var perSoort = { voedsel: 0, goed: 0, schat: 0 };
+    var bederfRem = 0;
 
     for (var i = 0; i < s.gebouwen.length; i++) {
       var g = s.gebouwen[i];
@@ -219,6 +231,11 @@
 
       ruimte += d.woonruimte || 0;
       opslag += d.opslag || 0;
+      if (d.opslagPer) {
+        for (var soort in d.opslagPer) perSoort[soort] = (perSoort[soort] || 0) + d.opslagPer[soort];
+      }
+      /* Several granaries do not stack to more than "nothing spoils". */
+      if (d.bederfRem) bederfRem = Math.max(bederfRem, d.bederfRem);
       verdediging += d.verdediging || 0;
       if (d.productieBonus && !g.uit) prodBonus += d.productieBonus;
 
@@ -236,6 +253,16 @@
 
     s.bevolking.ruimte = ruimte;
     s.capaciteit = Math.round(opslag * o.opslag);
+
+    /* Every resource gets its own ceiling: the general stores plus whatever
+       storehouse holds that kind of thing. Keeping s.capaciteit alongside it
+       means the older UI and the merchant keep reading a sensible number. */
+    s.capaciteiten = {};
+    Game.config.resourceOrder.forEach(function (r) {
+      var soort = Game.config.resSoort(r);
+      s.capaciteiten[r] = Math.round((opslag + (perSoort[soort] || 0)) * o.opslag);
+    });
+    s.bederfRem = bederfRem;
     s.verdediging = Math.round(verdediging * o.verdediging);
     s.bonus.productie = prodBonus * o.productie;
 
@@ -296,9 +323,14 @@
 
   /* Adds a resource, respecting the storage cap, and books it as gathered.
      Returns how much actually fitted. */
+  S.plafond = function (s, res) {
+    if (s.capaciteiten && typeof s.capaciteiten[res] === 'number') return s.capaciteiten[res];
+    return s.capaciteit;
+  };
+
   S.voegToe = function (s, res, hoeveelheid) {
     if (hoeveelheid <= 0) return 0;
-    var ruimte = s.capaciteit - s.res[res];
+    var ruimte = S.plafond(s, res) - s.res[res];
     var werkelijk = Math.min(hoeveelheid, Math.max(0, ruimte));
     s.res[res] += werkelijk;
     s.verzameld[res] += werkelijk;

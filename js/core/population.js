@@ -158,9 +158,16 @@
       lft.tevredenheidKinderen * Math.min(1, (s.bevolking.kinderen || 0) / (totaalMensen * 0.22)) +
       lft.tevredenheidOuderen * Math.min(1, (s.bevolking.ouderen || 0) / (totaalMensen * 0.12));
 
-    /* Burghers and patricians who are not getting the variety and the
-       services their standing calls for make that felt. */
+    /* Burghers and patricians who are not getting the variety, the goods and
+       the services their standing calls for make that felt. */
     var stand = -14 * (s.standOntevreden || 0);
+
+    /* A winter without firewood. Sits next to hunger as the other thing that
+       can go plainly, visibly wrong. */
+    var koude = s.koud ? -Game.config.winter.koudeStraf : 0;
+
+    /* And how hard the lord is squeezing them. */
+    var tarief = Game.config.belastingtarief(s.belastingtarief).tevredenheid;
 
     /* A close-knit, compactly built town lifts everyone's spirits a little.
        Worth less than it was: local services now do most of that work, and
@@ -175,10 +182,10 @@
       basis: 20, voedsel: voedsel, variatie: variatie, wonen: wonen,
       diensten: diensten, sfeer: sfeer, samen: samen, honger: honger,
       moreel: moreel, onderzoek: onderzoek,
-      generaties: generaties, stand: stand,
+      generaties: generaties, stand: stand, koude: koude, tarief: tarief,
       dekking: dekking,
       doel: Game.util.clamp(20 + voedsel + variatie + wonen + diensten + sfeer + samen +
-        generaties + stand + honger + moreel + onderzoek, 0, 100)
+        generaties + stand + koude + tarief + honger + moreel + onderzoek, 0, 100)
     };
   };
 

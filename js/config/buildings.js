@@ -14,6 +14,9 @@
  *                   poorters (js/config/standen.js). Higher standing pays
  *                   more tax but demands food variety and services nearby.
  *   opslag          added to the cap of every resource
+ *   opslagPer       { voedsel|goed|schat: n } added to one storehouse only,
+ *                   so a granary is not a treasury (js/config/resources.js)
+ *   bederfRem       fraction of food spoilage this building prevents
  *   tevredenheid    happiness points this building offers the homes that can
  *                   reach it (diminishing per extra copy in the same reach)
  *   bereik          how many tiles those happiness points carry — required
@@ -118,7 +121,14 @@
       id: 'voorraadschuur', naam: 'Voorraadschuur', emoji: '📦', tijdperk: 1, grootte: 1,
       kosten: { hout: 70 }, bouwtijd: 14, muur: '#c2a97e', dak: '#6d4326',
       opslag: 400, aantrekkelijkheid: -2, sfeerStraal: 3,
-      beschrijving: 'Verhoogt de opslagruimte voor elke grondstof met 400.'
+      beschrijving: 'Verhoogt de opslagruimte voor élke soort met 400 — handig zolang je stad nog klein is.'
+    },
+    {
+      id: 'graanschuur', naam: 'Graanschuur', emoji: '🌾', tijdperk: 1, grootte: 1,
+      kosten: { hout: 80, steen: 20 }, bouwtijd: 16,
+      muur: '#d0b98c', dak: '#7a5230',
+      opslagPer: { voedsel: 700 }, bederfRem: 0.8,
+      beschrijving: 'Droge, koele opslag voor eten. Geeft 700 extra ruimte voor voedsel én houdt het grootste deel van het bederf tegen — zonder schuur rot je voorraad langzaam weg.'
     },
     {
       id: 'waterput', naam: 'Waterput', emoji: '💧', tijdperk: 1, grootte: 1,
@@ -195,6 +205,26 @@
       beschrijving: 'Kades aan het water. Schippers drijven handel over zee (munten) en vissershutten binnen 6 tegels vangen 35% meer.'
     },
     {
+      id: 'schaapskooi', naam: 'Schaapskooi', emoji: '🐑', tijdperk: 2, grootte: 2,
+      kosten: { hout: 80, steen: 20 }, bouwtijd: 18,
+      muur: '#cbbd9a', dak: '#7a6a48',
+      banen: { aantal: 2, baan: 'herder' },
+      maakt: { in: {}, uit: { wol: 0.20, vlees: 0.05 } },
+      seizoensgevoelig: true,
+      plaats: { nabij: { node: 'vruchtbaar', straal: 4 } },
+      beschrijving: 'Een kudde op de wei. Levert wol voor de weverij en af en toe wat vlees. In de winter staan de schapen op stal.'
+    },
+    {
+      id: 'hopveld', naam: 'Hopveld', emoji: '🌿', tijdperk: 2, grootte: 2,
+      kosten: { hout: 55 }, bouwtijd: 14,
+      muur: '#b9c08a', dak: '#6f8040',
+      banen: { aantal: 2, baan: 'boer' },
+      maakt: { in: {}, uit: { hop: 0.22 } },
+      seizoensgevoelig: true,
+      plaats: { nabij: { node: 'vruchtbaar', straal: 3 } },
+      beschrijving: 'Hoge staken met rankende hop. De brouwerij kan niet zonder — en je herberg dus ook niet.'
+    },
+    {
       id: 'oefenveld', naam: 'Oefenveld', emoji: '🎯', tijdperk: 2, grootte: 2,
       kosten: { hout: 70, steen: 40 }, bouwtijd: 18, muur: '#a7a488', dak: '#6a5a3a',
       banen: { aantal: 4, baan: 'soldaat' },
@@ -239,12 +269,35 @@
       beschrijving: 'Een zwaar bewaakte poort. Verreweg de sterkste muurschakel — zet hem pal op de route die de rovers nemen.'
     },
     {
+      id: 'weverij', naam: 'Weverij', emoji: '🧵', tijdperk: 3, grootte: 1,
+      kosten: { hout: 100, steen: 60 }, bouwtijd: 22,
+      muur: '#cbb894', dak: '#6a5a7a',
+      banen: { aantal: 3, baan: 'wever' },
+      maakt: { in: { wol: 0.16 }, uit: { kleding: 0.10 } },
+      beschrijving: 'Weefgetouwen en spinnewielen. Kleding is wat een burger van een boer onderscheidt — burgers en poorters vragen erom.'
+    },
+    {
+      id: 'brouwerij', naam: 'Brouwerij', emoji: '🍺', tijdperk: 3, grootte: 1,
+      kosten: { hout: 110, steen: 70 }, bouwtijd: 22,
+      muur: '#c9a878', dak: '#5a4030',
+      banen: { aantal: 2, baan: 'brouwer' },
+      maakt: { in: { graan: 0.20, hop: 0.10 }, uit: { bier: 0.22 } },
+      beschrijving: 'Ketels, gist en geduld. Bier houdt de herberg open en de poorters te vriend.'
+    },
+    {
+      id: 'schatkamer', naam: 'Schatkamer', emoji: '💰', tijdperk: 3, grootte: 1,
+      kosten: { steen: 180, ijzer: 40 }, bouwtijd: 26, max: 3,
+      muur: '#a89a80', dak: '#4a4238',
+      opslagPer: { schat: 900 },
+      beschrijving: 'Zware deuren en een dieper gewelf. 900 extra ruimte voor munten en edelstenen — en precies waar rovers het eerst naar zoeken.'
+    },
+    {
       id: 'herberg', naam: 'Herberg', emoji: '🍺', tijdperk: 3, grootte: 1,
       kosten: { hout: 130, steen: 70 }, bouwtijd: 25, muur: '#c9a878', dak: '#7c4b2e',
       banen: { aantal: 2, baan: 'waard' },
-      onderhoud: { brood: 0.05 },
+      onderhoud: { brood: 0.03, bier: 0.04 },
       tevredenheid: 12, bereik: 8, aantrekkelijkheid: 3, sfeerStraal: 5,
-      beschrijving: 'Bier, verhalen en warmte. Verbruikt brood, maar houdt het humeur hoog.'
+      beschrijving: 'Bier, verhalen en warmte. Zonder een brouwerij in je stad staat de tap droog en gaat de herberg dicht.'
     },
     {
       id: 'kerk', naam: 'Kerk', emoji: '⛪', tijdperk: 3, grootte: 2,

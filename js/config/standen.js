@@ -26,14 +26,14 @@
     burgers: {
       naam: 'Burgers', emoji: '🏘️',
       belasting: 0.026,
-      eisen: { variatie: 2, diensten: 0.45 },
-      beschrijving: 'Willen afwisseling op tafel en voorzieningen om de hoek. Betalen daar ook naar.'
+      eisen: { variatie: 2, diensten: 0.45, waren: { kleding: 0.004 } },
+      beschrijving: 'Willen afwisseling op tafel, voorzieningen om de hoek en kleding aan hun lijf. Betalen daar ook naar.'
     },
     poorters: {
       naam: 'Poorters', emoji: '🎩',
       belasting: 0.058,
-      eisen: { variatie: 3, diensten: 0.70 },
-      beschrijving: 'Veeleisend en vermogend. Een stad met poorters is een rijke stad.'
+      eisen: { variatie: 3, diensten: 0.70, waren: { kleding: 0.006, bier: 0.008 } },
+      beschrijving: 'Veeleisend en vermogend: kleding én bier, en alles binnen handbereik. Een stad met poorters is een rijke stad.'
     }
   };
 

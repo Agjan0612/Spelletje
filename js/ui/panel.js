@@ -23,6 +23,7 @@
       s.wegTeller || 0, Math.round((g.ervaring || 0) * 20),
       s.bevolking.kinderen + ':' + s.bevolking.ouderen,
       s.wens && s.wens.actief ? s.wens.actief.gebouwId : '-',
+      s.belastingtarief, s.koud ? 1 : 0,
       s.raid.fase, s.leger ? (s.leger.uitval ? 1 : 0) + ':' + s.leger.overwinningen : '-',
       Game.core.construction.kanVerbeteren(s, g).ok ? 1 : 0].join('|');
   }
@@ -266,12 +267,36 @@
       if (rij.ontevreden >= 0.5) achter += ' — ' + Math.round(rij.ontevreden) + ' onvoldaan';
       el.appendChild(regel(stand.emoji + ' ' + stand.naam, achter));
     });
-    el.appendChild(regel('Belasting', (Math.round(st.muntenPerSec * 600) / 10) + ' munten/min'));
+    el.appendChild(regel('Belasting', (Math.round(s.belasting * 600) / 10) + ' munten/min'));
+
+    /* The one dial the player turns continuously rather than builds once. */
+    var tariefRij = Game.util.el('div', 'knoprij');
+    Game.config.belastingtarieven.forEach(function (t) {
+      var knop = Game.util.el('button', s.belastingtarief === t.id ? 'primair' : '',
+        t.emoji + ' ' + t.naam);
+      knop.title = t.beschrijving +
+        (t.tevredenheid ? ' (' + (t.tevredenheid > 0 ? '+' : '') + t.tevredenheid + ' tevredenheid)' : '');
+      knop.addEventListener('click', function () {
+        s.belastingtarief = t.id;
+        P.ververs(s, true);
+      });
+      tariefRij.appendChild(knop);
+    });
+    el.appendChild(tariefRij);
     if (st.ontevredenDeel > 0.05) {
       el.appendChild(Game.util.el('div', 'beschrijving',
-        'Burgers willen minstens twee soorten voedsel en voorzieningen om de hoek; ' +
-        'poorters willen drie soorten en veel meer voorzieningen. Wie dat niet krijgt, ' +
-        'betaalt nauwelijks belasting en moppert.'));
+        'Burgers willen twee soorten voedsel, kleding en voorzieningen om de hoek; ' +
+        'poorters willen drie soorten, kleding én bier, en veel meer voorzieningen. ' +
+        'Wie dat niet krijgt, betaalt nauwelijks belasting en moppert.'));
+      var tekort = [];
+      for (var waar in (st.vraag || {})) {
+        if (s.warenGeleverd && s.warenGeleverd[waar] === false) {
+          tekort.push(Game.config.resources[waar].emoji + ' ' + Game.config.resources[waar].naam.toLowerCase());
+        }
+      }
+      if (tekort.length) {
+        el.appendChild(Game.util.el('div', 'waarschuwing', '⚠️ Tekort aan ' + tekort.join(' en ')));
+      }
     }
 
     var wens = Game.core.dorpelingen.wens(s);

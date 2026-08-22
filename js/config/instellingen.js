@@ -33,6 +33,43 @@
     }
   ];
 
+  /* The winter used to be "farms yield nothing and everyone eats a bit more".
+     That is a season you wait out. These three turn it into a season you
+     prepare for, which is what makes autumn the tensest part of the year. */
+  Game.config.winter = {
+    /* Firewood burned per villager per second while it freezes. A town of 50
+       gets through roughly 70 logs in a winter. */
+    houtPerInwoner: 0.012,
+    /* No firewood is miserable, and people fall ill. */
+    koudeStraf: 20,
+    koudeZiekteNa: 40,        /* seconds of cold before someone is lost */
+
+    /* The shallows freeze over. A harbour keeps a channel open. */
+    visVorst: 0.4,
+    havenStraal: 8,
+
+    /* Food rots all year, faster when it is warm. A granary stops most of it. */
+    bederfPerSec: 0.0012,
+    bederfZomer: 1.6
+  };
+
+  /* What the lord may be told to take. The middle setting is what the rest of
+     the balance assumes. */
+  Game.config.belastingtarieven = [
+    { id: 'laag',    naam: 'Mild',    emoji: '🕊️', factor: 0.5, tevredenheid: 6,
+      beschrijving: 'De helft van de gebruikelijke afdracht. Je burgers zijn je dankbaar.' },
+    { id: 'normaal', naam: 'Gewoon',  emoji: '⚖️', factor: 1, tevredenheid: 0,
+      beschrijving: 'De gebruikelijke afdracht.' },
+    { id: 'hoog',    naam: 'Streng',  emoji: '💰', factor: 1.7, tevredenheid: -12,
+      beschrijving: 'Bijna twee keer zoveel munten, en een stad die dat merkt.' }
+  ];
+
+  Game.config.belastingtarief = function (id) {
+    var l = Game.config.belastingtarieven;
+    for (var i = 0; i < l.length; i++) if (l[i].id === id) return l[i];
+    return l[1];
+  };
+
   Game.config.kaartmaat = function (id) {
     var lijst = Game.config.kaartmaten;
     for (var i = 0; i < lijst.length; i++) if (lijst[i].id === id) return lijst[i];

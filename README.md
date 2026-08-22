@@ -35,20 +35,44 @@ opent speelt zijn eigen dorp, want alles wordt lokaal in de browser opgeslagen.
 ## Wat is het idee?
 
 Je verzamelt zes grondstoffen uit het land — 🥩 vlees, 🪵 hout, 🪨 steen, ⛓️ ijzer,
-🟠 koper en 💎 edelstenen — en verwerkt die tot 🌾 graan, 🍞 brood, 🔨 gereedschap en
-🪙 munten. Daarmee klim je door vier tijdperken:
+🟠 koper en 💎 edelstenen — en verwerkt die tot 🌾 graan, 🍞 brood, 🔨 gereedschap,
+🐑 wol, 🧥 kleding, 🌿 hop, 🍺 bier en 🪙 munten. Daarmee klim je door vier tijdperken:
 
 | Tijdperk | Wat je krijgt |
 |---|---|
-| 1 · **Nederzetting** | Boerderij, huisjes, houthakker, jacht, visserij, steengroeve, waterput, **straatjes** |
-| 2 · **Dorp** | Molen, bakkerij, marktplaats, kapel, koper- en ijzermijn, wachttoren, **haven**, **oefenveld** |
-| 3 · **Handelsstad** | Smederij, wapensmid, kazerne, muren, **stadspoort**, kerk, herberg, edelsteenmijn, gildehuis, **school** |
+| 1 · **Nederzetting** | Boerderij, huisjes, houthakker, jacht, visserij, steengroeve, waterput, **straatjes**, **graanschuur** |
+| 2 · **Dorp** | Molen, bakkerij, marktplaats, kapel, koper- en ijzermijn, wachttoren, **haven**, **oefenveld**, **schaapskooi**, **hopveld** |
+| 3 · **Handelsstad** | Smederij, wapensmid, kazerne, muren, **stadspoort**, kerk, herberg, edelsteenmijn, gildehuis, **school**, **weverij**, **brouwerij**, **schatkamer** |
 | 4 · **Middeleeuwse stad** | Stadhuis, herenhuizen, juwelier, handelshuis, universiteit, kathedraal, kasteel |
 
 Rechtsboven staat precies wat je nog nodig hebt voor het volgende tijdperk. Een
 **adviseur** in de doelenkolom wijst je steeds op de handigste volgende stap. Je stad is
 "af" zodra je 100 inwoners hebt, 70% tevredenheid, en de kathedraal, het kasteel, de
 universiteit en het stadhuis staan. Daarna kun je gewoon doorbouwen.
+
+### Opslag, bederf en belasting
+
+- 📦 **Drie soorten opslag.** Voedsel, goederen en schatten hebben elk hun eigen
+  ruimte. Een **graanschuur** is voor eten, een **pakhuis** voor goederen, een
+  **schatkamer** voor munten en edelstenen. De voorraadschuur en het dorpsplein
+  bergen alles een beetje.
+- 🪰 **Voedsel bederft**, het snelst in de zomer. Een graanschuur houdt het
+  grootste deel tegen. Zonder schuur lekt je oogst weg vóór de winter waar hij
+  voor bedoeld was.
+- 💰 **Belastingtarief.** Op het dorpsplein zet je hoe hard de heer knijpt:
+  mild (halve opbrengst, blijer volk), gewoon, of streng (bijna dubbel, maar je
+  stad merkt het). De enige knop die je continu blijft afwegen.
+
+### Twee echte productieketens
+
+| Keten | Gebouwen | Waarvoor |
+|---|---|---|
+| 🐑 wol → 🧥 kleding | Schaapskooi (t2) → Weverij (t3) | Burgers én poorters dragen kleding |
+| 🌿 hop → 🍺 bier | Hopveld (t2) → Brouwerij (t3) | Poorters drinken bier, en je herberg schenkt het |
+
+Dit is geen decoratie: standen **verbruiken** deze waren. Raakt je kleding op,
+dan zijn je burgers ontevreden en betalen ze nog maar een derde belasting. En
+zonder brouwerij staat je herberg gewoon droog.
 
 ### Standen: van boeren naar poorters
 
@@ -148,8 +172,16 @@ Op een tablet werkt het ook: één vinger sleept, tikken selecteert of plaatst.
    bediend, rood betekent vergeten. Beweeg met de muis over het 😀-icoon bovenin om te
    zien waar je punten vandaan komen.
 
-4. **De winter.** Boerderijen leveren dan níets en er wordt meer gegeten. Vissershutten
-   en mijnen werken gewoon door. Leg in de herfst voorraad aan.
+4. **De winter.** Dit is het seizoen waar je je hele jaar op voorbereidt:
+   - Boerderijen leveren **níets** en er wordt meer gegeten.
+   - Je dorpelingen **stoken hout** om niet te bevriezen. Geen hout betekent een
+     kelderend humeur en uiteindelijk doden. Hout is dus geen beginnersgrondstof
+     maar een blijvende zorg.
+   - Het water **bevriest**: vissershutten vangen nog maar 40% — tenzij er een
+     **haven** binnen acht tegels ligt die een geul openhoudt.
+   - Mijnen en groeven werken gewoon door.
+
+   Leg in de herfst dus voorraad aan: eten én brandhout.
 
 5. **Rovers.** Vanaf tijdperk 2 komen er bandieten langs, aangevoerd door een hoofdman
    met een naam die onthoudt wat je vorige keer deed. Je krijgt 45 seconden

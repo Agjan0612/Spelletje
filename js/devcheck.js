@@ -47,6 +47,17 @@
       if (d.tevredenheid && !d.bereik) {
         fouten.push(d.id + ': heeft tevredenheid maar geen bereik — die punten bereiken geen enkel huis');
       }
+      for (var soort in (d.opslagPer || {})) {
+        if (!Game.config.opslagSoorten[soort]) {
+          fouten.push(d.id + ': onbekende opslagsoort ' + soort);
+        }
+        if (typeof d.opslagPer[soort] !== 'number' || d.opslagPer[soort] <= 0) {
+          fouten.push(d.id + ': ongeldige opslagPer voor ' + soort);
+        }
+      }
+      if (d.bederfRem !== undefined && (d.bederfRem < 0 || d.bederfRem > 1)) {
+        fouten.push(d.id + ': bederfRem hoort tussen 0 en 1 te liggen');
+      }
       if (d.stand && !Game.config.standen[d.stand]) {
         fouten.push(d.id + ': onbekende stand ' + d.stand);
       }
@@ -104,6 +115,16 @@
         }
       }
       controleerResources(fouten, 'tijdperk ' + age.nr + '.kosten', age.kosten, res);
+    });
+
+    /* Every resource a standing demands must be producible before that
+       standing can exist, or a burgher house would be unsatisfiable. */
+    Object.keys(Game.config.standen).forEach(function (id) {
+      var eisen = Game.config.standen[id].eisen || {};
+      for (var waar in (eisen.waren || {})) {
+        if (!res[waar]) { fouten.push('Stand ' + id + ' vraagt onbekende grondstof ' + waar); continue; }
+        if (!bronBestaatVoor(waar, 4)) fouten.push('Stand ' + id + ' vraagt ' + waar + ', maar niets maakt dat');
+      }
     });
 
     /* Every resource needs at least one producer somewhere in the game. */

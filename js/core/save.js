@@ -75,6 +75,15 @@
     s.belasting = typeof s.belasting === 'number' ? s.belasting : 0;
     s.standOntevreden = typeof s.standOntevreden === 'number' ? s.standOntevreden : 0;
     s.wens = s.wens || { actief: null, rust: 160, vervuld: 0 };
+
+    /* Storehouse categories, firewood and the tax dial, all added later.
+       s.capaciteiten is derived and refilled by herbereken below. */
+    s.capaciteiten = s.capaciteiten || {};
+    s.bederfRem = typeof s.bederfRem === 'number' ? s.bederfRem : 0;
+    s.belastingtarief = s.belastingtarief || 'normaal';
+    s.koudeTimer = typeof s.koudeTimer === 'number' ? s.koudeTimer : 0;
+    s.koud = !!s.koud;
+    s.warenGeleverd = s.warenGeleverd || {};
     s.bonus = s.bonus || { productie: 1, mijnbouw: 1 };
     s.raid = s.raid || { fase: 'rust', timer: 200, kracht: 0, nummer: 0 };
     /* The marching band, its choices and the captain were added later. An
