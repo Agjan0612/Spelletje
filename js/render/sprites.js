@@ -1566,6 +1566,28 @@
     }
   }
 
+  /* An iso miniature of a building, rendered once to an offscreen canvas and
+     cached as a data URL, so the build menu and the panel can show the real
+     volume you are about to place instead of an emoji (fase 8.1). */
+  var miniCache = {};
+  S.miniatuurBron = function (def, maat, tijdperk) {
+    maat = maat || 60;
+    var sleutel = def.id + ':' + maat + ':' + (tijdperk || 0);
+    if (miniCache[sleutel]) return miniCache[sleutel];
+    if (typeof document === 'undefined') return null;
+    var cv = document.createElement('canvas');
+    cv.width = maat; cv.height = maat;
+    var c = cv.getContext('2d');
+    var grootte = def.grootte || 1;
+    var p = (maat * 0.6) / grootte;
+    S.tekenGebouw(c, def, maat / 2, maat * 0.3, p, grootte,
+      { tijd: 0, tijdperk: tijdperk || def.tijdperk, seizoen: 0, zaad: 3 });
+    var url;
+    try { url = cv.toDataURL(); } catch (e) { url = null; }
+    if (url) miniCache[sleutel] = url;
+    return url;
+  };
+
   Game.render.sprites = S;
 
 })(window.Game);

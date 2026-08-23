@@ -71,12 +71,22 @@
       if (spel.plaatsType === d.id) kaart.classList.add('geselecteerd');
 
       var em = Game.util.el('div', 'em');
+      /* The real iso volume you are about to place, cached per building. Falls
+         back to the top-down sprite, then to the emoji. */
+      var miniBron = Game.render.sprites && Game.render.sprites.miniatuurBron &&
+        Game.render.sprites.miniatuurBron(d, 60, s.tijdperk);
       var spritePad = Game.render.atlas && Game.render.atlas.gebouwPad(d.id);
-      if (spritePad) {
+      if (miniBron) {
+        var mini = document.createElement('img');
+        mini.className = 'mini';
+        mini.alt = '';
+        mini.onerror = function () { em.textContent = d.emoji; };
+        mini.src = miniBron;
+        em.appendChild(mini);
+      } else if (spritePad) {
         var thumb = document.createElement('img');
         thumb.className = 'sprite';
         thumb.alt = '';
-        /* Fall back to the emoji if the image is missing. */
         thumb.onerror = function () { em.textContent = d.emoji; };
         thumb.src = spritePad;
         em.appendChild(thumb);

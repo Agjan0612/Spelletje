@@ -72,7 +72,17 @@
     Game.config.resourceOrder.forEach(function (id) {
       var e = resEls[id];
       var waarde = s.res[id];
-      e.val.textContent = Game.util.fmt(waarde);
+
+      /* Fase 8.2: roll the number toward its real value instead of snapping,
+         and tint it by which way it is moving, so a rising stock reads gold and
+         a falling one reads warm-red. */
+      if (e.toon == null) e.toon = waarde;
+      var diff = waarde - e.toon;
+      if (Math.abs(diff) < 0.6) e.toon = waarde;
+      else e.toon += diff * 0.34;
+      e.val.textContent = Game.util.fmt(e.toon);
+      e.val.classList.toggle('stijgt', diff > 0.6);
+      e.val.classList.toggle('daalt', diff < -0.6);
 
       var stroom = s.stroom[id] || 0;
       if (Math.abs(stroom) >= 0.05) {
