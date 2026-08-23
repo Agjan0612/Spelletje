@@ -105,6 +105,20 @@
     werk += '.';
     stukken.push({ kop: 'Het werk', tekst: werk });
 
+    /* --- het handvest, als het er is --- */
+    if (s.gewonnen && s.faam && (s.faam.klaar || s.faam.gemist)) {
+      var rang = Game.core.faam.rang(s);
+      var handvest = 'Sinds de kroon ons het handvest verleende, draagt ' + s.dorpsnaam +
+        ' de rang van ' + rang.naam.toLowerCase() + '. ' +
+        telwoord(s.faam.klaar, 'termijn is', 'termijnen zijn') + ' vervuld';
+      if (s.faam.gemist) {
+        handvest += ', ' + telwoord(s.faam.gemist, 'termijn liep', 'termijnen liepen') +
+          ' af zonder dat wij leverden';
+      }
+      handvest += '.';
+      stukken.push({ kop: 'Het handvest', tekst: handvest });
+    }
+
     /* --- the things that actually happened --- */
     var punten = hoogtepunten(s);
     if (punten.length) stukken.push({ kop: 'Uit de kroniek', regels: punten });
@@ -112,11 +126,15 @@
     /* --- closing --- */
     stukken.push({
       kop: 'Slot',
-      tekst: s.gewonnen
-        ? 'En zo staat ' + s.dorpsnaam + ' voltooid: kathedraal, kasteel, universiteit en stadhuis, ' +
-          'en een volk dat er graag woont. Moge het zo blijven.'
-        : 'Het werk is niet af. Er is altijd een muur te zetten, een akker te ploegen, ' +
-          'een winter te doorstaan. Zo gaat dat met steden.'
+      tekst: s.uitgestorven
+        ? 'Hier eindigt de kroniek van ' + s.dorpsnaam + '. De daken staan er nog, ' +
+          'de akkers liggen klaar, maar er is niemand meer om ze te bewerken. ' +
+          'Zo gaat dat ook met steden.'
+        : (s.gewonnen
+          ? 'En zo staat ' + s.dorpsnaam + ' voltooid: kathedraal, kasteel, universiteit en stadhuis, ' +
+            'en een volk dat er graag woont. Moge het zo blijven.'
+          : 'Het werk is niet af. Er is altijd een muur te zetten, een akker te ploegen, ' +
+            'een winter te doorstaan. Zo gaat dat met steden.')
     });
 
     return { titel: 'De kroniek van ' + s.dorpsnaam, rang: st.rang, punten: st.punten, stukken: stukken };

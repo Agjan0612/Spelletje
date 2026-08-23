@@ -89,12 +89,41 @@
 
   /* --------------------------------------------------------------- wegen -- */
 
+  /* A bridge is laid from dry land or from a bridge tile that is already
+     there, so it grows out over the water span by span instead of appearing
+     in the middle of a lake. */
+  C.aanDeOever = function (s, x, y) {
+    var buren = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    for (var i = 0; i < buren.length; i++) {
+      var t = map.tegel(s.kaart, x + buren[i][0], y + buren[i][1]);
+      if (!t) continue;
+      if (t.t !== 'water') return true;      /* the bank */
+      if (t.brug) return true;               /* the span already built */
+    }
+    return false;
+  };
+
   C.controleerWeg = function (s, d, x, y) {
     var t = map.tegel(s.kaart, x, y);
     if (!t) return { ok: false, reden: 'Buiten de kaart' };
-    if (t.weg) return { ok: true, reden: '', opbreken: true };
-    if (t.t === 'water') return { ok: false, reden: 'Niet over water — daar hoort een brug' };
-    if (t.t === 'berg') return { ok: false, reden: 'De berg is te steil voor een weg' };
+    var overWater = !!d.overWater;
+    if (t.weg) {
+      /* Taking something up again is the same click as laying it, so the two
+         must not be able to lift each other: a street cannot break a bridge. */
+      if (!!t.brug !== overWater) {
+        return { ok: false, reden: t.brug ? 'Daar ligt een brug' : 'Daar ligt een straatje' };
+      }
+      return { ok: true, reden: '', opbreken: true };
+    }
+    if (t.t === 'water') {
+      if (!overWater) return { ok: false, reden: 'Niet over water — daar hoort een brug' };
+      if (!C.aanDeOever(s, x, y)) {
+        return { ok: false, reden: 'Een brug begint aan de oever of aan een brug die er al ligt' };
+      }
+    } else {
+      if (overWater) return { ok: false, reden: 'Een brug hoort over het water' };
+      if (t.t === 'berg') return { ok: false, reden: 'De berg is te steil voor een weg' };
+    }
     if (t.b !== null && t.b !== undefined) return { ok: false, reden: 'Hier staat al iets' };
     if (!Game.core.state.kanBetalen(s, d.kosten)) {
       return { ok: false, reden: 'Te weinig grondstoffen' };
@@ -111,16 +140,19 @@
 
     if (check.opbreken) {
       t.weg = 0;
+      t.brug = 0;
       for (var r in d.kosten) Game.core.state.voegToe(s, r, Math.floor(d.kosten[r] * 0.5));
     } else {
       Game.core.state.betaal(s, d.kosten);
       /* Clearing the ground for a street yields the same scrap of timber as
-         clearing it for a building would. */
-      if (t.t === 'bos') {
+         clearing it for a building would. A bridge clears nothing: the tile
+         stays water, fishing ground and all, and only gains the road flag. */
+      if (!d.overWater && t.t === 'bos') {
         Game.core.state.voegToe(s, 'hout', Math.round(Math.min(8, t.amt)));
         t.t = 'gras'; t.n = null; t.amt = 0; t.max = 0;
       }
       t.weg = 1;
+      if (d.overWater) t.brug = 1;
     }
 
     /* One counter is all core/logistiek.js needs to know the network moved. */

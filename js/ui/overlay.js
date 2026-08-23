@@ -49,16 +49,24 @@
   /* ------------------------------------------------------------- welkom -- */
 
   O.welkom = function () {
-    var erIsEenSave = Game.core.save.erIsEenSave();
+    var boeken = Game.core.save.boeken();
+    var gevuld = boeken.filter(function (b) { return !b.leeg; });
+    var erIsEenSave = gevuld.length > 0;
     var knoppen = [];
 
     if (erIsEenSave) {
+      var laatste = Game.core.save.laatste();
+      var meta = boeken[laatste - 1];
       knoppen.push({
-        tekst: '📜 Verder spelen', primair: true, actie: function () {
-          spel.laadOpgeslagenSpel();
+        tekst: '📜 Verder met ' + (meta && meta.naam ? meta.naam : 'je dorp'), primair: true,
+        actie: function () {
+          spel.laadOpgeslagenSpel(laatste);
           O.sluit();
         }
       });
+    }
+    if (gevuld.length > 1) {
+      knoppen.push({ tekst: '📁 Dorpsboeken', actie: function () { O.boeken(true); } });
     }
     knoppen.push({
       tekst: '🌱 Nieuw dorp stichten', primair: !erIsEenSave, actie: function () {
@@ -120,6 +128,10 @@
         'blijvende bonussen) en 📋 <b>Overzicht</b> (wat staat er stil?).</li>' +
         '<li>Ga met de muis over de cijfers bovenin voor de uitleg erachter — ' +
         'de tevredenheid laat zien waar elk punt vandaan komt.</li>' +
+        '<li>Bij <b>Menu → Statistieken</b> staat het <b>verloop</b> van je stad: ' +
+        'inwoners, tevredenheid, voedsel en munten per seizoen, met de tijdperken ' +
+        'als gouden strepen. Eén getal zegt hoe het nú staat, de lijn zegt of het ' +
+        'de goede kant op gaat.</li>' +
         '</ul>' +
         '<h4>Er gebeurt van alles</h4>' +
         '<ul>' +
@@ -133,6 +145,25 @@
         'wachttoren kunnen vanaf tijdperk 3 uitgroeien tot iets groters. ' +
         'Klik het gebouw aan en kijk in het paneel.</li>' +
         '</ul>' +
+        '<h4>De rivier en de brug</h4>' +
+        '<p>Door elke kaart loopt een rivier van de bergen naar zee. Dat is geen ' +
+        'decor: je karren gaan er niet overheen, dus alles aan de overkant ligt ' +
+        'ver van je opslag en levert veel minder op. Een 🌉 <b>brug</b> vind je bij ' +
+        '<b>Straten</b>. Je legt hem vanaf de oever, tegel voor tegel het water op ' +
+        '— of vanaf een brug die er al ligt. Over de brug rijden je karren net zo ' +
+        'hard als over een straatje. Het visgebied eronder blijft gewoon liggen, ' +
+        'dus een vissershut naast je brug vist rustig door.</p>' +
+        '<h4>Drie dorpen naast elkaar</h4>' +
+        '<p>Er passen drie dorpen in je browser. Bij <b>Menu → Dorpsboeken</b> zie je ' +
+        'ze alle drie en kun je wisselen; bij een nieuw dorp kies je zelf in welk ' +
+        'boek het komt. Zo kost een scenario proberen je niet je bestaande stad.</p>' +
+        '<h4>En als je gewonnen hebt</h4>' +
+        '<p>Zodra je stad af is verleent de kroon een <b>handvest</b>. Vanaf dan opent ' +
+        'er telkens een nieuwe termijn: een levering met een deadline én een norm ' +
+        'waar je stad aan moet blijven voldoen. Haal je allebei, dan levert dat ' +
+        'dubbele faam op, en met faam klim je van vrijstad naar keizerlijke ' +
+        'vrijstad. Elke rang geeft je stad iets blijvends. Het handvest staat in ' +
+        'het tabblad <b>Stad</b>.</p>' +
         '<h4>De vijf dingen die er echt toe doen</h4>' +
         '<ul>' +
         '<li><b>Voedsel.</b> Iedereen eet. Graan van de boerderij, vlees van jagers en vissers, ' +
@@ -158,7 +189,11 @@
 
   O.menu = function () {
     O.open('☰ Menu', function (el) {
-      el.innerHTML = '<p>Je spel wordt elke 20 seconden automatisch opgeslagen in deze browser.</p>';
+      var boek = Game.core.save.boeken()[Game.core.save.huidig - 1];
+      el.innerHTML = '<p>Je spel wordt elke 20 seconden automatisch opgeslagen in ' +
+        '<b>dorpsboek ' + Game.core.save.huidig + '</b>' +
+        (boek && !boek.leeg && boek.naam ? ' (' + boek.naam + ')' : '') +
+        '. Er passen er drie in deze browser.</p>';
 
       var kop = Game.util.el('h4', '', 'Save kopiëren of terugzetten');
       el.appendChild(kop);
@@ -171,8 +206,10 @@
       el.appendChild(ta);
     }, [
       { tekst: '💾 Nu opslaan', primair: true, actie: function () {
-        Game.core.save.opslaan(spel.state);
-        Game.ui.toast('💾 Opgeslagen');
+        var gelukt = Game.core.save.opslaan(spel.state);
+        Game.ui.toast(gelukt
+          ? '💾 Opgeslagen in dorpsboek ' + Game.core.save.huidig
+          : '⚠️ Opslaan lukte niet — is de browseropslag vol?');
         O.sluit();
       } },
       { tekst: '📥 Importeren', actie: function () {
@@ -183,6 +220,7 @@
         Game.ui.toast('📥 Save geladen');
         O.sluit();
       } },
+      { tekst: '📁 Dorpsboeken', actie: function () { O.boeken(false); } },
       { tekst: '📖 Dorpsboek', actie: function () { O.dorpsboek(); } },
       { tekst: '📊 Statistieken', actie: function () { O.statistieken(); } },
       { tekst: '📜 De kroniek', actie: function () { O.kroniek(); } },
@@ -202,18 +240,77 @@
     ]);
   };
 
+  /* --------------------------------------------------- dorpsboeken ------ */
+
+  /* Drie dorpen naast elkaar in plaats van één. Het scherm laat ze alle drie
+     zien, ook de lege, want dat is de hele mededeling: er is nog plek, je
+     hoeft je stad niet op te geven om een scenario te proberen. */
+  O.boeken = function (vanafWelkom) {
+    O.open('📁 Dorpsboeken', function (el) {
+      el.appendChild(Game.util.el('p', '',
+        'Er passen drie dorpen in deze browser. Het spel schrijft steeds in het ' +
+        'boek dat je hier openslaat.'));
+
+      var lijst = Game.util.el('div', 'boekenlijst');
+      Game.core.save.boeken().forEach(function (b) {
+        var rij = Game.util.el('div', 'boekrij' +
+          (b.nr === Game.core.save.huidig ? ' huidig' : '') + (b.leeg ? ' leeg' : ''));
+
+        var open = Game.util.el('button', 'boekknop');
+        var regel = b.leeg
+          ? '<b>Boek ' + b.nr + '</b><span>Leeg — hier past een nieuw dorp in</span>'
+          : '<b>' + b.nr + '. ' + b.naam + '</b><span>' +
+            (b.uitgestorven ? '⚰️ verlaten · ' : (b.gewonnen ? '👑 voltooid · ' : '')) +
+            'jaar ' + b.jaar + ' · tijdperk ' + b.tijdperk + ' · ' +
+            b.bevolking + ' inwoners · ' + b.punten + ' punten</span>';
+        open.innerHTML = regel;
+        open.disabled = b.leeg;
+        open.addEventListener('click', function () {
+          spel.laadOpgeslagenSpel(b.nr);
+          O.sluit();
+        });
+        rij.appendChild(open);
+
+        if (!b.leeg) {
+          var wis = Game.util.el('button', 'kleineknop', '🗑️');
+          wis.title = 'Dit dorpsboek wissen';
+          wis.addEventListener('click', function () {
+            O.open('Boek ' + b.nr + ' wissen?',
+              '<p><b>' + b.naam + '</b> verdwijnt dan voorgoed uit deze browser.</p>', [
+                { tekst: 'Ja, wissen', primair: true, actie: function () {
+                  Game.core.save.wissen(b.nr);
+                  O.boeken(vanafWelkom);
+                } },
+                { tekst: 'Nee, terug', actie: function () { O.boeken(vanafWelkom); } }
+              ]);
+          });
+          rij.appendChild(wis);
+        }
+        lijst.appendChild(rij);
+      });
+      el.appendChild(lijst);
+    }, [
+      { tekst: '🌱 Nieuw dorp stichten', primair: true, actie: function () { O.nieuwSpelScherm(); } },
+      { tekst: '← Terug', actie: function () { if (vanafWelkom) O.welkom(); else O.menu(); } }
+    ], !vanafWelkom);
+  };
+
   /* ------------------------------------------------------- nieuw spel --- */
 
   /* The set-up screen: name your village, pick how much world you want and
      how rough the bandits are. The seed is optional — fill in the same number
      and you get exactly the same map back. */
   O.nieuwSpelScherm = function () {
+    var boeken = Game.core.save.boeken();
     var keuze = {
       naam: spel.verzinNaam(),
       scenario: 'vrij',
       kaart: 'normaal',
       moeilijkheid: 'normaal',
-      seed: ''
+      seed: '',
+      /* Standaard het eerste lege boek: een nieuw dorp hoort niet stilletjes
+         over het vorige heen te schrijven. */
+      slot: Game.core.save.vrijBoek() || Game.core.save.huidig
     };
 
     function knoprij(el, lijst, veld) {
@@ -281,6 +378,31 @@
       el.appendChild(Game.util.el('h4', '', 'Hoe zwaar mag het zijn?'));
       knoprij(el, Game.config.moeilijkheden, 'moeilijkheid');
 
+      el.appendChild(Game.util.el('h4', '', 'In welk dorpsboek?'));
+      var boekRij = Game.util.el('div', 'keuzerij');
+      var boekWaarschuwing = Game.util.el('div', 'cursief');
+      function meldOverschrijven() {
+        var b = boeken[keuze.slot - 1];
+        boekWaarschuwing.textContent = b && !b.leeg
+          ? '⚠️ Boek ' + b.nr + ' bevat ' + b.naam + ' — dat dorp gaat dan verloren.'
+          : '';
+      }
+      boeken.forEach(function (b) {
+        var k = Game.util.el('button', 'keuzeknop' + (keuze.slot === b.nr ? ' gekozen' : ''));
+        k.innerHTML = '<b>Boek ' + b.nr + '</b><span>' +
+          (b.leeg ? 'leeg' : b.naam + ' · jaar ' + b.jaar) + '</span>';
+        k.addEventListener('click', function () {
+          keuze.slot = b.nr;
+          Array.prototype.forEach.call(boekRij.children, function (kk) { kk.classList.remove('gekozen'); });
+          k.classList.add('gekozen');
+          meldOverschrijven();
+        });
+        boekRij.appendChild(k);
+      });
+      el.appendChild(boekRij);
+      el.appendChild(boekWaarschuwing);
+      meldOverschrijven();
+
       el.appendChild(Game.util.el('h4', '', 'Kaartnummer (optioneel)'));
       var seedRij = Game.util.el('div', 'naamrij');
       var seedInvoer = document.createElement('input');
@@ -300,7 +422,8 @@
             seed: isNaN(seed) || seed <= 0 ? undefined : seed,
             scenario: keuze.scenario,
             kaart: keuze.kaart,
-            moeilijkheid: keuze.moeilijkheid
+            moeilijkheid: keuze.moeilijkheid,
+            slot: keuze.slot
           });
           O.sluit();
         }
@@ -345,7 +468,7 @@
      from the menu at any time, not just when you have won. */
   O.statistiekLijst = function (s) {
     var st = Game.core.state.statistiek(s);
-    return [
+    var lijst = [
       ['👥 Inwoners', st.bevolking],
       ['🏠 Gebouwen', st.gebouwen],
       ['😀 Tevredenheid', st.tevredenheid + '%'],
@@ -358,6 +481,15 @@
       ['🪨 Steen verzameld', Game.util.fmt(Math.round(s.verzameld.steen))],
       ['💎 Edelstenen gedolven', Game.util.fmt(Math.round(s.verzameld.edelsteen))]
     ];
+    /* Het handvest bestaat pas na de overwinning; ervóór zou het een rij met
+       nullen zijn, en die horen hier niet te staan. */
+    if (s.gewonnen && s.faam) {
+      var rang = Game.core.faam.rang(s);
+      lijst.push([rang.emoji + ' Rang van de stad', rang.naam]);
+      lijst.push(['📯 Faam', s.faam.punten + ' punten']);
+      lijst.push(['📯 Termijnen vervuld', s.faam.klaar + (s.faam.gemist ? ' (' + s.faam.gemist + ' gemist)' : '')]);
+    }
+    return lijst;
   };
 
   function statistiekBlok(el, s) {
@@ -376,6 +508,13 @@
       tabel.appendChild(r);
     });
     el.appendChild(tabel);
+
+    /* Het verloop erbij: één getal zegt hoe het nú staat, de lijn zegt of het
+       de goede kant op gaat. Dat tweede is meestal de vraag. */
+    if (Game.ui.grafiek) {
+      el.appendChild(Game.util.el('h4', '', 'Het verloop van ' + s.dorpsnaam));
+      el.appendChild(Game.ui.grafiek.bouw(s));
+    }
   }
 
   O.statistieken = function () {
@@ -453,6 +592,45 @@
     ]);
   };
 
+  /* -------------------------------------------------------- uitgestorven -- */
+
+  /* De andere afloop. Er was er tot nu toe maar één: winnen. Een dorp kon
+     leeglopen en het spel tikte gewoon door op een lege kaart, alsof er niets
+     gebeurd was. Dit is het scherm dat daar hoort — met de kroniek erbij,
+     want dit is nu juist het moment waarop je wil lezen hoe het zo ver kwam.
+
+     De autosave is op dit moment al stilgezet (js/main.js), dus wat er in de
+     browser ligt is het dorp van hooguit twintig seconden geleden. Dat is
+     geen troostprijs maar het echte aanbod: het ging mis, ga terug. */
+  O.uitgestorven = function (s) {
+    var erIsEenSave = Game.core.save.erIsEenSave();
+    var knoppen = [];
+
+    if (erIsEenSave) {
+      knoppen.push({
+        tekst: '📜 Terug naar de laatste opslag', primair: true, actie: function () {
+          spel.laadOpgeslagenSpel();
+          O.sluit();
+        }
+      });
+    }
+    knoppen.push({ tekst: '🌱 Een nieuw dorp stichten', primair: !erIsEenSave,
+      actie: function () { O.nieuwSpelScherm(); } });
+    knoppen.push({ tekst: '📜 De kroniek', actie: function () { O.kroniek(); } });
+    knoppen.push({ tekst: '👀 Rondkijken', actie: function () { O.sluit(false); } });
+
+    O.open('⚰️ ' + s.dorpsnaam + ' is verlaten', function (el) {
+      el.appendChild(Game.util.el('p', 'midden',
+        'De laatste inwoner is weg. Wat er staat, staat er nog — maar er is ' +
+        'niemand meer om het te bewonen.'));
+      el.appendChild(Game.util.el('p', '',
+        'Het dorp heeft ' + s.jaar + (s.jaar === 1 ? ' jaar' : ' jaren') +
+        ' bestaan. Hieronder staat wat het in die tijd heeft opgebouwd; ' +
+        'de kroniek vertelt waar het misging.'));
+      statistiekBlok(el, s);
+    }, knoppen);
+  };
+
   /* `sc` is the scenario that just ended, if any; `verloren` marks the ones
      with a deadline you did not make. */
   O.overwinning = function (s, sc, verloren) {
@@ -469,13 +647,31 @@
             : 'Van één boerderij tot een stad met kathedraal, kasteel en universiteit. ' +
               'Dat heb je knap gedaan.')));
       statistiekBlok(el, s);
-      el.appendChild(Game.util.el('p', '',
-        'Je kunt gewoon doorspelen en je stad nog verder uitbouwen — je score blijft meelopen.'));
+      if (!verloren) {
+        el.appendChild(Game.util.el('h4', '', '📯 En nu?'));
+        el.appendChild(Game.util.el('p', '',
+          'De kroon verleent je stad een handvest. Vanaf nu opent er telkens een ' +
+          'nieuwe termijn: een levering met een deadline, én een norm waar je stad ' +
+          'aan moet blijven voldoen. Haal je beide, dan klim je van vrijstad naar ' +
+          'hanzestad en uiteindelijk naar keizerlijke vrijstad — elke rang geeft je ' +
+          'stad iets blijvends. Je vindt het handvest in het tabblad Stad.'));
+      } else {
+        el.appendChild(Game.util.el('p', '',
+          'Je kunt gewoon doorspelen en je stad nog verder uitbouwen — je score blijft meelopen.'));
+      }
     }, [
       { tekst: 'Doorspelen', primair: true, actie: function () { O.sluit(); } },
       { tekst: '📜 De kroniek', actie: function () { O.kroniek(); } },
       { tekst: '📷 Plaatje maken', actie: function () { O.plaatje(); } }
     ]);
+  };
+
+  /* Een nieuwe rang is een moment, geen regel in het logboek. */
+  O.faamRang = function (s, rang) {
+    O.open(rang.emoji + ' ' + s.dorpsnaam + ' is een ' + rang.naam,
+      '<p style="text-align:center;font-size:16px">' + rang.tekst + '</p>' +
+      '<p style="text-align:center">De volgende termijn opent binnenkort.</p>',
+      [{ tekst: 'Verder regeren', primair: true, actie: function () { O.sluit(); } }]);
   };
 
   Game.ui.overlay = O;

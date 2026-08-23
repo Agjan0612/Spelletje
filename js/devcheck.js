@@ -30,6 +30,8 @@
           fouten.push(d.id + ': weg-gebouwen mogen geen werk, opbrengst, woonruimte of opslag hebben');
         }
         if (d.grootte !== 1) fouten.push(d.id + ': een weg beslaat altijd precies één tegel');
+      } else if (d.overWater) {
+        fouten.push(d.id + ': overWater hoort alleen op een weg-gebouw (een brug)');
       }
       if (d.wint) {
         if (!res[d.wint.res]) fouten.push(d.id + ': wint onbekende grondstof ' + d.wint.res);
@@ -125,6 +127,35 @@
         if (!res[waar]) { fouten.push('Stand ' + id + ' vraagt onbekende grondstof ' + waar); continue; }
         if (!bronBestaatVoor(waar, 4)) fouten.push('Stand ' + id + ' vraagt ' + waar + ', maar niets maakt dat');
       }
+    });
+
+    /* Het handvest van de vrijstad: rangen moeten oplopen en de kroon mag
+       niets vragen dat nergens gemaakt wordt. */
+    if (Game.config.faamRangen) {
+      var vorigeDrempel = -1;
+      Game.config.faamRangen.forEach(function (rang) {
+        if (rang.drempel <= vorigeDrempel) {
+          fouten.push('Faamrang ' + rang.naam + ': drempel loopt niet op');
+        }
+        vorigeDrempel = rang.drempel;
+        if (!rang.naam || !rang.emoji || !rang.tekst) fouten.push('Faamrang ' + rang.nr + ': naam, emoji of tekst ontbreekt');
+        for (var sleutel in (rang.effect || {})) {
+          if (Game.core.onderzoek.GEEN[sleutel] === undefined) {
+            fouten.push('Faamrang ' + rang.naam + ': onbekend effect ' + sleutel);
+          }
+        }
+      });
+      if (!Game.config.faamRangen.length || Game.config.faamRangen[0].drempel !== 0) {
+        fouten.push('De laagste faamrang hoort op drempel 0 te staan');
+      }
+    }
+    (Game.config.faamEisen || []).forEach(function (eis) {
+      if (!res[eis.res]) { fouten.push('Faameis ' + eis.id + ': onbekende grondstof ' + eis.res); return; }
+      if (!bronBestaatVoor(eis.res, 4)) fouten.push('Faameis ' + eis.id + ': niets produceert ' + eis.res);
+      if (eis.nodig && !Game.config.gebouw(eis.nodig)) {
+        fouten.push('Faameis ' + eis.id + ': onbekend gebouw ' + eis.nodig);
+      }
+      if (!eis.tekst) fouten.push('Faameis ' + eis.id + ': geen tekst');
     });
 
     /* Every resource needs at least one producer somewhere in the game. */
