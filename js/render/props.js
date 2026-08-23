@@ -395,11 +395,40 @@
     if (!plein) return;
 
     var d = Game.core.state.def(plein);
-    var mid = cam.wereldNaarScherm((plein.x + d.grootte / 2) * Game.render.TEGEL,
-      (plein.y + d.grootte / 2) * Game.render.TEGEL);
+    var cx = plein.x + d.grootte / 2, cy = plein.y + d.grootte / 2;
+    var mid = cam.wereldNaarScherm(cx * Game.render.TEGEL, cy * Game.render.TEGEL);
     var breedte = p * (d.grootte + 1.2);
     var top = mid.y - p * 0.95;      /* just above the roofs of the square */
     var kleuren = ['#e0603a', '#e8c04a', '#5f9fc0', '#c07ac0'];
+
+    /* A bonfire on the square, and villagers moving in a ring around it. At
+       night lanterns and the fire join the warm-window glow (fase 7.1). */
+    feestvuur(ctx, cam, s, cx, cy + d.grootte * 0.1, p);
+    var nacht = Game.render.sfeer ? Game.render.sfeer.licht(s).nacht : 0;
+    for (var r = 0; r < 6; r++) {
+      var hoek = r / 6 * Math.PI * 2 + s.tijd * 0.5;
+      var rx = cx + Math.cos(hoek) * (d.grootte * 0.5 + 1.1);
+      var ry = cy + Math.sin(hoek) * (d.grootte * 0.28 + 0.6);
+      var sp = cam.wereldNaarScherm(rx * Game.render.TEGEL, ry * Game.render.TEGEL);
+      var kijk = Math.cos(hoek) >= 0 ? 1 : -1;
+      Game.render.villagers.teken(ctx, sp.x, sp.y, p * 0.85,
+        ['boer', 'werkloos', 'waard'][r % 3], kijk, s.tijd * 6 + r, true, {});
+    }
+    /* Lanterns strung with the bunting, glowing after dark. */
+    if (nacht > 0.3) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (var l = 0; l < 6; l++) {
+        var lx = mid.x - breedte / 2 + breedte * (l + 0.5) / 6;
+        var ly = top - p * 0.1 + Math.sin(s.tijd * 2 + l) * p * 0.02;
+        var g = ctx.createRadialGradient(lx, ly, 0, lx, ly, p * 0.28);
+        g.addColorStop(0, 'rgba(255,200,110,' + (0.6 * nacht).toFixed(3) + ')');
+        g.addColorStop(1, 'rgba(255,180,80,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(lx, ly, p * 0.28, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+    }
 
     for (var k = -1; k <= 1; k += 2) {
       ctx.strokeStyle = 'rgba(230,220,190,.7)';
@@ -424,6 +453,52 @@
       }
     }
   };
+
+  /* The bonfire itself: a stack of logs, a flickering flame and a warm pool of
+     light, plus the odd smoke puff. */
+  function feestvuur(ctx, cam, s, wx, wy, p) {
+    var sp = cam.wereldNaarScherm(wx * Game.render.TEGEL, wy * Game.render.TEGEL);
+    var flikker = 0.75 + 0.25 * Math.sin(s.tijd * 7) + 0.1 * Math.sin(s.tijd * 13);
+
+    /* Warm light on the ground, additive. */
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    var g = ctx.createRadialGradient(sp.x, sp.y, 0, sp.x, sp.y, p * 1.1 * flikker);
+    g.addColorStop(0, 'rgba(255,190,90,.7)');
+    g.addColorStop(1, 'rgba(230,110,40,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.ellipse(sp.x, sp.y, p * 1.1 * flikker, p * 0.55 * flikker, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+
+    /* Logs. */
+    ctx.strokeStyle = '#5a3d22';
+    ctx.lineWidth = Math.max(1.5, p * 0.05);
+    ctx.lineCap = 'round';
+    for (var i = 0; i < 3; i++) {
+      var a = i / 3 * Math.PI;
+      ctx.beginPath();
+      ctx.moveTo(sp.x - Math.cos(a) * p * 0.16, sp.y - Math.sin(a) * p * 0.08);
+      ctx.lineTo(sp.x + Math.cos(a) * p * 0.16, sp.y + Math.sin(a) * p * 0.08);
+      ctx.stroke();
+    }
+    /* Flame. */
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    var vlam = ['rgba(255,120,40,.9)', 'rgba(255,180,70,.9)', 'rgba(255,230,150,.9)'];
+    for (var k = 0; k < 3; k++) {
+      ctx.fillStyle = vlam[k];
+      var h = p * (0.5 - k * 0.13) * flikker;
+      ctx.beginPath();
+      ctx.moveTo(sp.x - p * (0.1 - k * 0.03), sp.y);
+      ctx.quadraticCurveTo(sp.x + Math.sin(s.tijd * 6 + k) * p * 0.06, sp.y - h, sp.x, sp.y - h);
+      ctx.quadraticCurveTo(sp.x - Math.sin(s.tijd * 6 + k) * p * 0.06, sp.y - h, sp.x + p * (0.1 - k * 0.03), sp.y);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+    if (Game.render.particles && Math.random() < 0.25) {
+      Game.render.particles.emit('vonk', wx * Game.render.TEGEL, wy * Game.render.TEGEL, 1, { spreiding: 3 });
+    }
+  }
 
   Game.render.props = P;
 

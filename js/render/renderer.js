@@ -96,6 +96,11 @@
     sweep.actief = true;
     sweep.t = 0;
     sweep.gepoft = {};
+    /* The era just reached, for the parchment banner (fase 7.2). */
+    var age = Game.config.ages[Game.util.clamp(s.tijdperk - 1, 0, Game.config.ages.length - 1)];
+    sweep.naam = age ? age.naam : '';
+    sweep.emoji = age ? age.emoji : '';
+    sweep.nr = s.tijdperk;
     R.schok(4);
     R.flits('225,190,110');
   };
@@ -687,7 +692,54 @@
       ctx.fillRect(0, 0, cam.breedte, cam.hoogte);
       ctx.restore();
     }
+
+    /* --- a parchment banner announcing the new era, over everything --- */
+    if (sweep.actief) tekenTijdperkBanier(cam);
   };
+
+  /* The age-up wipe: a strip of parchment unrolls across the middle of the
+     screen with the new era's name, holds, and fades — turning a log line into
+     a milestone (fase 7.2). */
+  function tekenTijdperkBanier(cam) {
+    var f = sweep.t / sweep.duur;          /* 0..1 over the sweep */
+    var b = cam.breedte, h = cam.hoogte;
+    var bh = Math.min(96, h * 0.16);
+    var by = h * 0.4;
+
+    /* Unroll in, hold, fade out. */
+    var breed = Game.util.clamp(f / 0.22, 0, 1);          /* how far it unrolled */
+    var alpha = f < 0.72 ? 1 : Game.util.clamp((1 - f) / 0.28, 0, 1);
+    if (alpha <= 0.01) return;
+    var bw = b * (0.2 + 0.7 * breed);
+    var bx = (b - bw) / 2;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    /* Parchment strip with rolled ends. */
+    var g = ctx.createLinearGradient(0, by, 0, by + bh);
+    g.addColorStop(0, '#e8d7ac');
+    g.addColorStop(0.5, '#dcc794');
+    g.addColorStop(1, '#c9b177');
+    ctx.fillStyle = g;
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.fillStyle = '#8a6a3a';
+    ctx.fillRect(bx - Math.min(14, bw * 0.03), by - 4, Math.min(14, bw * 0.03), bh + 8);
+    ctx.fillRect(bx + bw, by - 4, Math.min(14, bw * 0.03), bh + 8);
+    ctx.strokeStyle = 'rgba(120,92,50,.6)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(bx, by, bw, bh);
+
+    if (breed > 0.85) {
+      ctx.fillStyle = '#4a3418';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = '600 ' + Math.round(bh * 0.34) + 'px "Iowan Old Style", Georgia, serif';
+      ctx.fillText((sweep.emoji || '') + '  Tijdperk ' + (sweep.nr || '') + '  ' + (sweep.emoji || ''), b / 2, by + bh * 0.36);
+      ctx.font = '700 ' + Math.round(bh * 0.42) + 'px "Iowan Old Style", Georgia, serif';
+      ctx.fillText(sweep.naam || '', b / 2, by + bh * 0.72);
+    }
+    ctx.restore();
+  }
 
   /* Real-time bits that are not the fixed simulation: particles, raiders,
      screen shake, the age-up sweep, ambient work smoke and scorch decay. */
