@@ -65,13 +65,13 @@
       lok.bende.push({
         leider: i === 0,
         /* Formation offset (tiles) behind and beside the captain. */
-        fx: (i === 0 ? 0.6 : -rij * 0.9 + (Math.random() - 0.5) * 0.4),
-        fy: (i === 0 ? 0 : (i % 3 - 1) * 0.8 + (Math.random() - 0.5) * 0.4),
+        fx: (i === 0 ? 0.6 : -rij * 0.9 + (Game.render.rng() - 0.5) * 0.4),
+        fy: (i === 0 ? 0 : (i % 3 - 1) * 0.8 + (Game.render.rng() - 0.5) * 0.4),
         x: entryPos(s).x, y: entryPos(s).y,
         koers: 0, snelheid: 0,
-        traag: 0.8 + Math.random() * 0.5,      /* stragglers lag */
+        traag: 0.8 + Game.render.rng() * 0.5,      /* stragglers lag */
         fakkel: i % 3 === 0,                    /* every third carries a torch */
-        klok: Math.random() * 6.28,
+        klok: Game.render.rng() * 6.28,
         gevallen: false
       });
     }
@@ -178,8 +178,8 @@
           for (var k = 0; k < 4; k++) {
             lok.pijlen.push({
               x0: gx, y0: gy - 0.4,
-              x1: doel.x + (Math.random() - 0.5) * 0.8, y1: doel.y + (Math.random() - 0.5) * 0.8,
-              t: 0, duur: 0.5 + Math.random() * 0.2
+              x1: doel.x + (Game.render.rng() - 0.5) * 0.8, y1: doel.y + (Game.render.rng() - 0.5) * 0.8,
+              t: 0, duur: 0.5 + Game.render.rng() * 0.2
             });
           }
           velRover(doel);
@@ -202,7 +202,7 @@
   function staandeRover() {
     var kandidaten = lok.bende.filter(function (b) { return !b.gevallen && !b.leider; });
     if (!kandidaten.length) kandidaten = lok.bende.filter(function (b) { return !b.gevallen; });
-    return kandidaten.length ? kandidaten[Math.floor(Math.random() * kandidaten.length)] : null;
+    return kandidaten.length ? kandidaten[Math.floor(Game.render.rng() * kandidaten.length)] : null;
   }
 
   function velRover(b) {
@@ -235,7 +235,7 @@
 
   function maakKamp(s) {
     var entry = s.raid.vanaf, pl = plein(s), perim = perimeter(entry, pl);
-    lok.kamp = { x: perim.x, y: perim.y, tenten: [], vuurFase: Math.random() * 6.28 };
+    lok.kamp = { x: perim.x, y: perim.y, tenten: [], vuurFase: Game.render.rng() * 6.28 };
     for (var i = 0; i < 3; i++) {
       var a = i / 3 * Math.PI * 2;
       lok.kamp.tenten.push({ x: perim.x + Math.cos(a) * 1.2, y: perim.y + Math.sin(a) * 1.2 });
@@ -297,8 +297,8 @@
     if (!Game.render.particles) return;
     var L = leiderPos(s);
     for (var i = 0; i < 6; i++) {
-      Game.render.particles.stof((L.x + (Math.random() - 0.5) * 2) * TEGEL(),
-                                 (L.y + (Math.random() - 0.5) * 2) * TEGEL(), 3);
+      Game.render.particles.stof((L.x + (Game.render.rng() - 0.5) * 2) * TEGEL(),
+                                 (L.y + (Game.render.rng() - 0.5) * 2) * TEGEL(), 3);
     }
   }
 
@@ -439,10 +439,10 @@
     var doelen = s.gebouwen.filter(function (g) { return g.gebouwd && g.type !== 'dorpsplein'; });
     var n = Math.min(4, lok.bende.filter(function (b) { return !b.gevallen; }).length);
     for (var i = 0; i < n; i++) {
-      var g = doelen.length ? doelen[Math.floor(Math.random() * doelen.length)] : null;
+      var g = doelen.length ? doelen[Math.floor(Game.render.rng() * doelen.length)] : null;
       var gx = g ? g.x : pl.x, gy = g ? g.y : pl.y;
       var koers = Math.atan2(entry.y - gy, entry.x - gx);
-      lok.plunderaars.push({ x: gx, y: gy, koers: koers, snelheid: 1.2, klok: Math.random() * 6, buit: true });
+      lok.plunderaars.push({ x: gx, y: gy, koers: koers, snelheid: 1.2, klok: Game.render.rng() * 6, buit: true });
     }
   }
 
@@ -489,7 +489,7 @@
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.arc(fp.x, fp.y, p * 0.7 * flikker, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
-    if (Game.render.particles && Math.random() < 0.3) Game.render.particles.rook(k.x * TEGEL(), k.y * TEGEL(), 1);
+    if (Game.render.particles && Game.render.rng() < 0.3) Game.render.particles.rook(k.x * TEGEL(), k.y * TEGEL(), 1);
   }
 
   /* --------------------------------------------------------- de vier keuzes */

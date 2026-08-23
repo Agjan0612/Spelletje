@@ -15,7 +15,7 @@
   var W = {};
 
   var fase = 'droog';       /* droog | regen | wegtrekken */
-  var faseTimer = 40 + Math.random() * 60;
+  var faseTimer = 40 + Game.render.rng() * 60;
   var intensiteit = 0;      /* 0..1 how hard it is coming down right now */
   var nat = 0;              /* 0..1 wetness — lags the rain and lingers after */
   var mist = 0;             /* 0..1 low morning fog */
@@ -36,13 +36,13 @@
     if (fase === 'droog') {
       if (faseTimer <= 0) {
         var kans = REGENKANS[s.seizoen] || 0.4;
-        if (Math.random() < kans) { fase = 'regen'; faseTimer = 25 + Math.random() * 45; }
-        else faseTimer = 40 + Math.random() * 60;
+        if (Game.render.rng() < kans) { fase = 'regen'; faseTimer = 25 + Game.render.rng() * 45; }
+        else faseTimer = 40 + Game.render.rng() * 60;
       }
     } else if (fase === 'regen') {
-      if (faseTimer <= 0) { fase = 'wegtrekken'; faseTimer = 8 + Math.random() * 6; }
+      if (faseTimer <= 0) { fase = 'wegtrekken'; faseTimer = 8 + Game.render.rng() * 6; }
     } else if (fase === 'wegtrekken') {
-      if (faseTimer <= 0) { fase = 'droog'; faseTimer = 60 + Math.random() * 90; }
+      if (faseTimer <= 0) { fase = 'droog'; faseTimer = 60 + Game.render.rng() * 90; }
     }
 
     /* Snow, not rain, when it freezes: leave winter to the seasonal emitter. */
@@ -62,13 +62,13 @@
     /* Advance the rain streaks (normalised screen coords: they fall down-right). */
     var wil = Math.round(intensiteit * 140);
     while (druppels.length < wil) {
-      druppels.push({ x: Math.random(), y: Math.random(), v: 0.9 + Math.random() * 0.7, l: 0.04 + Math.random() * 0.05 });
+      druppels.push({ x: Game.render.rng(), y: Game.render.rng(), v: 0.9 + Game.render.rng() * 0.7, l: 0.04 + Game.render.rng() * 0.05 });
     }
     if (druppels.length > wil) druppels.length = wil;
     for (var i = 0; i < druppels.length; i++) {
       var d = druppels[i];
       d.y += d.v * dt; d.x += d.v * 0.28 * dt;
-      if (d.y > 1.05) { d.y = -0.05; d.x = Math.random(); }
+      if (d.y > 1.05) { d.y = -0.05; d.x = Game.render.rng(); }
       if (d.x > 1.05) d.x -= 1.1;
     }
   };

@@ -28,7 +28,7 @@
     sneeuw: { leven: [3.6, 6.5], grootte: [1.6, 3.2], vy: [8, 13], vx: [6, 11], groei: 0, kleur: '238,244,250', begin: 0.9, zwaarte: 1, zweef: 3 }
   };
 
-  function rnd(a, b) { return a + Math.random() * (b - a); }
+  function rnd(a, b) { return a + Game.render.rng() * (b - a); }
 
   /* Spawn `aantal` particles of a type at a world-pixel position. */
   P.emit = function (soort, wx, wy, aantal, opts) {
@@ -47,7 +47,7 @@
         zwaarte: def.zwaarte,
         groei: def.groei,
         zweef: def.zweef || 0,
-        zweefFase: Math.random() * 6.28,
+        zweefFase: Game.render.rng() * 6.28,
         r: rnd(def.grootte[0], def.grootte[1]) * (opts.grootte || 1),
         leven: maxLeven,
         maxLeven: maxLeven,

@@ -15,6 +15,21 @@
 
   var B = {};
 
+  /* The render layer's own random source. Everything decorative — walkers,
+     raiders, weather, particles, the clouds and the birds — draws from this
+     instead of the global Game.render.rng, so the decoration can never perturb the
+     simulation's RNG stream. That is the first principle of the whole plan:
+     "Decor stuurt de simulatie niet." A mulberry32 over Math.imul, never
+     touching Game.render.rng. */
+  var zaad = 0x9e3779b9 >>> 0;
+  B.rng = function () {
+    zaad |= 0; zaad = (zaad + 0x6D2B79F5) | 0;
+    var t = Math.imul(zaad ^ (zaad >>> 15), 1 | zaad);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  Game.render.rng = B.rng;
+
   /* How fast a figure may turn and change speed. Deliberately gentle: the point
      is that motion has weight, not that it is snappy. */
   B.DRAAI = 3.4;     /* rad/s — max turn rate */
@@ -78,12 +93,12 @@
   /* How long a figure lingers in a non-walking state before moving on. */
   B.duur = function (bezig) {
     switch (bezig) {
-      case B.WERKEN: return 1.6 + Math.random() * 1.6;
-      case B.LADEN: return 0.5 + Math.random() * 0.5;
-      case B.LOSSEN: return 0.4 + Math.random() * 0.5;
-      case B.PRATEN: return 2.0 + Math.random() * 1.4;
-      case B.RUSTEN: return 3.0 + Math.random() * 3.0;
-      default: return 0.4 + Math.random() * 0.9;
+      case B.WERKEN: return 1.6 + Game.render.rng() * 1.6;
+      case B.LADEN: return 0.5 + Game.render.rng() * 0.5;
+      case B.LOSSEN: return 0.4 + Game.render.rng() * 0.5;
+      case B.PRATEN: return 2.0 + Game.render.rng() * 1.4;
+      case B.RUSTEN: return 3.0 + Game.render.rng() * 3.0;
+      default: return 0.4 + Game.render.rng() * 0.9;
     }
   };
 

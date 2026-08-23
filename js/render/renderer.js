@@ -227,12 +227,12 @@
       baan: baan,
       soort: opt.soort || 'dorp',
       cohort: opt.cohort || 'volwassen',
-      p: opt.p != null ? opt.p : Math.random(),
-      richting: Math.random() < 0.5 ? 1 : -1,
+      p: opt.p != null ? opt.p : Game.render.rng(),
+      richting: Game.render.rng() < 0.5 ? 1 : -1,
       rond: !!opt.rond,                 /* patrols loop instead of bouncing */
       /* Constant *world* speed (tiles/sec): long and short routes walk at the
          same pace instead of the old fraction-per-second. */
-      snelheidT: (opt.snelheidT || 0.55) + Math.random() * 0.35,
+      snelheidT: (opt.snelheidT || 0.55) + Game.render.rng() * 0.35,
       snelheid: 0,                      /* eased by the steering model */
       koers: 0,
       draagt: opt.draagt || null,
@@ -241,8 +241,8 @@
       werkTempo: opt.werkTempo || 0,    /* 0..1 from g.ervaring: a skilled crew works visibly quicker */
       bezig: BEW().LOPEN,
       toestandT: 0,
-      klok: Math.random() * 6.28,
-      afgelegd: Math.random() * 6,      /* seeds the gait so feet aren't in lockstep */
+      klok: Game.render.rng() * 6.28,
+      afgelegd: Game.render.rng() * 6,      /* seeds the gait so feet aren't in lockstep */
       verborgen: false,
       /* A fixed lateral offset so walkers of one building don't share a line. */
       zijoffset: 0.1 + hash1((seed || 0) + 3) * 0.14,
@@ -425,7 +425,7 @@
       for (var j = 0; j < bak.length; j++) {
         var o = bak[j];
         var dx = o._ex - pos.x, dy = o._ey - pos.y;
-        if (dx * dx + dy * dy < 0.25 && Math.random() < 0.35) {
+        if (dx * dx + dy * dy < 0.25 && Game.render.rng() < 0.35) {
           w.bezig = bew.PRATEN; w.toestandT = bew.duur(bew.PRATEN);
           o.bezig = bew.PRATEN; o.toestandT = w.toestandT;
         }
@@ -446,7 +446,7 @@
   /* Pick the state a walker drops into on reaching a route end. */
   function enterToestand(s, w, bew, verEind) {
     if (w.soort === 'bouwer') { w.bezig = verEind ? bew.WERKEN : bew.LADEN; w.toestandT = bew.duur(w.bezig); return; }
-    if (w.soort === 'kind') { w.bezig = Math.random() < 0.5 ? bew.RUSTEN : bew.PRATEN; w.toestandT = bew.duur(w.bezig); return; }
+    if (w.soort === 'kind') { w.bezig = Game.render.rng() < 0.5 ? bew.RUSTEN : bew.PRATEN; w.toestandT = bew.duur(w.bezig); return; }
     /* Gatherers work at the resource (far end). Crafters (draagtOp 'heen') carry
        goods out and come home to their bench — that homecoming is their work
        stroke, so a baker or a smith visibly does something too (fase 2.4). */
@@ -524,8 +524,8 @@
 
     /* Screen shake: offset the whole transform by a decaying jitter. */
     if (schud > 0.05) {
-      schudX = (Math.random() - 0.5) * schud;
-      schudY = (Math.random() - 0.5) * schud;
+      schudX = (Game.render.rng() - 0.5) * schud;
+      schudY = (Game.render.rng() - 0.5) * schud;
     } else { schudX = schudY = 0; }
     ctx.setTransform(dpr, 0, 0, dpr, schudX * dpr, schudY * dpr);
     ctx.clearRect(-4, -4, cam.breedte + 8, cam.hoogte + 8);
@@ -770,9 +770,9 @@
     wolken = [];
     for (var i = 0; i < 3; i++) {
       wolken.push({
-        x: Math.random() * W, y: Math.random() * H,
-        r: (5.5 + Math.random() * 4.5) * Game.render.TEGEL,   /* world px */
-        vx: 7 + Math.random() * 5, vy: 3 + Math.random() * 4
+        x: Game.render.rng() * W, y: Game.render.rng() * H,
+        r: (5.5 + Game.render.rng() * 4.5) * Game.render.TEGEL,   /* world px */
+        vx: 7 + Game.render.rng() * 5, vy: 3 + Game.render.rng() * 4
       });
     }
   }
@@ -784,8 +784,8 @@
     for (var i = 0; i < wolken.length; i++) {
       var c = wolken[i];
       c.x += c.vx * dt; c.y += c.vy * dt;
-      if (c.x > W + m) { c.x = -m; c.y = Math.random() * H; }
-      if (c.y > H + m) { c.y = -m; c.x = Math.random() * W; }
+      if (c.x > W + m) { c.x = -m; c.y = Game.render.rng() * H; }
+      if (c.y > H + m) { c.y = -m; c.x = Game.render.rng() * W; }
     }
   }
 
@@ -832,7 +832,7 @@
     if (!vogels) vogels = [];
     vogelKans -= dt;
     if (vogelKans <= 0) {
-      vogelKans = 12 + Math.random() * 20;
+      vogelKans = 12 + Game.render.rng() * 20;
       if (vogels.length < 2) spawnVlucht(s);
     }
     var m = 12 * Game.render.TEGEL;
@@ -846,14 +846,14 @@
 
   function spawnVlucht(s) {
     var W = s.kaart.b * Game.render.TEGEL, H = s.kaart.h * Game.render.TEGEL;
-    var links = Math.random() < 0.5;
+    var links = Game.render.rng() < 0.5;
     vogels.push({
       x: links ? -6 * Game.render.TEGEL : W + 6 * Game.render.TEGEL,
-      y: Math.random() * H,
-      vx: (links ? 1 : -1) * (16 + Math.random() * 10),
-      vy: (Math.random() - 0.5) * 8,
-      n: 3 + Math.floor(Math.random() * 4),
-      klap: Math.random() * 6.28
+      y: Game.render.rng() * H,
+      vx: (links ? 1 : -1) * (16 + Game.render.rng() * 10),
+      vy: (Game.render.rng() - 0.5) * 8,
+      n: 3 + Math.floor(Game.render.rng() * 4),
+      klap: Game.render.rng() * 6.28
     });
   }
 
@@ -894,8 +894,8 @@
     var zicht = cam.zichtbaar(s.kaart);
     var TEGEL = Game.render.TEGEL;
     for (var k = 0; k < 3; k++) {
-      var tx = zicht.x0 - 2 + Math.random() * (zicht.x1 - zicht.x0 + 2);
-      var ty = zicht.y0 - 2 + Math.random() * (zicht.y1 - zicht.y0 + 2);
+      var tx = zicht.x0 - 2 + Game.render.rng() * (zicht.x1 - zicht.x0 + 2);
+      var ty = zicht.y0 - 2 + Game.render.rng() * (zicht.y1 - zicht.y0 + 2);
       Game.render.particles.weer(soort, tx * TEGEL, ty * TEGEL);
     }
   };
@@ -940,7 +940,7 @@
          particle budget. */
       var thuis = d.woonruimte || g.type === 'herberg' || g.type === 'bakkerij';
       var winterHaard = s.seizoen === 3 && d.woonruimte;
-      if (thuis && (winterHaard ? Math.random() < 0.5 : Math.random() < 0.22)) {
+      if (thuis && (winterHaard ? Game.render.rng() < 0.5 : Game.render.rng() < 0.22)) {
         var hx = (g.x + d.grootte * 0.62) * TEGEL, hy = (g.y + d.grootte * 0.30) * TEGEL;
         Game.render.particles.emit('rook', hx, hy, 1, { grootte: 0.6, levenSchaal: 1.3, spreiding: 2, begin: winterHaard ? 0.26 : 0.2 });
       }

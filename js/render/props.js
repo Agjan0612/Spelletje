@@ -495,7 +495,7 @@
       ctx.closePath(); ctx.fill();
     }
     ctx.restore();
-    if (Game.render.particles && Math.random() < 0.25) {
+    if (Game.render.particles && Game.render.rng() < 0.25) {
       Game.render.particles.emit('vonk', wx * Game.render.TEGEL, wy * Game.render.TEGEL, 1, { spreiding: 3 });
     }
   }
