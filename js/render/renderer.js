@@ -525,9 +525,14 @@
     ctx.setTransform(dpr, 0, 0, dpr, schudX * dpr, schudY * dpr);
     ctx.clearRect(-4, -4, cam.breedte + 8, cam.hoogte + 8);
 
-    /* Beyond the map edge: deep sea. */
-    ctx.fillStyle = ['#27506b', '#295473', '#254a64', '#2b4a5e'][s.seizoen];
-    ctx.fillRect(-4, -4, cam.breedte + 8, cam.hoogte + 8);
+    /* Beyond the map edge: the sky fading down into the sea, with the sun or
+       moon riding it (fase 3.2). Falls back to a flat deep-sea fill. */
+    if (Game.render.sfeer && Game.render.sfeer.tekenHemel) {
+      Game.render.sfeer.tekenHemel(ctx, cam, s);
+    } else {
+      ctx.fillStyle = ['#27506b', '#295473', '#254a64', '#2b4a5e'][s.seizoen];
+      ctx.fillRect(-4, -4, cam.breedte + 8, cam.hoogte + 8);
+    }
 
     var zicht = cam.zichtbaar(s.kaart);
     var tijd = s.tijd;
@@ -603,6 +608,9 @@
     if (p > 14 && Game.render.props) Game.render.props.verzamel(zicht, laag);
     if (p > 14 && Game.render.wildlife) Game.render.wildlife.verzamel(zicht, laag);
 
+    /* Low morning fog, laid between the far country and the town (fase 3.4). */
+    if (Game.render.weer) Game.render.weer.tekenVoor(ctx, cam, s);
+
     if (p > 15) {
       for (var wi = 0; wi < wandelaars.length; wi++) {
         var w = wandelaars[wi];
@@ -656,6 +664,9 @@
       Game.render.raiders.tekenCorridor(ctx, cam, s, p);
     }
 
+    /* --- rain: a cool wash and drizzle over the whole town (fase 3.4) --- */
+    if (Game.render.weer) Game.render.weer.tekenNa(ctx, cam, s);
+
     /* --- placement ghost --- */
     if (ui.plaatsType && ui.muisTegel) tekenSpook(s, cam, ui, p);
 
@@ -688,6 +699,7 @@
 
     tickSweep(s, dt);
     tickWerkrook(s, dt);
+    if (Game.render.weer) Game.render.weer.tick(s, dt);
     if (Game.render.wildlife) Game.render.wildlife.tick(s, dt);
     if (Game.render.floaters) Game.render.floaters.tick(s, dt);
     vervaagSchroei(s, dt);
@@ -732,7 +744,9 @@
       var c = wolken[i];
       var sp = cam.wereldNaarScherm(c.x, c.y);
       var R = c.r * zoom;
-      if (sp.x < -R || sp.y < -R || sp.x > cam.breedte + R || sp.y > cam.hoogte + R) continue;
+      if (sp.x < -R || sp.y < -R - p * 4 || sp.x > cam.breedte + R || sp.y > cam.hoogte + R) continue;
+
+      /* The shadow on the ground. */
       var g = ctx.createRadialGradient(sp.x, sp.y, R * 0.15, sp.x, sp.y, R);
       g.addColorStop(0, 'rgba(16,20,26,.09)');
       g.addColorStop(1, 'rgba(16,20,26,0)');
@@ -740,6 +754,23 @@
       ctx.beginPath();
       ctx.ellipse(sp.x, sp.y, R, R * 0.5, 0, 0, Math.PI * 2);   /* iso-flattened */
       ctx.fill();
+
+      /* And the cloud itself, lifted above its shadow with a little parallax so
+         the motion reads (fase 3.3). A couple of soft lobes, lit by the day. */
+      var L = Game.render.sfeer ? Game.render.sfeer.licht(s) : { dag: 1 };
+      var licht = 0.14 + 0.16 * (L.dag != null ? L.dag : 1);
+      var cy = sp.y - p * 2.6;                     /* parallax lift into the sky */
+      var cx = sp.x + p * 0.6;
+      for (var k = 0; k < 3; k++) {
+        var ox = (k - 1) * R * 0.44, oy = (k === 1 ? -R * 0.16 : 0);
+        var cg = ctx.createRadialGradient(cx + ox, cy + oy, R * 0.05, cx + ox, cy + oy, R * 0.6);
+        cg.addColorStop(0, 'rgba(245,247,250,' + licht.toFixed(3) + ')');
+        cg.addColorStop(1, 'rgba(245,247,250,0)');
+        ctx.fillStyle = cg;
+        ctx.beginPath();
+        ctx.ellipse(cx + ox, cy + oy, R * 0.6, R * 0.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
   }
 

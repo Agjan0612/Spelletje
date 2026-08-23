@@ -241,7 +241,7 @@
     ctx.strokeStyle = kleur; ctx.lineWidth = 1; ctx.stroke();
 
     if (tegel.t === 'water' && kaart) {
-      if (p >= 12) water(ctx, d, tegel, p, tijd, kaart, x, y); else kust(ctx, d, kaart, x, y);
+      if (p >= 12) water(ctx, d, tegel, p, tijd, kaart, x, y, seizoen); else kust(ctx, d, kaart, x, y);
       if (seizoen === 3) ijs(ctx, d, tegel, p, kaart, x, y);
       return;
     }
@@ -475,8 +475,14 @@
     ctx.stroke();
   }
 
-  function water(ctx, d, t, p, tijd, kaart, tx, ty) {
+  function water(ctx, d, t, p, tijd, kaart, tx, ty, seizoen) {
     if (kaart) kust(ctx, d, kaart, tx, ty, tijd);
+
+    /* Reflection of the shore: on water tiles that touch land, smear the
+       neighbour's colour (its trees, its buildings) a little way into the tile,
+       vertically flipped and wavering. Only for shoreline tiles — randen /
+       BUUREDGE already tell us which edges face land (fase 3.1). */
+    if (p >= 16 && kaart) spiegeling(ctx, d, p, tijd, kaart, tx, ty, seizoen);
 
     /* Three drifting ripple lines instead of two static ones. */
     ctx.strokeStyle = 'rgba(226,244,250,.09)';
@@ -499,12 +505,51 @@
     var dag = (Game.core.state && Game.core.state.DAG) || 1;
     var f = (tijd % dag) / dag;
     var licht = Game.util.clamp(0.5 - 0.5 * Math.cos(f * Math.PI * 2), 0, 1);   /* 1 at midday */
-    var a = 0.04 + licht * (0.45 + 0.55 * Math.abs(Math.sin(tijd * 3 + t.v * 20))) * 0.34;
-    if (a > 0.07) {
-      ctx.fillStyle = 'rgba(255,248,222,' + a.toFixed(3) + ')';
+    /* Bright and warm by day; a faint, cold moon-glitter never fully off at
+       night, so the sea is never dead. */
+    var a = (0.04 + licht * (0.45 + 0.55 * Math.abs(Math.sin(tijd * 3 + t.v * 20))) * 0.34);
+    var koud = 1 - licht;
+    a = Math.max(a, koud * 0.10 * (0.4 + 0.6 * Math.abs(Math.sin(tijd * 2.4 + t.v * 20))));
+    if (a > 0.05) {
+      var kleur = licht > 0.4 ? '255,248,222' : '196,214,240';   /* sun → moon */
+      ctx.fillStyle = 'rgba(' + kleur + ',' + a.toFixed(3) + ')';
       ctx.beginPath();
       ctx.arc(d.cx + Math.sin(tijd * 0.7 + t.v * 12) * p * 0.13, d.cy - p * 0.02, p * 0.028, 0, Math.PI * 2);
       ctx.fill();
+    }
+  }
+
+  /* Shore reflection: for each edge of this water tile that faces land, smear a
+     wavering vertical band of the neighbour's colour into the water, ~25%
+     opaque. A building on the shore reflects its roof; trees and grass reflect
+     their green. Cheap: two soft strokes per land edge, and shoreline tiles are
+     a small fraction of the map. */
+  function spiegeling(ctx, d, p, tijd, kaart, tx, ty, seizoen) {
+    seizoen = seizoen || 0;
+    for (var i = 0; i < BUUREDGE.length; i++) {
+      var e = BUUREDGE[i];
+      var buur = Game.core.map.tegel(kaart, tx + e.dx, ty + e.dy);
+      if (!buur || buur.t === 'water') continue;
+
+      var kleur;
+      if (buur.b != null) kleur = '#8a5a3a';                       /* a roof on the shore */
+      else if (buur.t === 'bos') kleur = '#2f5226';
+      else kleur = S.terreinKleur({ t: buur.t }, seizoen);
+
+      /* Midpoint of the shared edge, and the two edge corners. */
+      var a = d[e.a], b = d[e.b];
+      var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      var wob = Math.sin(tijd * 2 + (tx + ty) * 0.7) * p * 0.03;
+      ctx.strokeStyle = kleur;
+      ctx.globalAlpha = 0.22;
+      ctx.lineWidth = Math.max(1.5, p * 0.09);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      /* Down into the tile (screen-down) from the edge midpoint, wavering. */
+      ctx.moveTo(mx + wob * 0.4, my);
+      ctx.quadraticCurveTo(mx + wob, my + p * 0.1, d.cx + wob, d.cy + p * 0.04);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
     }
   }
 
