@@ -171,6 +171,23 @@ button:active:not(:disabled) { transform: translateY(1px); }
   white-space: nowrap;
 }
 .stat .val { font-weight: 700; }
+.stat { cursor: help; transition: border-color var(--soepel), background var(--soepel); }
+.stat:hover { border-color: rgba(215, 169, 75, .6); }
+/* Two states that must read from the corner of your eye: something is tight,
+   or something is wrong. */
+.stat.let-op { border-color: rgba(215, 169, 75, .6); }
+.stat.let-op .val { color: var(--goud-licht); }
+.stat.slecht { border-color: rgba(200, 80, 60, .7); animation: tekortPuls 1.6s ease-in-out infinite; }
+.stat.slecht .val { color: #e8907c; }
+
+#hud-knoppen { display: flex; gap: 4px; padding-left: 8px; border-left: 1px solid rgba(255, 232, 190, .12); }
+#hud-knoppen button {
+  min-width: 32px; height: 30px; font-size: 13px;
+  background: linear-gradient(180deg, var(--hout-licht), var(--hout));
+  border: 1px solid rgba(0, 0, 0, .55); border-radius: 5px;
+  box-shadow: inset 0 1px 0 var(--rand-licht);
+}
+#hud-knoppen button:hover { background: linear-gradient(180deg, #6a5136, var(--hout-licht)); }
 
 #speeds { display: flex; gap: 4px; }
 #speeds button {
@@ -216,25 +233,59 @@ button:active:not(:disabled) { transform: translateY(1px); }
   background: linear-gradient(90deg, var(--goud), rgba(215, 169, 75, .05));
 }
 
-/* Rechterkolom: tijdperk + doelen */
+/* Rechterkolom: advies, drie tabbladen, één kaart.
+   Drie kaarten onder elkaar pasten nooit; de onderste stond altijd half uit
+   beeld en de kolom had een fade nodig om dat toe te geven. */
 #right-col {
-  position: absolute; top: 10px; right: 10px; width: 258px;
-  display: flex; flex-direction: column; gap: 10px;
-  max-height: calc(100% - 20px); overflow-y: auto;
-  padding-bottom: 12px;
+  position: absolute; top: 10px; right: 10px; width: 268px;
+  display: flex; flex-direction: column; gap: 6px;
+  max-height: calc(100% - 20px);
   z-index: 10;
-  scrollbar-width: thin;
-  /* The column scrolls, so the last card is often cut mid-sentence. Fading the
-     bottom few pixels says "there is more" instead of "this is broken". */
-  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 26px), transparent 100%);
-  mask-image: linear-gradient(180deg, #000 calc(100% - 26px), transparent 100%);
 }
-#right-col::-webkit-scrollbar { width: 8px; }
-#right-col::-webkit-scrollbar-thumb { background: var(--hout-licht); border-radius: 4px; }
-#right-col::-webkit-scrollbar-track { background: transparent; }
+
+#col-tabs { display: flex; gap: 3px; }
+#col-tabs button {
+  flex: 1; position: relative;
+  padding: 5px 4px; font-size: 11.5px; letter-spacing: .2px;
+  border: 1px solid rgba(0, 0, 0, .5); border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  background: linear-gradient(180deg, rgba(56, 39, 24, .9), rgba(28, 19, 11, .9));
+  color: var(--perkament-stil);
+}
+#col-tabs button:hover { color: var(--perkament); background: rgba(255, 240, 210, .12); }
+#col-tabs button.active {
+  background: linear-gradient(180deg, var(--goud-licht), var(--goud));
+  color: #2b1d12; font-weight: 700; border-color: var(--goud-licht);
+}
+/* The dot is what keeps the tabs from hiding anything: you never have to
+   click through them to find out whether there is news behind them. */
+#col-tabs .stip {
+  position: absolute; top: 3px; right: 4px;
+  width: 7px; height: 7px; border-radius: 50%;
+}
+#col-tabs .stip.goud { background: var(--goud-licht); box-shadow: 0 0 6px var(--goud); }
+#col-tabs .stip.rood { background: #e07a5f; box-shadow: 0 0 7px var(--bloed); animation: tekortPuls 1.4s ease-in-out infinite; }
+
+#right-col .pane {
+  border-top-left-radius: 0; border-top-right-radius: 0;
+  /* The column already fits inside the stage, so let the pane take whatever
+     is left of it and scroll inside that — a viewport-based calc would go
+     wrong the moment the build tabs wrap onto a second row. */
+  flex: 0 1 auto; min-height: 0;
+  overflow-y: auto; scrollbar-width: thin;
+}
+#right-col .pane::-webkit-scrollbar { width: 8px; }
+#right-col .pane::-webkit-scrollbar-thumb { background: var(--hout-licht); border-radius: 4px; }
+#right-col .pane::-webkit-scrollbar-track { background: transparent; }
+#right-col .pane:not(.hidden) { animation: paneelInRechts 140ms cubic-bezier(.3, .7, .4, 1); }
+
+.stadknoppen { flex-wrap: wrap; }
+.stadknoppen button { flex: 1 1 78px; font-size: 11.5px; padding: 6px 4px; }
 
 .advies {
-  font-size: 12px; line-height: 1.4; margin: 0 0 9px; padding: 8px 10px;
+  font-size: 12px; line-height: 1.4; margin: 0; padding: 8px 10px;
+  background-color: rgba(26, 18, 11, .92);
+  box-shadow: var(--schaduw);
   background: linear-gradient(90deg, rgba(196, 160, 90, .2), rgba(196, 160, 90, .07));
   border-left: 3px solid var(--goud);
   border-radius: 0 6px 6px 0; color: var(--perkament);
@@ -394,14 +445,25 @@ ul.dorpsboek .sinds { color: var(--perkament-dof); font-size: 11px; min-width: 9
   box-shadow: 0 6px 22px rgba(0, 0, 0, .55), inset 0 0 0 3px rgba(0, 0, 0, .45);
 }
 
-/* Zwevende hint bij plaatsen */
+/* Zwevende hint bij plaatsen: wat dit gebouw op déze tegel waard is. */
 #ghost-info {
   position: absolute; z-index: 12; pointer-events: none;
-  background: rgba(26, 18, 11, .93); border: 1px solid var(--goud);
-  border-radius: 5px; padding: 4px 8px; font-size: 12px; white-space: nowrap;
-  transform: translate(14px, 14px);
+  display: flex; flex-direction: column; gap: 2px;
+  max-width: 250px;
+  background: rgba(26, 18, 11, .95); border: 1px solid var(--goud);
+  border-radius: 6px; padding: 6px 9px; font-size: 12px; line-height: 1.35;
+  box-shadow: var(--schaduw);
+  transform: translate(16px, 16px);
 }
-#ghost-info.fout { border-color: var(--bloed); color: #f0b3a6; }
+/* Flipped to the left of the cursor near the right edge of the stage. */
+#ghost-info.links { transform: translate(calc(-100% - 16px), 16px); }
+#ghost-info.fout { border-color: var(--bloed); }
+#ghost-info b { color: var(--goud-licht); font-size: 13px; }
+#ghost-info .reden { color: #f0b3a6; }
+#ghost-info .plekregel { color: var(--perkament-dof); }
+#ghost-info .plekregel.goed { color: #a8cc7a; }
+#ghost-info .plekregel.matig { color: var(--goud-licht); }
+#ghost-info .plekregel.slecht { color: #e8907c; }
 
 /* Roverswaarschuwing */
 #raid-warning {
@@ -436,14 +498,16 @@ ul.dorpsboek .sinds { color: var(--perkament-dof); font-size: 11px; min-width: 9
    ========================================================================== */
 
 #buildbar {
-  height: var(--barhoogte); flex: 0 0 auto;
+  /* Grows when the tabs wrap onto a second row on a narrow window, instead of
+     clipping the cards off the bottom of a fixed-height bar. */
+  min-height: var(--barhoogte); flex: 0 0 auto;
   background: linear-gradient(0deg, #241708 0%, #33230f 45%, #4a3524 100%);
   border-top: 1px solid var(--hout-diep);
   box-shadow: 0 -6px 18px rgba(0, 0, 0, .55);
   display: flex; flex-direction: column; z-index: 20; position: relative;
 }
 
-#build-tabs { display: flex; gap: 4px; padding: 6px 10px 0; }
+#build-tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 10px 0; }
 #build-tabs button {
   padding: 5px 14px; font-size: 12px; letter-spacing: .3px;
   border: 1px solid rgba(0, 0, 0, .5); border-bottom: none;
@@ -459,7 +523,7 @@ ul.dorpsboek .sinds { color: var(--perkament-dof); font-size: 11px; min-width: 9
 #build-tabs button.op-slot { opacity: .5; }
 
 #build-list {
-  flex: 1; display: flex; gap: 7px; padding: 8px 10px;
+  flex: 1 1 auto; min-height: 96px; display: flex; gap: 7px; padding: 8px 10px;
   overflow-x: auto; overflow-y: hidden; align-items: stretch;
   scrollbar-width: thin;
 }
@@ -517,6 +581,9 @@ ul.dorpsboek .sinds { color: var(--perkament-dof); font-size: 11px; min-width: 9
 .tip .cursief { font-style: italic; color: var(--perkament-dof); }
 .tip .rij { margin-top: 4px; }
 .tip .label { color: var(--goud); }
+.tip .plus { color: #a8cc7a; }
+.tip .min { color: #e8907c; }
+.tip h4 + .cursief { margin-bottom: 2px; }
 
 /* ==========================================================================
    Overlay (menu, tijdperk, einde)
