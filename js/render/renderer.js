@@ -38,6 +38,13 @@
   var weerAccu = 0;
   var vogelKans = 0;
 
+  /* The decorative walkers. Kept here in the render layer (like props and
+     wildlife) rather than in Game.state: they carry no simulation weight, so a
+     save has no business storing them and stays smaller and purely JSON. */
+  var wandelaars = [];
+  R.wandelaars = function () { return wandelaars; };
+  var ontmoetTimer = 0;
+
   R.init = function (el) {
     canvas = el;
     ctx = canvas.getContext('2d');
@@ -95,14 +102,15 @@
 
   /* ------------------------------------------------------- wandelaars ---- */
 
-  /* Decorative villagers walking their building's road to a resource and back.
-     They carry no simulation weight. Rebuilt by reconciliation (not from
-     scratch) so nobody teleports when the list refreshes. */
+  var BEW = function () { return Game.render.beweging; };
+
+  /* Decorative villagers walking their building's road to a resource and back,
+     builders on the sites, soldiers on patrol and children by the square. They
+     carry no simulation weight. Rebuilt by reconciliation (not from scratch) so
+     nobody teleports when the list refreshes. */
   R.verversWandelaars = function (s) {
     var oud = {};
-    if (s.wandelaars) {
-      for (var k = 0; k < s.wandelaars.length; k++) oud[s.wandelaars[k].sleutel] = s.wandelaars[k];
-    }
+    for (var k = 0; k < wandelaars.length; k++) oud[wandelaars[k].sleutel] = wandelaars[k];
 
     var plein = s.gebouwen.filter(function (g) { return g.type === 'dorpsplein'; })[0];
     var pleinX = plein ? plein.x + 1 : (s.start ? s.start.x : s.kaart.b / 2);
@@ -114,11 +122,24 @@
     var lijst = [];
     var limiet = 90;
 
+    /* Cohort mix, so the street reads as the register: mostly grown-ups, a few
+       elderly, and children milling near the square. */
+    var bev = s.bevolking || {};
+    var handen = Math.max(1, (bev.volwassenen || 0) + (bev.ouderen || 0));
+    var oudDeel = Game.util.clamp((bev.ouderen || 0) / handen, 0, 0.6);
+
     for (var i = 0; i < s.gebouwen.length && lijst.length < limiet; i++) {
       var g = s.gebouwen[i];
-      if (!g.gebouwd) continue;
+      if (!g.gebouwd) {
+        /* Fase 2.1: a construction site the crew is working pulls builders. */
+        if (bouwtActief(s, g)) maakBouwers(s, g, oud, lijst, limiet);
+        continue;
+      }
       var d = Game.core.state.def(g);
       if (!d.banen || g.werkers <= 0) continue;
+
+      /* Fase 5.1: soldiers patrol the walls instead of running errands. */
+      if (d.banen.baan === 'soldaat') { maakPatrouille(s, g, d, oud, lijst, limiet); continue; }
 
       /* Crafters and gatherers alike haul to the depot the simulation says
          they deliver to, so the carts you see on the street are the carts the
@@ -165,32 +186,60 @@
           bestaand.draagt = draagt;
           bestaand.draagtOp = draagtOp;
           bestaand.werkt = !!d.wint;
+          bestaand.werkTempo = g.ervaring || 0;
           lijst.push(bestaand);
         } else {
-          lijst.push({
-            sleutel: sleutel,
-            route: route,
-            routeLen: lengte,
-            baan: d.banen.baan,
-            p: Math.random(),
-            richting: Math.random() < 0.5 ? 1 : -1,
-            /* Constant *world* speed (tiles/sec): long and short routes now
-               walk at the same pace instead of the old fraction-per-second,
-               which made long routes sprint and short ones crawl. */
-            snelheidT: 0.55 + Math.random() * 0.35,
-            draagt: draagt,
-            draagtOp: draagtOp,
-            werkt: !!d.wint,          /* gatherers actually work at the far end */
-            klok: Math.random() * 6.28,
-            afgelegd: Math.random() * 6,   /* seeds the gait so feet aren't in lockstep */
-            wachtT: 0,
-            fase: (g.id * 7 + n * 13) % 100 / 100
-          });
+          lijst.push(nieuweWandelaar(sleutel, route, lengte, d.banen.baan, {
+            draagt: draagt, draagtOp: draagtOp, werkt: !!d.wint, werkTempo: g.ervaring || 0,
+            cohort: (hash1(g.id * 7 + n * 13) < oudDeel) ? 'oud' : 'volwassen'
+          }, g.id * 7 + n * 13));
         }
       }
     }
-    s.wandelaars = lijst;
+
+    /* Fase 2.5 + 2.6: children playing near the square. */
+    maakKinderen(s, pleinX, pleinY, oud, lijst, limiet);
+
+    wandelaars = lijst;
+    /* No longer stored in the save; kept off Game.state on purpose. */
+    if (s.wandelaars) delete s.wandelaars;
   };
+
+  /* A stable pseudo-random in [0,1) from an integer seed. */
+  function hash1(n) { var x = Math.sin(n * 12.9898) * 43758.5453; return x - Math.floor(x); }
+
+  /* One fresh walker with the steering + state-machine fields. */
+  function nieuweWandelaar(sleutel, route, lengte, baan, opt, seed) {
+    opt = opt || {};
+    return {
+      sleutel: sleutel,
+      route: route,
+      routeLen: lengte,
+      baan: baan,
+      soort: opt.soort || 'dorp',
+      cohort: opt.cohort || 'volwassen',
+      p: opt.p != null ? opt.p : Math.random(),
+      richting: Math.random() < 0.5 ? 1 : -1,
+      rond: !!opt.rond,                 /* patrols loop instead of bouncing */
+      /* Constant *world* speed (tiles/sec): long and short routes walk at the
+         same pace instead of the old fraction-per-second. */
+      snelheidT: (opt.snelheidT || 0.55) + Math.random() * 0.35,
+      snelheid: 0,                      /* eased by the steering model */
+      koers: 0,
+      draagt: opt.draagt || null,
+      draagtOp: opt.draagtOp || 'terug',
+      werkt: !!opt.werkt,               /* gatherers actually work at the far end */
+      werkTempo: opt.werkTempo || 0,    /* 0..1 from g.ervaring: a skilled crew works visibly quicker */
+      bezig: BEW().LOPEN,
+      toestandT: 0,
+      klok: Math.random() * 6.28,
+      afgelegd: Math.random() * 6,      /* seeds the gait so feet aren't in lockstep */
+      verborgen: false,
+      /* A fixed lateral offset so walkers of one building don't share a line. */
+      zijoffset: 0.1 + hash1((seed || 0) + 3) * 0.14,
+      fase: ((seed || 0) * 1 % 100) / 100
+    };
+  }
 
   /* Total length of a route in tile units, for constant-speed walking. */
   function routeLengte(route) {
@@ -202,27 +251,201 @@
     return t || 1e-6;
   }
 
+  /* --- fase 2.1: builders on an active construction site --- */
+
+  function bouwtActief(s, g) {
+    if (g.gebouwd) return false;
+    if (Game.core.raids && Game.core.raids.bouwStilgelegd && Game.core.raids.bouwStilgelegd(s)) return false;
+    /* Only the sites the crew is actually working (construction.PLOEGEN caps
+       how many at once) draw builders. voortgang creeping up is the tell. */
+    return (g.voortgang || 0) > 0.01 || !!g.actief;
+  }
+
+  function maakBouwers(s, g, oud, lijst, limiet) {
+    var d = Game.core.state.def(g);
+    var cx = g.x + d.grootte / 2, cy = g.y + d.grootte / 2;
+    /* Shuttle between a material stack just outside a corner and the scaffold. */
+    var stapel = { x: g.x - 0.4, y: g.y + d.grootte + 0.3 };
+    var steiger = { x: cx, y: cy };
+    var route = [stapel, steiger];
+    var lengte = routeLengte(route);
+    var aantal = 2 + (d.grootte >= 2 ? 1 : 0);
+    /* Carry the stuff the building is made of, toward the scaffold. */
+    var last = null;
+    for (var kr in (d.kosten || {})) { last = kr; break; }
+    for (var n = 0; n < aantal && lijst.length < limiet; n++) {
+      var sleutel = 'b' + g.id + ':' + n;
+      var bestaand = oud[sleutel];
+      if (bestaand) { bestaand.route = route; bestaand.routeLen = lengte; lijst.push(bestaand); }
+      else lijst.push(nieuweWandelaar(sleutel, route, lengte, 'bouwer', {
+        soort: 'bouwer', werkt: true, snelheidT: 0.6, draagt: last, draagtOp: 'heen'
+      }, g.id * 17 + n * 5));
+    }
+  }
+
+  /* --- fase 5.1: a patrol loop for soldiers --- */
+
+  function maakPatrouille(s, g, d, oud, lijst, limiet) {
+    var route = patrouilleRoute(s, g, d);
+    var lengte = routeLengte(route);
+    var aantal = Math.min(3, g.werkers);
+    for (var n = 0; n < aantal && lijst.length < limiet; n++) {
+      var sleutel = 'p' + g.id + ':' + n;
+      var bestaand = oud[sleutel];
+      if (bestaand) { bestaand.route = route; bestaand.routeLen = lengte; bestaand.rond = true; lijst.push(bestaand); }
+      else lijst.push(nieuweWandelaar(sleutel, route, lengte, 'soldaat', {
+        rond: true, snelheidT: 0.5, p: n / Math.max(1, aantal)
+      }, g.id * 23 + n * 9));
+    }
+  }
+
+  /* A closed loop from the barracks along the nearest few pieces of positional
+     cover on the side the last raid came from, then back. */
+  function patrouilleRoute(s, g, d) {
+    var mid = d.grootte / 2;
+    var start = { x: g.x + mid, y: g.y + mid };
+    var vanaf = s.raid && s.raid.vanaf ? s.raid.vanaf : { x: s.kaart.b / 2, y: 0 };
+    var muren = [];
+    for (var i = 0; i < s.gebouwen.length; i++) {
+      var b = s.gebouwen[i];
+      if (!b.gebouwd) continue;
+      var bd = Game.core.state.def(b);
+      if (!bd.dekking || !bd.dekking.straal || !bd.verdediging) continue;
+      var bm = bd.grootte / 2;
+      var bx = b.x + bm, by = b.y + bm;
+      /* Prefer cover that sits toward the invasion side. */
+      var richting = (bx - start.x) * (vanaf.x - start.x) + (by - start.y) * (vanaf.y - start.y);
+      muren.push({ x: bx, y: by, d: (bx - start.x) * (bx - start.x) + (by - start.y) * (by - start.y), bias: richting });
+    }
+    muren.sort(function (a, b) { return (a.d - a.bias * 0.4) - (b.d - b.bias * 0.4); });
+    var route = [start];
+    for (var m = 0; m < muren.length && route.length < 4; m++) route.push({ x: muren[m].x, y: muren[m].y });
+    if (route.length < 2) {
+      /* No walls yet: pace toward the edge the raiders favour and back. */
+      route.push({ x: start.x + (vanaf.x - start.x) * 0.3, y: start.y + (vanaf.y - start.y) * 0.3 });
+    }
+    return route;
+  }
+
+  /* --- fase 2.5: children milling by the square --- */
+
+  function maakKinderen(s, px, py, oud, lijst, limiet) {
+    var n = Game.util.clamp(Math.floor((s.bevolking.kinderen || 0) / 2), 0, 6);
+    for (var i = 0; i < n && lijst.length < limiet; i++) {
+      var a = (i / Math.max(1, n)) * Math.PI * 2;
+      var r = 1.4 + (i % 3) * 0.7;
+      var route = [
+        { x: px + Math.cos(a) * r, y: py + Math.sin(a) * r },
+        { x: px + Math.cos(a + 2) * r, y: py + Math.sin(a + 2) * r }
+      ];
+      var sleutel = 'k' + i;
+      var bestaand = oud[sleutel];
+      if (bestaand) { bestaand.route = route; bestaand.routeLen = routeLengte(route); lijst.push(bestaand); }
+      else lijst.push(nieuweWandelaar(sleutel, route, routeLengte(route), 'werkloos', {
+        soort: 'kind', cohort: 'kind', snelheidT: 0.7
+      }, 900 + i * 11));
+    }
+  }
+
+  /* Advance every walker on the steering model: they accelerate away from a
+     stop, brake into the next one, and turn toward the route rather than
+     snapping. `bezig` says what they are doing (walking, working, resting…). */
   R.tickWandelaars = function (s, dt) {
-    if (!s.wandelaars) return;
-    for (var i = 0; i < s.wandelaars.length; i++) {
-      var w = s.wandelaars[i];
-      /* Pause + turn at the ends of the route instead of instantly bouncing. */
+    var bew = BEW();
+    /* Fase 2.6: how much of the town is out and about, following the sun. */
+    var L = Game.render.sfeer ? Game.render.sfeer.licht(s) : { dag: 1 };
+    var actief = 0.4 + 0.6 * L.dag;
+
+    for (var i = 0; i < wandelaars.length; i++) {
+      var w = wandelaars[i];
       w.klok = (w.klok || 0) + dt;
-      if (w.wachtT > 0) {
-        w.wachtT -= dt;
-        /* Chips, splashes and dust while the axe is actually swinging. */
-        if (w.werkt && w.p >= 1) werkDeeltjes(s, w, dt);
+
+      /* Day rhythm: at dusk a share of the townsfolk head home and vanish;
+         at dawn they come back. Children and patrols keep their own hours. */
+      var welkom = w.soort === 'kind' || w.baan === 'soldaat' || (w.fase < actief);
+      if (!welkom && w.bezig !== bew.HUISWAARTS && !w.verborgen) w.bezig = bew.HUISWAARTS;
+      if (welkom && (w.verborgen || w.bezig === bew.HUISWAARTS)) { w.verborgen = false; if (w.bezig === bew.HUISWAARTS) w.bezig = bew.LOPEN; }
+      if (w.verborgen) continue;
+
+      /* In a stationary state: run its clock, emit work particles, then move on. */
+      if (w.bezig !== bew.LOPEN && w.bezig !== bew.HUISWAARTS) {
+        w.snelheid = Math.max(0, w.snelheid - bew.VERSNEL * dt);
+        w.toestandT -= dt;
+        if ((w.bezig === bew.WERKEN) && Game.render.particles) werkDeeltjes(s, w, dt);
+        if (w.toestandT <= 0) { w.bezig = bew.LOPEN; w.richting = (w.p >= 1 ? -1 : 1); }
         continue;
       }
+
       var len = w.routeLen || 1;
-      var stap = (w.snelheidT || 0.6) * dt;      /* tiles moved this frame */
+      /* Ease speed toward cruise, but brake as we near a route end (LOPEN only;
+         a HUISWAARTS walker keeps pace until it is home). */
+      var restT = w.richting > 0 ? (1 - w.p) : w.p;      /* fraction of route left */
+      var nabij = Game.util.clamp(restT * len / 0.8, 0.25, 1);   /* slow in the last ~0.8 tile */
+      var doelSnel = w.snelheidT * (w.rond ? 1 : nabij);
+      bew.stuur(w, headingVan(w), doelSnel, dt);
+      var stap = w.snelheid * dt;
       w.p += (w.richting * stap) / len;
-      w.afgelegd = (w.afgelegd || 0) + stap;      /* drives the gait cadence */
-      /* A gatherer lingers at the resource: that pause *is* the work. */
-      if (w.p >= 1) { w.p = 1; w.richting = -1; w.wachtT = w.werkt ? 1.6 + Math.random() * 1.6 : 0.4 + Math.random() * 0.9; }
-      else if (w.p <= 0) { w.p = 0; w.richting = 1; w.wachtT = 0.4 + Math.random() * 0.9; }
+      w.afgelegd = (w.afgelegd || 0) + stap;
+
+      if (w.p >= 1) {
+        if (w.rond) { w.p -= 1; }                        /* patrols wrap and keep going */
+        else { w.p = 1; w.richting = -1; enterToestand(s, w, bew, true); }
+      } else if (w.p <= 0) {
+        w.p = 0;
+        if (w.bezig === bew.HUISWAARTS) { w.verborgen = true; continue; }
+        w.richting = 1; enterToestand(s, w, bew, false);
+      }
     }
+
+    /* Fase 2.7: two walkers passing close may stop for a chat. Throttled and
+       bucketed on a coarse tile grid so it never becomes O(n²). */
+    ontmoetTimer -= dt;
+    if (ontmoetTimer <= 0) { ontmoetTimer = 0.5; ontmoetingen(s, bew); }
   };
+
+  /* Bucket the walking figures by tile and let close pairs strike up a chat. */
+  function ontmoetingen(s, bew) {
+    var raster = {};
+    for (var i = 0; i < wandelaars.length; i++) {
+      var w = wandelaars[i];
+      if (w.verborgen || w.bezig !== bew.LOPEN) continue;
+      var pos = wandelaarPositie(w);
+      w._ex = pos.x; w._ey = pos.y;
+      var sleutel = Math.round(pos.x) + ',' + Math.round(pos.y);
+      var bak = raster[sleutel] || (raster[sleutel] = []);
+      for (var j = 0; j < bak.length; j++) {
+        var o = bak[j];
+        var dx = o._ex - pos.x, dy = o._ey - pos.y;
+        if (dx * dx + dy * dy < 0.25 && Math.random() < 0.35) {
+          w.bezig = bew.PRATEN; w.toestandT = bew.duur(bew.PRATEN);
+          o.bezig = bew.PRATEN; o.toestandT = w.toestandT;
+        }
+      }
+      bak.push(w);
+    }
+  }
+
+  /* The heading (tile-space angle) a walker should steer toward: the tangent of
+     its route at the current point, signed by travel direction. */
+  function headingVan(w) {
+    var pos = langsRoute(w.route, Game.util.clamp(w.p, 0, 1));
+    var dx = pos.dx, dy = pos.dy != null ? pos.dy : 0;
+    if (w.richting < 0) { dx = -dx; dy = -dy; }
+    return Math.atan2(dy || 0, dx || (w.richting >= 0 ? 1 : -1));
+  }
+
+  /* Pick the state a walker drops into on reaching a route end. */
+  function enterToestand(s, w, bew, verEind) {
+    if (w.soort === 'bouwer') { w.bezig = verEind ? bew.WERKEN : bew.LADEN; w.toestandT = bew.duur(w.bezig); return; }
+    if (w.soort === 'kind') { w.bezig = Math.random() < 0.5 ? bew.RUSTEN : bew.PRATEN; w.toestandT = bew.duur(w.bezig); return; }
+    /* Gatherers work at the resource (far end). Crafters (draagtOp 'heen') carry
+       goods out and come home to their bench — that homecoming is their work
+       stroke, so a baker or a smith visibly does something too (fase 2.4). */
+    if (verEind && w.werkt) { w.bezig = bew.WERKEN; w.toestandT = bew.duur(bew.WERKEN); return; }
+    if (!verEind && w.draagtOp === 'heen') { w.bezig = bew.WERKEN; w.toestandT = bew.duur(bew.WERKEN); return; }
+    w.bezig = verEind ? bew.LADEN : bew.LOSSEN;
+    w.toestandT = bew.duur(w.bezig);
+  }
 
   /* A few particles on every downstroke of the tool, matched to the trade:
      wood chips, a splash, or rock dust. */
@@ -231,8 +454,8 @@
     w.slagTimer = (w.slagTimer || 0) - dt;
     if (w.slagTimer > 0) return;
     w.slagTimer = 0.55;
-    var eind = w.route[w.route.length - 1];
-    var wx = eind.x * Game.render.TEGEL, wy = eind.y * Game.render.TEGEL;
+    var hier = langsRoute(w.route, Game.util.clamp(w.p, 0, 1));
+    var wx = hier.x * Game.render.TEGEL, wy = hier.y * Game.render.TEGEL;
     if (w.draagt === 'hout') {
       Game.render.particles.emit('stof', wx, wy, 2, { spreiding: 5, kleur: '196,158,96', grootte: 0.7 });
     } else if (w.draagt === 'vlees') {
@@ -242,9 +465,10 @@
     }
   }
 
-  /* Point at fraction `f` (0..1) along a multi-segment route, in tile coords. */
+  /* Point at fraction `f` (0..1) along a multi-segment route, in tile coords,
+     plus the tangent (dx, dy) of the segment it lies on. */
   function langsRoute(route, f) {
-    if (route.length === 1) return { x: route[0].x, y: route[0].y, dx: 1 };
+    if (route.length === 1) return { x: route[0].x, y: route[0].y, dx: 1, dy: 0 };
     var lengtes = [], totaal = 0;
     for (var i = 0; i < route.length - 1; i++) {
       var ddx = route[i + 1].x - route[i].x, ddy = route[i + 1].y - route[i].y;
@@ -259,13 +483,28 @@
         return {
           x: a.x + (b.x - a.x) * lok,
           y: a.y + (b.y - a.y) * lok,
-          dx: b.x - a.x
+          dx: b.x - a.x,
+          dy: b.y - a.y
         };
       }
       gelopen += lengtes[j];
     }
     var e = route[route.length - 1];
-    return { x: e.x, y: e.y, dx: 1 };
+    return { x: e.x, y: e.y, dx: 1, dy: 0 };
+  }
+
+  /* Where a walker actually stands: the route point plus a lateral offset along
+     the right-hand normal of travel, so the two directions of traffic keep to
+     their own side of the lane instead of walking down one line through each
+     other (fase 0.3). */
+  function wandelaarPositie(w) {
+    var pos = langsRoute(w.route, Game.util.clamp(w.p, 0, 1));
+    var tx = pos.dx * w.richting, ty = pos.dy * w.richting;
+    var len = Math.sqrt(tx * tx + ty * ty) || 1;
+    /* Right-hand normal of (tx,ty). */
+    var nx = ty / len, ny = -tx / len;
+    var off = (w.zijoffset || 0.16);
+    return { x: pos.x + nx * off, y: pos.y + ny * off, dx: pos.dx, dy: pos.dy };
   }
 
   /* ------------------------------------------------------------ tekenen -- */
@@ -360,10 +599,11 @@
     if (p > 14 && Game.render.props) Game.render.props.verzamel(zicht, laag);
     if (p > 14 && Game.render.wildlife) Game.render.wildlife.verzamel(zicht, laag);
 
-    if (p > 15 && s.wandelaars) {
-      for (var wi = 0; wi < s.wandelaars.length; wi++) {
-        var w = s.wandelaars[wi];
-        var pos = langsRoute(w.route, w.p);
+    if (p > 15) {
+      for (var wi = 0; wi < wandelaars.length; wi++) {
+        var w = wandelaars[wi];
+        if (w.verborgen) continue;
+        var pos = wandelaarPositie(w);
         if (pos.x < zicht.x0 - 1 || pos.x > zicht.x1 + 1 || pos.y < zicht.y0 - 1 || pos.y > zicht.y1 + 1) continue;
         laag.push({ d: pos.x + pos.y, yy: pos.y, soort: 2, w: w, pos: pos });
       }
@@ -750,16 +990,19 @@
     var sp = cam.wereldNaarScherm(pos.x * Game.render.TEGEL, pos.y * Game.render.TEGEL);
     if (sp.x < -20 || sp.y < -20 || sp.x > cam.breedte + 20 || sp.y > cam.hoogte + 20) return;
 
-    var kijk = (pos.dx * w.richting) >= 0 ? 1 : -1;
-    var wandelt = !(w.wachtT > 0);
+    var bew = BEW();
+    /* Facing follows the eased heading, so the figure turns rather than flips. */
+    var kijk = bew.kijkrichting(w.koers != null ? w.koers : Math.atan2(pos.dy || 0, pos.dx || 1));
+    var wandelt = w.bezig === bew.LOPEN || w.bezig === bew.HUISWAARTS;
     var stapFase = (w.afgelegd || 0) * 7.5 + w.fase * 6.28;
 
-    var opties = {};
-    /* Working: standing still at the resource end with a tool in hand. */
-    if (w.werkt && !wandelt && w.p >= 1) opties.werktFase = (w.klok || 0) * 5.5;
+    var opties = { cohort: w.cohort, bezig: w.bezig };
+    /* Working: standing still with a tool, tool cadence sped up by practice. */
+    if (w.bezig === bew.WERKEN) opties.werktFase = (w.klok || 0) * (5.5 + w.werkTempo * 3);
+    if (w.bezig === bew.PRATEN) opties.praat = (w.klok || 0);
     /* Loaded: on the leg of the trip where this job hauls something. */
     var geladen = w.draagtOp === 'heen' ? (w.richting > 0) : (w.richting < 0);
-    if (w.draagt && geladen && p > 20) opties.draagt = w.draagt;
+    if (w.draagt && geladen && p > 20 && w.bezig !== bew.WERKEN) opties.draagt = w.draagt;
 
     Game.render.villagers.teken(ctx, sp.x, sp.y, p, w.baan, kijk, stapFase, wandelt, opties);
   }

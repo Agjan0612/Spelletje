@@ -131,7 +131,9 @@
     s.moeilijkheid = s.moeilijkheid || 'normaal';
     s.questsGedaan = s.questsGedaan || {};
     s.log = s.log || [];
-    s.wandelaars = [];
+    /* Walkers now live in the render layer, not the save. Drop the field an
+       older save may still carry so a fresh save never writes it again. */
+    delete s.wandelaars;
     s.tevredenheid = typeof s.tevredenheid === 'number' ? s.tevredenheid : 60;
     s.snelheid = s.snelheid || 1;
 
