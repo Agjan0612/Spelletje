@@ -27,6 +27,13 @@
     this.zoom = 1;
     this.breedte = 1;
     this.hoogte = 1;
+    /* Damping (fase 8.4): pan glides on after a fling, and zoom eases toward a
+       target rather than snapping. */
+    this.velX = 0;
+    this.velY = 0;
+    this.doelZoom = 1;
+    this.zoomSx = 0;
+    this.zoomSy = 0;
   }
 
   Camera.prototype.TEGEL = TEGEL;
@@ -63,17 +70,57 @@
   /* Move the view by a *screen-space* delta (mouse drag, keyboard pan). The
      delta is un-projected into world pixels so dragging feels 1:1 on screen. */
   Camera.prototype.beweeg = function (dx, dy) {
-    var ix = dx / this.zoom, iy = dy / this.zoom;
-    this.x += wereldX(ix, iy);
-    this.y += wereldY(ix, iy);
+    var d = this.wereldDelta(dx, dy);
+    this.x += d.x;
+    this.y += d.y;
   };
 
+  /* Screen-space delta → world-pixel delta, for both panning and for turning a
+     drag into a fling velocity. */
+  Camera.prototype.wereldDelta = function (dx, dy) {
+    var ix = dx / this.zoom, iy = dy / this.zoom;
+    return { x: wereldX(ix, iy), y: wereldY(ix, iy) };
+  };
+
+  /* Let go of a drag with a world-pixel velocity, so the view glides to a stop
+     instead of stopping dead. */
+  Camera.prototype.glij = function (vx, vy) {
+    this.velX = vx;
+    this.velY = vy;
+  };
+
+  Camera.prototype.stopGlij = function () { this.velX = 0; this.velY = 0; };
+
+  /* Aim the zoom at a target level, keeping the point under (sx, sy) fixed. The
+     actual zoom eases toward it in demp(). */
   Camera.prototype.zoomOp = function (sx, sy, richting) {
-    var voor = this.schermNaarWereld(sx, sy);
-    this.zoom = Game.util.clamp(this.zoom * (richting > 0 ? 1.15 : 1 / 1.15), 0.4, 2.6);
-    var na = this.schermNaarWereld(sx, sy);
-    this.x += voor.x - na.x;
-    this.y += voor.y - na.y;
+    this.doelZoom = Game.util.clamp((this.doelZoom || this.zoom) * (richting > 0 ? 1.18 : 1 / 1.18), 0.4, 2.6);
+    this.zoomSx = sx;
+    this.zoomSy = sy;
+  };
+
+  /* Real-time damping: apply the pan glide and ease the zoom toward its target,
+     both frame-rate independent. Called from the main loop. */
+  Camera.prototype.demp = function (dt) {
+    if (dt <= 0) return;
+    /* Pan inertia, decaying exponentially. */
+    if (Math.abs(this.velX) > 1 || Math.abs(this.velY) > 1) {
+      this.x += this.velX * dt;
+      this.y += this.velY * dt;
+      var afname = Math.exp(-7 * dt);
+      this.velX *= afname;
+      this.velY *= afname;
+    } else { this.velX = this.velY = 0; }
+
+    /* Smooth zoom toward the target, holding the focus point steady. */
+    if (this.doelZoom && Math.abs(this.doelZoom - this.zoom) > 0.0005) {
+      var voor = this.schermNaarWereld(this.zoomSx, this.zoomSy);
+      var t = 1 - Math.exp(-16 * dt);
+      this.zoom += (this.doelZoom - this.zoom) * t;
+      var na = this.schermNaarWereld(this.zoomSx, this.zoomSy);
+      this.x += voor.x - na.x;
+      this.y += voor.y - na.y;
+    }
   };
 
   /* Keeps the view roughly over the map instead of drifting into the void. */

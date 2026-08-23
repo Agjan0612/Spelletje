@@ -148,10 +148,7 @@
       /* Towns beyond the map edge: reputation, trade routes and requests.
          Generated on the first tick by core/buren.js. */
       buren: [],
-      burenTimer: 0,
-
-      /* Purely cosmetic walkers on the map. */
-      wandelaars: []
+      burenTimer: 0
     };
 
     Game.config.resourceOrder.forEach(function (id) {

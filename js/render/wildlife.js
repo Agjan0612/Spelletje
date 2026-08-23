@@ -50,9 +50,9 @@
         schapen.push({
           x: x + 0.5, y: y + 0.5,
           thuisX: x + 0.5, thuisY: y + 0.5,
-          fase: Math.random() * 6.28,
-          kijk: Math.random() < 0.5 ? 1 : -1,
-          traag: 0.25 + Math.random() * 0.25
+          fase: Game.render.rng() * 6.28,
+          kijk: Game.render.rng() < 0.5 ? 1 : -1,
+          traag: 0.25 + Game.render.rng() * 0.25
         });
       }
     }
@@ -73,7 +73,7 @@
       visplekken.push({
         x: (idx % s.kaart.b) + 0.5,
         y: Math.floor(idx / s.kaart.b) + 0.5,
-        timer: Math.random() * 4,
+        timer: Game.render.rng() * 4,
         sprong: 0
       });
     }
@@ -99,10 +99,10 @@
       if (v.sprong > 0) { v.sprong = Math.max(0, v.sprong - dt * 1.6); continue; }
       v.timer -= dt;
       if (v.timer <= 0) {
-        v.timer = 3 + Math.random() * 6;
+        v.timer = 3 + Game.render.rng() * 6;
         v.sprong = 1;
-        v.ox = (Math.random() - 0.5) * 0.5;
-        v.oy = (Math.random() - 0.5) * 0.5;
+        v.ox = (Game.render.rng() - 0.5) * 0.5;
+        v.oy = (Game.render.rng() - 0.5) * 0.5;
       }
     }
   };

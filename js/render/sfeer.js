@@ -59,6 +59,79 @@
     [170, 200, 240, 0.10]
   ];
 
+  /* --------------------------------------------------------------- hemel --- */
+
+  /* The background beyond the map edge. Instead of one flat deep-sea colour, a
+     vertical gradient from the sky at the top (where the iso horizon lies) down
+     to the sea, with the sun or the moon as a disc that drifts across with the
+     day. Drawn first of all, so the terrain paints over it. */
+  var ZEE = ['#27506b', '#295473', '#254a64', '#2b4a5e'];
+
+  Sf.tekenHemel = function (ctx, cam, s) {
+    var L = Sf.licht(s);
+    var b = cam.breedte, h = cam.hoogte;
+    var lucht = luchtKleur(L);
+    var zee = ZEE[s.seizoen] || ZEE[0];
+
+    var g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, lucht);
+    g.addColorStop(0.5, meng(lucht, zee, 0.6));
+    g.addColorStop(1, zee);
+    ctx.fillStyle = g;
+    ctx.fillRect(-4, -4, b + 8, h + 8);
+
+    /* Sun or moon, riding the top third of the sky. f 0..1: 0 midday, 0.5
+       midnight — put the disc high at midday, low near dawn/dusk. */
+    var maan = L.nacht > 0.5;
+    var x = ((L.f + 0.25) % 1) * b;
+    var hoog = 0.5 - 0.5 * Math.cos(L.f * Math.PI * 2);   /* 0 at midday, 1 midnight */
+    var y = h * (0.08 + hoog * 0.22);
+    var r = Math.min(b, h) * 0.045;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    var disc = ctx.createRadialGradient(x, y, 0, x, y, r * 2.4);
+    var kern = maan ? '224,230,246' : (L.avond > 0.3 || L.ochtend > 0.3 ? '255,206,150' : '255,244,214');
+    disc.addColorStop(0, 'rgba(' + kern + ',' + (maan ? 0.5 : 0.85) + ')');
+    disc.addColorStop(0.25, 'rgba(' + kern + ',' + (maan ? 0.3 : 0.5) + ')');
+    disc.addColorStop(1, 'rgba(' + kern + ',0)');
+    ctx.fillStyle = disc;
+    ctx.beginPath();
+    ctx.arc(x, y, r * 2.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  };
+
+  function luchtKleur(L) {
+    var nacht = [26, 34, 68], dag = [138, 176, 210];
+    var c = [
+      Math.round(nacht[0] + (dag[0] - nacht[0]) * L.dag),
+      Math.round(nacht[1] + (dag[1] - nacht[1]) * L.dag),
+      Math.round(nacht[2] + (dag[2] - nacht[2]) * L.dag)
+    ];
+    /* Warm the horizon at dawn and dusk. */
+    var warm = L.avond * 0.8 + L.ochtend * 0.5;
+    if (warm > 0.02) {
+      c[0] = Math.min(255, Math.round(c[0] + warm * 90));
+      c[1] = Math.round(c[1] + warm * 30);
+      c[2] = Math.max(0, Math.round(c[2] - warm * 30));
+    }
+    return 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')';
+  }
+
+  function meng(a, b, t) {
+    var ca = ontleedKleur(a), cb = ontleedKleur(b);
+    return 'rgb(' + Math.round(ca[0] + (cb[0] - ca[0]) * t) + ',' +
+                    Math.round(ca[1] + (cb[1] - ca[1]) * t) + ',' +
+                    Math.round(ca[2] + (cb[2] - ca[2]) * t) + ')';
+  }
+
+  function ontleedKleur(k) {
+    var m = k.match(/^#(\w\w)(\w\w)(\w\w)$/);
+    if (m) return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
+    m = k.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+    return m ? [+m[1], +m[2], +m[3]] : [40, 60, 90];
+  }
+
   /* ------------------------------------------------------------- gradatie -- */
 
   /* The full-screen colour grade: one wash for the night, one for the warm
