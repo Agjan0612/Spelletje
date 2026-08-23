@@ -106,6 +106,22 @@
         ctx.fillStyle = '#8a4438';
         ctx.fillRect(hx - p * 0.05, hy - p * 0.03, p * 0.1, p * 0.07);
         break;
+      case 'fakkel':
+        ctx.strokeStyle = '#4a3018'; ctx.lineWidth = Math.max(1, p * 0.03);
+        ctx.beginPath(); ctx.moveTo(hx, hy + p * 0.06); ctx.lineTo(hx, hy - p * 0.14); ctx.stroke();
+        /* Flame, drawn additively so it glows in the night wash. */
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        var fg = ctx.createRadialGradient(hx, hy - p * 0.17, 0, hx, hy - p * 0.17, p * 0.12);
+        fg.addColorStop(0, 'rgba(255,220,120,.95)');
+        fg.addColorStop(0.5, 'rgba(240,140,50,.7)');
+        fg.addColorStop(1, 'rgba(220,90,30,0)');
+        ctx.fillStyle = fg;
+        ctx.beginPath();
+        ctx.ellipse(hx, hy - p * 0.17, p * 0.06, p * 0.1, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        break;
     }
   }
 
@@ -127,6 +143,14 @@
 
     var acc = kind ? {} : (ACCENT[baan] || {});
     if (oud && !acc.helm && !acc.kap) acc = { hoed: '#b9b4ac' };   /* grey hair */
+
+    /* Raiders (fase 6.1): the same figure your own people are, so it walks with
+       the same gait, but in a dark, battered palette with a hood and an axe or
+       a torch — no longer a floating tinted sprite. */
+    if (opties.rover) {
+      body = '#6b3b34';
+      acc = { kap: '#372924', gereedschap: opties.fakkel ? 'fakkel' : 'bijl' };
+    }
 
     /* At the far end of their route villagers stop and actually work: the arm
        swings a full stroke and the body leans into it. `werktFase` runs on
