@@ -2,7 +2,10 @@
 (function (Game) {
 
   var L = {};
-  var MAX_ZICHTBAAR = 6;
+  /* Four lines, not six: the log sits over the bottom-left corner of the map
+     and the map is the thing you came for. Older lines are still in s.log and
+     in the chronicle. */
+  var MAX_ZICHTBAAR = 4;
   var doosje = null;
   var knop = null;
   var toastEl = null;

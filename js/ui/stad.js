@@ -1,9 +1,12 @@
 /* City affairs: the panel and dialogs for everything that is not building.
  *
- * One card in the right-hand column shows what is going on right now (a
- * festival, the caravan on the square, the lord's open contract), and the
- * three buttons in the top bar open the dialogs: throw a feast, order
- * research, or read the overview of what is stuck in your town.
+ * The "Stad" tab of the right-hand column shows what is going on right now (a
+ * festival, the caravan on the square, the lord's open contract, a neighbour
+ * asking for help, and what is stuck), with three buttons under it that open
+ * the dialogs: throw a feast, order research, or read the full overview. They
+ * used to be three unlabelled emoji in the top bar, where nobody found them.
+ * The tab itself is shown and hidden by js/ui/kolom.js, so this module never
+ * hides its own card any more — an empty one says so instead.
  *
  * The card is rebuilt only when its *structure* changes; the countdowns are
  * written into the existing nodes every refresh. Otherwise the buttons would
@@ -75,9 +78,6 @@
       bouw(s);
     }
     for (var i = 0; i < dyn.length; i++) dyn[i](s);
-
-    var leeg = !inhoudEl.firstChild;
-    box.classList.toggle('hidden', leeg);
   };
 
   function bouw(s) {
@@ -89,6 +89,15 @@
     if (s.opdracht.actief) bouwOpdracht(s);
     bouwBuren(s);
     bouwProblemen(s);
+
+    /* The card lives in a tab now, so an empty one has to say so itself
+       instead of quietly disappearing and leaving a blank pane. */
+    if (!inhoudEl.firstChild) {
+      var rust = Game.util.el('div', 'stadregel cursief',
+        'Er speelt nu niets bijzonders. Hier verschijnen de koopman, de ' +
+        'opdrachten van de heer, je buursteden en alles wat vastloopt.');
+      inhoudEl.appendChild(rust);
+    }
   }
 
   /* The towns beyond the map edge: a request to answer, a route to open, or

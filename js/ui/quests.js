@@ -15,15 +15,14 @@
     naamEl = document.getElementById('age-next-name');
     knopEl = document.getElementById('btn-advance');
 
-    /* The village elder's advice: one line, always the single most useful
-       next step, injected at the top of the objectives card. */
-    adviesEl = Game.util.el('div', 'advies');
-    var box = document.getElementById('questbox');
-    box.insertBefore(adviesEl, lijstEl);
+    /* The village elder's advice: one line, always the single most useful next
+       step. It sits above the tabs rather than inside the objectives card,
+       because it is the one thing that must never be behind a tab. */
+    adviesEl = document.getElementById('advies');
 
     knopEl.addEventListener('click', function () {
       Game.core.ages.bevorder(spel.state);
-      Game.ui.buildmenu.ververs(spel.state);
+      Game.ui.buildmenu.ververs(spel.state, true);
       Q.ververs(spel.state);
     });
   };
@@ -76,6 +75,16 @@
       return '🧰 Iedereen heeft een baan — houd een paar dorpelingen vrij, want zij bouwen alles.';
     }
 
+    /* Idle villagers next to empty benches is the most common way a village
+       quietly stops growing, and the fix (click the building, or switch on
+       the labour policy) is not something you find by yourself. */
+    var leeg = legePlekken(s);
+    if (leeg >= 2 && s.bevolking.werkloos > (s.arbeid ? s.arbeid.bouwers : 3)) {
+      return '👥 ' + s.bevolking.werkloos + ' dorpelingen lopen werkloos rond terwijl er ' +
+        leeg + ' werkplekken leegstaan. Klik een gebouw aan en zet er mensen op, of ' +
+        'zet op het dorpsplein de arbeidsverdeling op automatisch.';
+    }
+
     if (s.tevredenheid < 45) {
       return '😟 Je dorp is ontevreden. Bouw een waterput, kapel of herberg, of geef een feest met de 🎉-knop rechtsboven.';
     }
@@ -87,10 +96,26 @@
     var eisen = Game.core.ages.eisen(s);
     if (eisen) {
       var mist = eisen.lijst.filter(function (r) { return !r.klaar; })[0];
-      if (mist) return '🎯 Op weg naar ' + eisen.tijdperk.naam + ': werk aan ' + mist.tekst.replace(/^[^ ]+ /, '') + '.';
+      if (mist) {
+        var wat = mist.tekst.replace(/^[^ ]+ /, '');
+        return '🎯 Op weg naar ' + eisen.tijdperk.naam + ': werk aan ' +
+          wat.charAt(0).toLowerCase() + wat.slice(1) + ' (' +
+          Game.util.fmt(mist.nu) + ' van ' + Game.util.fmt(mist.doel) + ').';
+      }
     }
     return '🏰 Mooi bezig! Blijf je stad uitbouwen en houd voedsel en tevredenheid op peil.';
   };
+
+  function legePlekken(s) {
+    var leeg = 0;
+    for (var i = 0; i < s.gebouwen.length; i++) {
+      var g = s.gebouwen[i];
+      if (!g.gebouwd || g.uit) continue;
+      var d = Game.core.state.def(g);
+      if (d.banen) leeg += d.banen.aantal - g.werkers;
+    }
+    return leeg;
+  }
 
   Q.ververs = function (s) {
     if (!lijstEl) return;
@@ -132,14 +157,19 @@
     var eisen = Game.core.ages.eisen(s);
 
     if (!eisen) {
+      /* Careful: the heading holds #age-next-name, so write around the span
+         rather than through the whole heading's textContent. */
       naamEl.textContent = '';
-      document.querySelector('#agebox h3').textContent = 'De voltooide stad';
+      var kop = document.querySelector('#agebox h3');
+      if (kop.firstChild && kop.firstChild.nodeType === 3) kop.firstChild.nodeValue = 'De voltooide stad';
       Game.core.ages.eindDoelLijst(s).forEach(function (r) { eisenEl.appendChild(eisRegel(r)); });
       knopEl.disabled = true;
       knopEl.textContent = s.gewonnen ? '👑 Stad voltooid' : 'Bouw je stad af';
       return;
     }
 
+    var kop2 = document.querySelector('#agebox h3');
+    if (kop2.firstChild && kop2.firstChild.nodeType === 3) kop2.firstChild.nodeValue = 'Volgend tijdperk ';
     naamEl.textContent = eisen.tijdperk.emoji + ' ' + eisen.tijdperk.naam;
     eisen.lijst.forEach(function (r) { eisenEl.appendChild(eisRegel(r)); });
 

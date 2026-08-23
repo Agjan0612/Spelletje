@@ -22,7 +22,7 @@
     { id: 'logistiek', naam: 'Aanvoer', emoji: '🛣️',
       uitleg: 'Hoeveel van de opbrengst een werkplaats hier daadwerkelijk thuisbrengt. Rood = te ver van elke opslag: bouw een voorraadschuur dichterbij of leg een straat.' },
     { id: 'aders', naam: 'Grondstoffen', emoji: '⛏️',
-      uitleg: 'Hoeveel er nog in de grond zit. Rood betekent bijna uitgeput — tijd om te verhuizen.' }
+      uitleg: 'Hoeveel er nog in de grond zit. Rood betekent bijna uitgeput — tijd om te verhuizen. Vruchtbare grond en visgronden raken nooit op en staan dus altijd groen.' }
   ];
 
   L.actief = null;
@@ -125,7 +125,12 @@
         for (var x3 = 0; x3 < b; x3++) {
           var t3 = Game.core.map.tegel(s.kaart, x3, y3);
           var k = y3 * b + x3;
-          if (!t3 || !t3.n || t3.max <= 0 || t3.max >= Game.core.map.ONEINDIG) { w[k] = -1; continue; }
+          if (!t3 || !t3.n || t3.max <= 0) { w[k] = -1; continue; }
+          /* Endless nodes — fertile ground and fishing grounds — used to be
+             left blank here, which meant the one layer called "Grondstoffen"
+             hid exactly the two a new player is looking for. They cannot be
+             depleted, so they simply stand at full. */
+          if (t3.max >= Game.core.map.ONEINDIG) { w[k] = 1; continue; }
           w[k] = Game.util.clamp(t3.amt / t3.max, 0, 1);
         }
       }

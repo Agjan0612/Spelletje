@@ -89,6 +89,22 @@
       s.voedselWaarschuwing = 45;
       Game.ui.log.schrijf(s, '🍽️ Je voedselvoorraad raakt op (' + dagen.toFixed(1) +
         ' dagen). Zet meer mensen op jacht, visserij of de akkers.', 'slecht');
+      return;
+    }
+
+    /* And once, in the autumn, the warning you can still act on: the fields
+       stop in twelve days and the barn will not reach the thaw. Said in
+       autumn rather than on the first day of frost, because in the frost
+       there is nothing left to sow. */
+    if (s.seizoen === 2 && s.bevolking.totaal > 3 && s.winterWaarschuwing !== s.jaar) {
+      var v = P.vooruitzicht(s);
+      if (v.tekort) {
+        s.winterWaarschuwing = s.jaar;
+        s.voedselWaarschuwing = 45;
+        Game.ui.log.schrijf(s, '❄️ De winter komt over ' + v.dagenTotWinter +
+          ' dagen en je voorraad haalt de lente niet. Leg nu voedsel aan — ' +
+          'de akkers leveren straks niets meer.', 'slecht');
+      }
     }
   }
 
@@ -102,6 +118,70 @@
   P.voedselDagen = function (s) {
     var perDag = Math.max(0.001, P.monden(s) * HONGER * Game.core.state.DAG);
     return P.voedselVoorraad(s) / perDag;
+  };
+
+  /* Winter is a deadline, and until now the only way to find out you had
+     missed it was to watch people starve in it. This is that deadline made
+     readable: how much food is in store, how long it lasts, how many days of
+     cold are still to come, and whether the two meet.
+
+     Deliberately pessimistic about production rather than clever: fields give
+     nothing in winter, so what is in the barn *now* plus what the hunters and
+     fishers still bring in is what has to carry the town. The net flow of the
+     food resources (s.stroom, which the economy already fills in) is the
+     honest estimate of that, and it is exactly the number the HUD shows. */
+  P.vooruitzicht = function (s) {
+    var S = Game.core.state;
+    var perDag = Math.max(0.001, P.monden(s) * HONGER * S.DAG);
+    /* Winter eats more, the same surcharge tick() applies. */
+    var winterPerDag = perDag * (1 + 0.3 * (s.bonus.winter === undefined ? 1 : s.bonus.winter));
+    var voorraad = P.voedselVoorraad(s);
+
+    /* Days between now and the last day of the coming (or current) winter. */
+    var dagInSeizoen = s.dag % S.DAGEN_PER_SEIZOEN;
+    var seizoenenTotWinter = (3 - s.seizoen + 4) % 4;
+    var dagenTotWinter = seizoenenTotWinter * S.DAGEN_PER_SEIZOEN - dagInSeizoen;
+    var dagenTotWinterEind = dagenTotWinter + S.DAGEN_PER_SEIZOEN;
+    if (s.seizoen === 3) {
+      dagenTotWinter = 0;
+      dagenTotWinterEind = S.DAGEN_PER_SEIZOEN - dagInSeizoen;
+    }
+
+    /* What the town nets per day right now, food only. */
+    var netto = 0;
+    Game.config.voedselSoorten.forEach(function (r) { netto += (s.stroom[r] || 0); });
+    netto *= S.DAG;
+
+    /* Roll the larder forward: the rest of the year at today's rate, then the
+       winter with the fields shut down. `netto` is production minus what is
+       eaten, so today's gross income is netto + perDag. */
+    var opWinter = voorraad + netto * dagenTotWinter;
+    /* The barn cannot hold more than it holds: projecting a stock above the
+       ceiling would quietly promise a winter the storehouse cannot pay for. */
+    var plafond = 0;
+    Game.config.voedselSoorten.forEach(function (r) { plafond += Game.core.state.plafond(s, r); });
+    opWinter = Math.min(opWinter, plafond);
+    var winterDagen = Math.min(S.DAGEN_PER_SEIZOEN, dagenTotWinterEind);
+    /* Fields yield nothing in the frost and the catch collapses; a third of
+       today's income is the rough share that keeps coming. In winter itself
+       the flow already says it, so believe the measurement over the guess. */
+    var winterNetto = s.seizoen === 3
+      ? netto
+      : 0.33 * (netto + perDag) - winterPerDag;
+    var eind = opWinter + winterNetto * winterDagen;
+
+    return {
+      voorraad: voorraad,
+      perDag: perDag,
+      winterPerDag: winterPerDag,
+      dagen: voorraad / perDag,
+      netto: netto,
+      dagenTotWinter: Math.max(0, Math.round(dagenTotWinter)),
+      dagenTotWinterEind: Math.max(0, Math.round(dagenTotWinterEind)),
+      opWinter: opWinter,
+      /* True when the larder is projected to run out before the thaw. */
+      tekort: eind < 0
+    };
   };
 
   /* ---------------------------------------------------------- tevredenheid */

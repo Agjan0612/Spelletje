@@ -1,35 +1,95 @@
-/* The build bar at the bottom: one tab per age, a card per building. */
+/* The build bar at the bottom: one tab per kind of building, a card each.
+ *
+ * The tabs used to be the four ages, which answers a question nobody asks. A
+ * player in the fourth age who wants another cottage does not think "that was
+ * age one" — they think "a house". So the drawers are what a building *does*,
+ * every drawer holds everything of that kind from every age, and the ones
+ * that are still locked sit greyed at the back so you can see what is coming.
+ */
 (function (Game) {
 
   var BM = {};
   var spel = null;
-  var tabsEl, lijstEl, tipEl = null;
-  var actieveTab = 1;
+  var tabsEl, lijstEl;
   /* Ids of the cards you can actually click, in the order they are shown —
      that order is what Shift+1..9 selects from. */
   var zichtbaar = [];
+
+  /* Which drawer a building belongs in. Derived from what it does, so a new
+     entry in config lands somewhere sensible without another field to fill in.
+
+     Two orders live here and they are not the same: the array is the order of
+     the tabs, roughly the order in which a town needs them, while `prio` is
+     the order in which the tests are tried. A castle stores goods and pleases
+     the neighbourhood, but it is a fortress, so defence has to be asked
+     before storage even though its tab comes last. */
+  BM.SOORTEN = [
+    { id: 'wonen',     naam: 'Wonen',        emoji: '🏠', prio: 10,
+      test: function (d) { return d.woonruimte; } },
+    { id: 'voedsel',   naam: 'Voedsel',      emoji: '🌾', prio: 20,
+      test: function (d) {
+        return Game.core.population.isVoedselgebouw(d) || d.boerderijBonus || d.visserijBonus;
+      } },
+    { id: 'grondstof', naam: 'Grondstoffen', emoji: '🪵', prio: 30,
+      test: function (d) { return d.wint; } },
+    { id: 'opslag',    naam: 'Opslag',       emoji: '📦', prio: 70,
+      test: function (d) { return d.opslag || d.opslagPer; } },
+    { id: 'diensten',  naam: 'Voorzieningen', emoji: '⛪', prio: 50,
+      test: function (d) { return d.tevredenheid && d.bereik; } },
+    { id: 'ambacht',   naam: 'Ambacht',      emoji: '🔨', prio: 60,
+      test: function (d) { return d.maakt || d.productieBonus; } },
+    { id: 'handel',    naam: 'Handel',       emoji: '🪙', prio: 45,
+      test: function (d) { return d.maakt && d.maakt.uit && d.maakt.uit.munten; } },
+    { id: 'verdediging', naam: 'Verdediging', emoji: '🛡️', prio: 40,
+      test: function (d) { return d.verdediging || d.verdPerWerker; } },
+    { id: 'straten',   naam: 'Straten',      emoji: '🛣️', prio: 80,
+      test: function (d) { return d.weg; } },
+    { id: 'overig',    naam: 'Overig',       emoji: '🧱', prio: 990,
+      test: function () { return true; } }
+  ];
+
+  var opPrio = BM.SOORTEN.slice().sort(function (a, b) { return a.prio - b.prio; });
+
+  BM.soortVan = function (d) {
+    for (var i = 0; i < opPrio.length; i++) {
+      if (opPrio[i].test(d)) return opPrio[i].id;
+    }
+    return 'overig';
+  };
+
+  var actieveTab = 'wonen';
 
   BM.init = function (hetSpel) {
     spel = hetSpel;
     tabsEl = document.getElementById('build-tabs');
     lijstEl = document.getElementById('build-list');
     bouwTabs();
-    BM.toon(1);
+    BM.toon(actieveTab);
   };
+
+  /* Buildings of one kind, unlocked first and then the locked ones, each
+     group ordered by the age they arrive in. */
+  function inTab(id) {
+    var lijst = Game.config.buildingList.filter(function (d) {
+      return !d.verborgen && d.tijdperk > 0 && BM.soortVan(d) === id;
+    });
+    lijst.sort(function (a, b) { return a.tijdperk - b.tijdperk; });
+    return lijst;
+  }
 
   function bouwTabs() {
     tabsEl.innerHTML = '';
-    Game.config.ages.forEach(function (age) {
-      if (age.nr < 1) return;
-      var k = Game.util.el('button', '', age.emoji + ' ' + age.naam);
-      k.dataset.tab = age.nr;
-      k.addEventListener('click', function () { BM.toon(age.nr); });
+    BM.SOORTEN.forEach(function (soort) {
+      if (!inTab(soort.id).length) return;      /* never show an empty drawer */
+      var k = Game.util.el('button', '', soort.emoji + ' ' + soort.naam);
+      k.dataset.tab = soort.id;
+      k.addEventListener('click', function () { BM.toon(soort.id); });
       tabsEl.appendChild(k);
     });
   }
 
-  BM.toon = function (nr) {
-    actieveTab = nr;
+  BM.toon = function (id) {
+    actieveTab = id;
     BM.ververs(spel.state, true);
   };
 
@@ -37,8 +97,7 @@
      player can see actually changed, so hovering and clicking stay stable. */
   function handtekening(s) {
     var stukken = [actieveTab, s.tijdperk, spel.plaatsType];
-    Game.config.buildingList.forEach(function (d) {
-      if (d.verborgen || d.tijdperk !== actieveTab) return;
+    inTab(actieveTab).forEach(function (d) {
       stukken.push(Game.core.state.kanBetalen(s, d.kosten) ? 1 : 0);
       if (d.max) stukken.push(Game.core.construction.aantalGepland(s, d.id));
     });
@@ -53,17 +112,16 @@
     BM.laatsteTeken = teken;
 
     Array.prototype.forEach.call(tabsEl.children, function (k) {
-      var nr = parseInt(k.dataset.tab, 10);
-      k.classList.toggle('active', nr === actieveTab);
-      k.classList.toggle('op-slot', nr > s.tijdperk);
+      k.classList.toggle('active', k.dataset.tab === actieveTab);
+      /* A drawer with nothing unlocked in it yet is dimmed rather than
+         hidden: seeing that "Verdediging" exists is half the hint. */
+      var open = inTab(k.dataset.tab).some(function (d) { return d.tijdperk <= s.tijdperk; });
+      k.classList.toggle('op-slot', !open);
     });
 
     lijstEl.innerHTML = '';
     zichtbaar = [];
-    Game.config.buildingList.forEach(function (d) {
-      /* Upgrade targets are reached through the panel, never placed. */
-      if (d.verborgen || d.tijdperk !== actieveTab) return;
-
+    inTab(actieveTab).forEach(function (d) {
       var vergrendeld = d.tijdperk > s.tijdperk;
       var opMax = d.max && Game.core.construction.aantalGepland(s, d.id) >= d.max;
       var kaart = Game.util.el('div', 'bouwkaart');
@@ -138,33 +196,31 @@
     spel.kiesBouw(spel.plaatsType === id ? null : id);
   };
 
-  /* --------------------------------------------------------------- tooltip */
+  /* --------------------------------------------------------------- tooltip
+
+     Everything the card cannot fit: what it makes, what it costs to keep, and
+     where it is allowed to stand. Drawn by the shared tooltip in js/ui/tip.js,
+     the same box the HUD uses. */
 
   function toonTip(d, s, anker) {
-    verbergTip();
-    tipEl = Game.util.el('div', 'tip');
-
-    var h = Game.util.el('h4', '', d.emoji + '  ' + d.naam);
-    tipEl.appendChild(h);
-    tipEl.appendChild(Game.util.el('div', 'cursief', d.beschrijving || ''));
-
-    var regels = [];
+    var T = Game.ui.tip;
+    var html = T.kop(d.emoji + '  ' + d.naam) + T.cursief(d.beschrijving || '');
 
     var kosten = [];
     for (var r in d.kosten) {
       kosten.push(Game.config.resources[r].emoji + ' ' + d.kosten[r] + ' ' + Game.config.resources[r].naam.toLowerCase());
     }
-    if (kosten.length) regels.push(['Kosten', kosten.join(', ')]);
-    regels.push(['Bouwtijd', Math.round(d.bouwtijd) + ' sec (sneller met werkloze dorpelingen)']);
-    if (d.grootte > 1) regels.push(['Grootte', d.grootte + '×' + d.grootte + ' tegels']);
+    if (kosten.length) html += T.regel('Kosten', kosten.join(', '));
+    html += T.regel('Bouwtijd', Math.round(d.bouwtijd) + ' sec (sneller met werkloze dorpelingen)');
+    if (d.grootte > 1) html += T.regel('Grootte', d.grootte + '×' + d.grootte + ' tegels');
 
     if (d.banen) {
-      regels.push(['Werkers', d.banen.aantal + '× ' + Game.config.jobs[d.banen.baan].naam]);
+      html += T.regel('Werkers', d.banen.aantal + '× ' + Game.config.jobs[d.banen.baan].naam);
     }
     if (d.wint) {
-      regels.push(['Wint', Game.config.resources[d.wint.res].emoji + ' ' +
+      html += T.regel('Wint', Game.config.resources[d.wint.res].emoji + ' ' +
         (d.wint.tempo * 60).toFixed(0) + ' ' + Game.config.resources[d.wint.res].naam.toLowerCase() +
-        ' per minuut per werker']);
+        ' per minuut per werker');
     }
     if (d.maakt) {
       var inTekst = [];
@@ -175,49 +231,55 @@
       for (var ur in d.maakt.uit) {
         uitTekst.push(Game.config.resources[ur].emoji + ' ' + (d.maakt.uit[ur] * 60).toFixed(0));
       }
-      regels.push(['Maakt', (inTekst.length ? inTekst.join(' + ') + ' → ' : '') + uitTekst.join(' + ') + ' per minuut per werker']);
+      html += T.regel('Maakt', (inTekst.length ? inTekst.join(' + ') + ' → ' : '') +
+        uitTekst.join(' + ') + ' per minuut per werker');
     }
-    if (d.woonruimte) regels.push(['Woonruimte', d.woonruimte + ' inwoners']);
-    if (d.opslag) regels.push(['Opslag', '+' + d.opslag + ' per grondstof']);
-    if (d.tevredenheid) regels.push(['Tevredenheid', '+' + d.tevredenheid + ' punten']);
-    if (d.verdediging) regels.push(['Verdediging', '+' + d.verdediging]);
-    if (d.verdPerWerker) regels.push(['Verdediging', '+' + d.verdPerWerker + ' per werker']);
-    if (d.productieBonus) regels.push(['Bonus', '+' + Math.round(d.productieBonus * 100) + '% op alle productie']);
-    if (d.boerderijBonus) regels.push(['Bonus', '+' + Math.round(d.boerderijBonus * 100) + '% graan voor boerderijen binnen ' + d.boerderijStraal + ' tegels']);
-    if (d.visserijBonus) regels.push(['Bonus', '+' + Math.round(d.visserijBonus * 100) + '% vis voor vissershutten binnen ' + d.visserijStraal + ' tegels']);
+    if (d.woonruimte) html += T.regel('Woonruimte', d.woonruimte + ' inwoners');
+    if (d.stand) html += T.regel('Bewoners', Game.config.standen[d.stand].naam);
+    if (d.opslag) html += T.regel('Opslag', '+' + d.opslag + ' per grondstof');
+    if (d.opslagPer) {
+      for (var soort in d.opslagPer) {
+        html += T.regel('Opslag', '+' + d.opslagPer[soort] + ' ' +
+          Game.config.opslagSoorten[soort].naam.toLowerCase());
+      }
+    }
+    if (d.tevredenheid) {
+      html += T.regel('Tevredenheid', '+' + d.tevredenheid + ' punten voor huizen binnen ' +
+        d.bereik + ' tegels');
+    }
+    if (d.aantrekkelijkheid) {
+      html += T.regel('Buurt', (d.aantrekkelijkheid > 0 ? '+' : '') + d.aantrekkelijkheid +
+        ' aantrekkelijkheid binnen ' + (d.sfeerStraal || 6) + ' tegels');
+    }
+    if (d.verdediging) html += T.regel('Verdediging', '+' + d.verdediging);
+    if (d.verdPerWerker) html += T.regel('Verdediging', '+' + d.verdPerWerker + ' per werker');
+    if (d.productieBonus) html += T.regel('Bonus', '+' + Math.round(d.productieBonus * 100) + '% op alle productie');
+    if (d.boerderijBonus) html += T.regel('Bonus', '+' + Math.round(d.boerderijBonus * 100) + '% graan voor boerderijen binnen ' + d.boerderijStraal + ' tegels');
+    if (d.visserijBonus) html += T.regel('Bonus', '+' + Math.round(d.visserijBonus * 100) + '% vis voor vissershutten binnen ' + d.visserijStraal + ' tegels');
     if (d.onderhoud) {
       var onder = [];
       for (var orr in d.onderhoud) {
         onder.push(Game.config.resources[orr].emoji + ' ' + (d.onderhoud[orr] * 60).toFixed(1) + ' per minuut');
       }
-      regels.push(['Onderhoud', onder.join(', ')]);
+      html += T.regel('Onderhoud', onder.join(', '));
     }
     if (d.plaats && d.plaats.nabij) {
-      regels.push(['Plaatsing', 'binnen ' + d.plaats.nabij.straal + ' tegels van ' +
-        Game.core.map.nodeNaam[d.plaats.nabij.node].toLowerCase()]);
+      html += T.regel('Plaatsing', 'binnen ' + d.plaats.nabij.straal + ' tegels van ' +
+        Game.core.map.nodeNaam[d.plaats.nabij.node].toLowerCase());
     }
-    if (d.seizoensgevoelig) regels.push(['Let op', 'de opbrengst hangt af van het seizoen']);
-    if (d.max) regels.push(['Maximum', d.max + '×']);
-    if (d.tijdperk > s.tijdperk) regels.push(['Vergrendeld', 'beschikbaar vanaf tijdperk ' + d.tijdperk]);
+    if (d.verbetering) {
+      var naar = Game.config.gebouw(d.verbetering.naar);
+      if (naar) html += T.regel('Later uit te bouwen tot', naar.emoji + ' ' + naar.naam +
+        ' (tijdperk ' + d.verbetering.tijdperk + ')');
+    }
+    if (d.seizoensgevoelig) html += T.regel('Let op', 'de opbrengst hangt af van het seizoen');
+    if (d.max) html += T.regel('Maximum', d.max + '×');
+    if (d.tijdperk > s.tijdperk) html += T.regel('Vergrendeld', 'beschikbaar vanaf tijdperk ' + d.tijdperk);
 
-    regels.forEach(function (rij) {
-      var el = Game.util.el('div', 'rij');
-      el.innerHTML = '<span class="label">' + rij[0] + ':</span> ' + rij[1];
-      tipEl.appendChild(el);
-    });
-
-    document.body.appendChild(tipEl);
-    var r2 = anker.getBoundingClientRect();
-    var b = tipEl.getBoundingClientRect();
-    var left = Game.util.clamp(r2.left + r2.width / 2 - b.width / 2, 8, window.innerWidth - b.width - 8);
-    tipEl.style.left = left + 'px';
-    tipEl.style.top = Math.max(8, r2.top - b.height - 8) + 'px';
+    Game.ui.tip.toon(anker, html);
   }
 
-  function verbergTip() {
-    if (tipEl && tipEl.parentNode) tipEl.parentNode.removeChild(tipEl);
-    tipEl = null;
-  }
+  function verbergTip() { Game.ui.tip.verberg(); }
   BM.verbergTip = verbergTip;
 
   Game.ui.buildmenu = BM;
