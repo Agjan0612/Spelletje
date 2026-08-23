@@ -29,22 +29,25 @@
     </div>
 
     <div id="hud-right">
+      <!-- Vier cijfers die je altijd wilt zien. De uitleg zit in de tooltip
+           (js/ui/tip.js), niet in een title-attribuut, en het schild komt pas
+           in beeld zodra er rovers kunnen komen. -->
       <div id="stats">
-        <div class="stat" id="stat-pop" title="Inwoners (werkloos)"><span class="ico">👥</span><span class="val">0</span></div>
-        <div class="stat" id="stat-happy" title="Tevredenheid"><span class="ico">😀</span><span class="val">0%</span></div>
-        <div class="stat" id="stat-def" title="Verdediging"><span class="ico">🛡️</span><span class="val">0</span></div>
-        <div class="stat" id="stat-season" title="Seizoen"><span class="ico">🌱</span><span class="val">Lente, jaar 1</span></div>
+        <div class="stat" id="stat-pop" tabindex="0"><span class="ico">👥</span><span class="val">0</span></div>
+        <div class="stat" id="stat-voedsel" tabindex="0"><span class="ico">🍞</span><span class="val">0d</span></div>
+        <div class="stat" id="stat-happy" tabindex="0"><span class="ico">😀</span><span class="val">0%</span></div>
+        <div class="stat hidden" id="stat-def" tabindex="0"><span class="ico">🛡️</span><span class="val">0</span></div>
+        <div class="stat" id="stat-season" tabindex="0"><span class="ico">🌱</span><span class="val">Lente, jaar 1</span></div>
       </div>
       <div id="speeds">
         <button class="spd" data-speed="0" title="Pauze (spatie)">⏸</button>
-        <button class="spd active" data-speed="1" title="Normale snelheid">1×</button>
-        <button class="spd" data-speed="2" title="Snel">2×</button>
-        <button class="spd" data-speed="4" title="Zeer snel">4×</button>
-        <button id="btn-feest" title="Een feest geven">🎉</button>
-        <button id="btn-onderzoek" title="Onderzoek in de universiteit">📚</button>
-        <button id="btn-overzicht" title="Overzicht: wat staat er stil?">📋</button>
+        <button class="spd active" data-speed="1" title="Normale snelheid (1)">1×</button>
+        <button class="spd" data-speed="2" title="Snel (2)">2×</button>
+        <button class="spd" data-speed="4" title="Zeer snel (3)">4×</button>
+      </div>
+      <div id="hud-knoppen">
         <button id="btn-sound" title="Geluid uit">🔊</button>
-        <button id="btn-menu" title="Menu">☰</button>
+        <button id="btn-menu" title="Menu (Esc)">☰</button>
       </div>
     </div>
   </header>
@@ -55,20 +58,35 @@
 
     <div id="ghost-info" class="hidden"></div>
 
-    <!-- Doelen + tijdperk -->
+    <!-- Rechterkolom: één kaart met drie tabbladen. Drie kaarten onder elkaar
+         pasten niet op het scherm, dus stond de onderste altijd half buiten
+         beeld. De adviesregel staat erboven en blijft dus altijd zichtbaar. -->
     <aside id="right-col">
-      <section id="agebox" class="card">
+      <div id="advies" class="advies"></div>
+
+      <div id="col-tabs" role="tablist">
+        <button data-pane="agebox" class="active" role="tab">⚑ Tijdperk<i class="stip hidden"></i></button>
+        <button data-pane="questbox" role="tab">🎯 Doelen<i class="stip hidden"></i></button>
+        <button data-pane="stadbox" role="tab">🏛️ Stad<i class="stip hidden"></i></button>
+      </div>
+
+      <section id="agebox" class="card pane">
         <h3>Volgend tijdperk <span id="age-next-name"></span></h3>
         <ul id="age-reqs"></ul>
         <button id="btn-advance" disabled>Bevorder tijdperk</button>
       </section>
-      <section id="stadbox" class="card hidden">
-        <h3>Stadszaken</h3>
-        <div id="stad-inhoud"></div>
-      </section>
-      <section id="questbox" class="card">
-        <h3>Doelen</h3>
+
+      <section id="questbox" class="card pane hidden">
         <ul id="quest-list"></ul>
+      </section>
+
+      <section id="stadbox" class="card pane hidden">
+        <div id="stad-inhoud"></div>
+        <div class="knoprij stadknoppen">
+          <button id="btn-feest" title="Een feest geven">🎉 Feest</button>
+          <button id="btn-onderzoek" title="Onderzoek in de universiteit">📚 Onderzoek</button>
+          <button id="btn-overzicht" title="Overzicht: wat staat er stil?">📋 Overzicht</button>
+        </div>
       </section>
     </aside>
 
@@ -145,6 +163,7 @@
 <script src="js/core/onderzoek.js"></script>
 <script src="js/core/buurt.js"></script>
 <script src="js/core/logistiek.js"></script>
+<script src="js/core/plek.js"></script>
 <script src="js/core/demografie.js"></script>
 <script src="js/core/standen.js"></script>
 <script src="js/core/buren.js"></script>
@@ -172,6 +191,7 @@
 
 <script src="js/ui/log.js"></script>
 <script src="js/ui/audio.js"></script>
+<script src="js/ui/tip.js"></script>
 <script src="js/ui/hud.js"></script>
 <script src="js/ui/buildmenu.js"></script>
 <script src="js/ui/panel.js"></script>
@@ -180,6 +200,7 @@
 <script src="js/ui/stad.js"></script>
 <script src="js/ui/onderzoek.js"></script>
 <script src="js/ui/lagen.js"></script>
+<script src="js/ui/kolom.js"></script>
 
 <script src="js/devcheck.js"></script>
 <script src="js/main.js"></script>

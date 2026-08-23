@@ -41,6 +41,7 @@
     Game.ui.stad.init(spel);
     Game.ui.onderzoek.init(spel);
     Game.ui.lagen.init(spel);
+    Game.ui.kolom.init(spel);
     Game.ui.overlay.init(spel);
     if (Game.render.minimap) Game.render.minimap.init(spel);
 
@@ -86,6 +87,7 @@
     Game.ui.quests.ververs(s);
     Game.ui.stad.ververs(s, true);
     Game.ui.panel.ververs(s);
+    Game.ui.kolom.ververs(s);
   };
 
   /* `opties` are the choices from the new-game screen:
@@ -126,6 +128,27 @@
     Game.ui.hud.ververs(spel.state);
   };
 
+  /* While a building that must stand near an ore vein or a fishing ground is
+     on the cursor, the resources overlay comes on by itself — hunting for an
+     iron vein by clicking hopefully at rocks was the single most tedious
+     minute in the game. Whatever layer was on before is put back afterwards,
+     so this borrows the view rather than taking it. */
+  var laagVoorPlaatsen = null;
+
+  function leenKaartlaag(def) {
+    if (def && def.plaats && def.plaats.nabij) {
+      if (laagVoorPlaatsen === null) laagVoorPlaatsen = Game.render.lagen.actief || '';
+      /* lagen.zet() toggles, so set it directly — asking for the layer that is
+         already on would switch it off again. */
+      Game.render.lagen.actief = 'aders';
+      Game.ui.lagen.ververs();
+    } else if (laagVoorPlaatsen !== null) {
+      Game.render.lagen.actief = laagVoorPlaatsen || null;
+      Game.ui.lagen.ververs();
+      laagVoorPlaatsen = null;
+    }
+  }
+
   spel.kiesBouw = function (type) {
     if (!type) spel.verplaatst = null;
     spel.lijn = null;
@@ -133,6 +156,7 @@
     document.getElementById('canvas').classList.toggle('placing', !!type);
     if (!type) document.getElementById('ghost-info').classList.add('hidden');
     if (type) spel.geselecteerd = null;
+    leenKaartlaag(type ? Game.config.gebouw(type) : null);
     Game.ui.buildmenu.ververs(spel.state, true);
     Game.ui.panel.ververs(spel.state, true);
   };
@@ -231,6 +255,7 @@
       Game.ui.stad.ververs(s);
       Game.ui.panel.ververs(s);
       Game.ui.buildmenu.ververs(s);
+      Game.ui.kolom.ververs(s);
       if (Game.render.minimap) Game.render.minimap.ververs(s);
     }
 
@@ -408,6 +433,10 @@
       if (ev.key.toLowerCase() === 'l' && !ev.shiftKey && !ev.ctrlKey && !ev.metaKey) {
         Game.ui.lagen.volgende();
       }
+      /* And one steps through the three tabs of the right-hand column. */
+      if (ev.key.toLowerCase() === 'c' && !ev.shiftKey && !ev.ctrlKey && !ev.metaKey) {
+        Game.ui.kolom.volgende();
+      }
       if (ev.key.toLowerCase() === 'z' && (ev.ctrlKey || ev.metaKey)) {
         ev.preventDefault();
         spel.ongedaan();
@@ -528,7 +557,13 @@
     if (!isWeg && !Game.core.state.kanBetalen(s, Game.config.gebouw(spel.plaatsType).kosten)) spel.kiesBouw(null);
   }
 
-  /* Little label that follows the cursor while placing. */
+  /* The label that follows the cursor while placing.
+     It used to say only "Huisje hier plaatsen" or why you could not. But the
+     whole town runs on *where*: the haul to the nearest barn, the trees a
+     woodcutter can reach, low ground under a field, the homes a chapel can
+     comfort. All of that was readable afterwards and invisible at the one
+     moment it is a decision. Now the ghost says what this spot is worth,
+     straight out of the same functions the simulation uses. */
   function toonGhostInfo() {
     var el = document.getElementById('ghost-info');
     if (!spel.muisScherm || !spel.muisTegel) { el.classList.add('hidden'); return; }
@@ -537,15 +572,37 @@
       ? Game.core.construction.controleerVerplaatsing(spel.state, g, spel.muisTegel.x, spel.muisTegel.y)
       : Game.core.construction.controleer(spel.state, spel.plaatsType, spel.muisTegel.x, spel.muisTegel.y);
     var def = Game.config.gebouw(spel.plaatsType);
+
     el.classList.remove('hidden');
     el.classList.toggle('fout', !check.ok);
-    el.textContent = check.ok
-      ? (g ? def.naam + ' hierheen verplaatsen' : def.naam + ' hier plaatsen')
-      : check.reden;
+
+    var html = '<b>' + def.emoji + ' ' + def.naam + '</b>';
+    if (!check.ok) {
+      html += '<span class="reden">⚠️ ' + check.reden + '</span>';
+    } else {
+      if (g) html += '<span class="reden">Klik om hem hierheen te verplaatsen</span>';
+      /* Streets have nothing to say about a tile, and drawing a row of them
+         would flicker a box under the cursor on every tile. */
+      if (!def.weg) {
+        var regels = Game.core.plek.verwachting(spel.state, def, spel.muisTegel.x, spel.muisTegel.y);
+        for (var i = 0; i < regels.length; i++) {
+          html += '<span class="plekregel ' + (regels[i].soort || '') + '">' +
+            regels[i].emoji + ' ' + regels[i].tekst + '</span>';
+        }
+      }
+    }
+    if (html !== el.dataset.html) { el.innerHTML = html; el.dataset.html = html; }
+
     /* muisScherm is in viewport coordinates; the label lives inside #stage. */
     var stage = document.getElementById('stage').getBoundingClientRect();
-    el.style.left = (spel.muisScherm.x - stage.left) + 'px';
-    el.style.top = (spel.muisScherm.y - stage.top) + 'px';
+    var links = spel.muisScherm.x - stage.left;
+    var boven = spel.muisScherm.y - stage.top;
+    /* Flip the box to the other side of the cursor when it would run off. */
+    var breed = el.offsetWidth || 210;
+    var hoog = el.offsetHeight || 40;
+    el.classList.toggle('links', links + breed + 30 > stage.width);
+    el.style.left = links + 'px';
+    el.style.top = Math.min(boven, Math.max(0, stage.height - hoog - 20)) + 'px';
   }
 
   window.addEventListener('DOMContentLoaded', start);

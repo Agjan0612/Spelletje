@@ -145,10 +145,33 @@ verloren. Voortdurend mensen heen en weer schuiven kost je dus iets.
 | Pauzeren | **Spatie** |
 | Snelheid | **1** = normaal, **2** = snel, **3** = zeer snel |
 | Kaartlagen aan/uit | **L**, of de knoppen onderin het beeld |
-| Feest, onderzoek, overzicht | De **🎉 📚 📋** knoppen rechtsboven |
+| Tabblad rechts wisselen | **C**, of klik op **⚑ Tijdperk / 🎯 Doelen / 🏛️ Stad** |
+| Feest, onderzoek, overzicht | De knoppen onderin het tabblad **🏛️ Stad** |
 | Menu, opslaan, uitleg | De **☰** knop rechtsboven |
 
 Op een tablet werkt het ook: één vinger sleept, tikken selecteert of plaatst.
+
+### Het scherm leest zichzelf voor
+
+- De **bouwbalk** onderin is gesorteerd op wát een gebouw doet — Wonen, Voedsel,
+  Grondstoffen, Opslag, Voorzieningen, Ambacht, Handel, Verdediging, Straten —
+  en niet op het tijdperk waar het vandaan komt. Een huisje zoeken in tabblad 1
+  terwijl je in tijdperk 4 zit, hoeft dus niet meer. Grijze kaarten met een 🔒
+  laten zien wat er nog komt.
+- Terwijl een gebouw aan je muis hangt, staat bij de cursor **wat het op déze
+  tegel waard is**: hoeveel van de opbrengst thuiskomt, hoe lang het bos of de
+  ader meegaat voor een volle ploeg, of er water bij de akker ligt, hoeveel
+  huizen een kapel bereikt. Bij een mijn of een vissershut springt de
+  grondstoffenlaag er vanzelf bij aan, en daarna weer uit.
+- Bovenin staat alleen wat je écht hebt: een grondstof verschijnt zodra je hem
+  produceert of er een gebouw voor neerzet. Het schild komt pas in beeld als er
+  rovers kunnen komen.
+- Ga met de muis over een cijfer bovenin voor de uitleg erachter. Bij de
+  tevredenheid zie je precies waar elk punt vandaan komt, en bij 🍞 hoeveel
+  dagen voorraad je hebt en of je daarmee de winter uitkomt.
+- Rechts staan drie tabbladen met één kaart. Een **stip** op een tabblad
+  betekent dat daar iets ligt te wachten — rood als er iets misgaat. Boven de
+  tabbladen staat altijd één regel advies: het nuttigste wat je nú kunt doen.
 
 ---
 
@@ -269,8 +292,12 @@ rechts in beeld.
 - ↩️ **Ongedaan maken.** Verkeerd geklikt? **Ctrl+Z** draait de laatste
   plaatsing terug en je krijgt alles terug — ook straatjes. Een gebouw dat al
   áf is sloop je gewoon in het paneel (dan houd je de helft over).
-- ❗ **Vraagt aandacht.** Rechts staat een kort lijstje met wat er nu vastloopt,
-  het ergste bovenaan. Klik erop en de camera springt naar het gebouw.
+- ❗ **Vraagt aandacht.** In het tabblad **🏛️ Stad** staat een kort lijstje met
+  wat er nu vastloopt, het ergste bovenaan. Klik erop en de camera springt naar
+  het gebouw. Loopt er iets echt mis, dan kleurt de stip op dat tabblad rood.
+- ❄️ **De winter kondigt zich aan.** De 🍞-teller bovenin zegt hoeveel dagen
+  voorraad er ligt, en in de herfst krijg je één waarschuwing als die voorraad
+  de lente niet gaat halen — op het moment dat je er nog iets aan kunt doen.
 
 ## De wereld buiten je muren
 
@@ -383,6 +410,7 @@ js/core/              De simulatie
   opdrachten.js         Opdrachten met een deadline
   gebeurtenissen.js     Wanneer er iets gebeurt en wat je keuze doet
   onderzoek.js          Onderzoek en de bonussen die eruit komen
+  plek.js               Wat een gebouw op déze tegel waard is
   save.js               Opslaan en laden
 
 js/render/            Tekenen op het canvas
@@ -397,6 +425,8 @@ js/render/            Tekenen op het canvas
 
 js/ui/                De schermelementen
   hud.js  buildmenu.js  panel.js  quests.js  log.js  overlay.js
+  tip.js                Eén tooltip voor het hele spel
+  kolom.js              De drie tabbladen rechts (tijdperk, doelen, stad)
   lagen.js              De knoppenbalk voor de kaartlagen
   stad.js               Stadszaken: feest, koopman, opdracht, overzicht
   onderzoek.js          Het onderzoeksscherm

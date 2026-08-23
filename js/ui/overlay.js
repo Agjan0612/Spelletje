@@ -79,7 +79,7 @@
         '<li>Houd je dorpelingen gevoed en tevreden — dan groeit je dorp vanzelf.</li>' +
         '<li>Leg voorraad aan vóór de winter, en bouw verdediging vóór de rovers komen.</li>' +
         '<li>Er komen kooplieden, opdrachten van de heer en gebeurtenissen langs ' +
-        'waar je iets mee moet. Kijk in de balk rechtsboven.</li>' +
+        'waar je iets mee moet. Kijk in het tabblad <b>Stad</b> rechts.</li>' +
         '</ul>';
     }, knoppen, false);
   };
@@ -98,15 +98,28 @@
         '<li><b>Spatie</b>: pauzeren en hervatten · <b>1 2 3</b>: snelheid</li>' +
         '<li><b>Shift + 1…9</b>: het zoveelste gebouw uit het open tabblad kiezen</li>' +
         '<li><b>Shift + slepen</b>: een hele rij neerzetten (muren, straatjes)</li>' +
+        '<li><b>Ctrl + Z</b>: het laatst geplaatste gebouw terugdraaien</li>' +
+        '<li><b>L</b>: door de kaartlagen · <b>C</b>: door de tabbladen rechts</li>' +
         '<li><b>✋ Verplaatsen</b> in het paneel: een gebouw oppakken en ergens ' +
         'anders neerzetten voor een vijfde van de bouwkosten</li>' +
         '</ul>' +
-        '<h4>De knoppen rechtsboven</h4>' +
+        '<h4>Waar staat wat?</h4>' +
         '<ul>' +
-        '<li>🎉 <b>Feest</b> — voorraad omzetten in een flinke portie tevredenheid</li>' +
-        '<li>📚 <b>Onderzoek</b> — munten omzetten in blijvende bonussen ' +
-        '(vanaf een gildehuis)</li>' +
-        '<li>📋 <b>Overzicht</b> — wat staat er stil? Alles in één lijst</li>' +
+        '<li>De <b>bouwbalk</b> onderin is gesorteerd op wát een gebouw doet: ' +
+        'Wonen, Voedsel, Grondstoffen, Opslag, Voorzieningen, Ambacht, Handel, ' +
+        'Verdediging en Straten. Grijze kaarten komen in een later tijdperk.</li>' +
+        '<li>Terwijl een gebouw aan je muis hangt, staat er bij de cursor ' +
+        '<b>wat het op déze tegel waard is</b>: hoeveel er van de opbrengst ' +
+        'thuiskomt, hoeveel bos of erts er binnen bereik ligt, en hoeveel ' +
+        'huizen een kapel bereikt.</li>' +
+        '<li>Rechts staan drie tabbladen: <b>Tijdperk</b>, <b>Doelen</b> en ' +
+        '<b>Stad</b>. Een stip op een tabblad betekent dat daar iets ligt te ' +
+        'wachten — rood als er iets misgaat.</li>' +
+        '<li>In het tabblad <b>Stad</b> zitten ook 🎉 <b>Feest</b> (voorraad ' +
+        'omzetten in tevredenheid), 📚 <b>Onderzoek</b> (munten omzetten in ' +
+        'blijvende bonussen) en 📋 <b>Overzicht</b> (wat staat er stil?).</li>' +
+        '<li>Ga met de muis over de cijfers bovenin voor de uitleg erachter — ' +
+        'de tevredenheid laat zien waar elk punt vandaan komt.</li>' +
         '</ul>' +
         '<h4>Er gebeurt van alles</h4>' +
         '<ul>' +

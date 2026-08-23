@@ -148,13 +148,20 @@
       /* Towns beyond the map edge: reputation, trade routes and requests.
          Generated on the first tick by core/buren.js. */
       buren: [],
-      burenTimer: 0
+      burenTimer: 0,
+
+      /* Which resources the town has actually met: one gained, one produced
+         somewhere, or one a building of yours wants. The HUD shows only these,
+         so a new village is not staring at eight counters stuck on zero.
+         Plain `{ id: true }`, exactly like `s.onderzoek`. */
+      gezien: {}
     };
 
     Game.config.resourceOrder.forEach(function (id) {
       s.res[id] = Game.config.resources[id].start || 0;
       s.verzameld[id] = 0;
       s.stroom[id] = 0;
+      if (s.res[id] > 0) s.gezien[id] = true;
     });
 
     /* Starting village: a town square, a farm and one cottage. */
@@ -250,6 +257,20 @@
 
   /* Recompute everything derived from the buildings: housing, storage,
      defence, global bonuses and the worker tally. */
+  /* Every resource this building wins, makes, eats or burns is one the
+     player now has a reason to watch. */
+  function merkOp(s, d) {
+    if (!s.gezien) s.gezien = {};
+    var r;
+    if (d.wint) s.gezien[d.wint.res] = true;
+    if (d.maakt) {
+      for (r in d.maakt.in) s.gezien[r] = true;
+      for (r in d.maakt.uit) s.gezien[r] = true;
+    }
+    for (r in (d.onderhoud || {})) s.gezien[r] = true;
+  }
+  S.merkOp = merkOp;
+
   S.herbereken = function (s) {
     var ruimte = 0, opslag = Game.config.basisOpslag, verdediging = 0;
     var prodBonus = 1, werkend = 0, soldaten = 0;
@@ -277,6 +298,11 @@
         if (d.banen.baan === 'soldaat') soldaten += g.werkers;
         if (d.verdPerWerker && !g.uit) verdediging += d.verdPerWerker * g.werkers;
       }
+
+      /* A resource counts as known the moment something of yours handles it —
+         so the counter for iron appears when you place the mine, not when the
+         first bar comes in. */
+      merkOp(s, d);
     }
 
     /* Research multiplies what the buildings already give. It is derived
@@ -363,6 +389,7 @@
 
   S.voegToe = function (s, res, hoeveelheid) {
     if (hoeveelheid <= 0) return 0;
+    if (s.gezien && !s.gezien[res]) s.gezien[res] = true;
     var ruimte = S.plafond(s, res) - s.res[res];
     var werkelijk = Math.min(hoeveelheid, Math.max(0, ruimte));
     s.res[res] += werkelijk;

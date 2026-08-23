@@ -61,10 +61,14 @@
     s.res = s.res || {};
     s.verzameld = s.verzameld || {};
     s.stroom = s.stroom || {};
+    /* Which resources the HUD shows. An older save simply gets everything it
+       has ever held; herbereken adds whatever its buildings handle. */
+    s.gezien = s.gezien || {};
     Game.config.resourceOrder.forEach(function (r) {
       if (typeof s.res[r] !== 'number') s.res[r] = 0;
       if (typeof s.verzameld[r] !== 'number') s.verzameld[r] = 0;
       s.stroom[r] = 0;
+      if (s.res[r] > 0 || s.verzameld[r] > 0) s.gezien[r] = true;
     });
 
     s.bevolking = s.bevolking || { totaal: 5 };
