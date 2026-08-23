@@ -48,7 +48,25 @@
 
     /* --- kop --- */
     var kop = Game.util.el('div', 'titelrij');
-    kop.appendChild(Game.util.el('span', 'emoji', d.emoji));
+    var miniBron = Game.render.sprites && Game.render.sprites.miniatuurBron &&
+      Game.render.sprites.miniatuurBron(d, 60, s.tijdperk);
+    if (miniBron) {
+      var wrap = Game.util.el('div', 'paneelmini');
+      var img = document.createElement('img');
+      img.className = 'mini'; img.alt = ''; img.src = miniBron;
+      img.onerror = function () { wrap.textContent = d.emoji; };
+      wrap.appendChild(img);
+      /* A progress ring around the miniature while it is being built (fase 8.1). */
+      if (!g.gebouwd) {
+        var pct = Math.round(Game.util.clamp(g.voortgang / d.bouwtijd, 0, 1) * 100);
+        var ring = Game.util.el('div', 'ring');
+        ring.style.background = 'conic-gradient(var(--goud, #d7a94b) ' + pct + '%, rgba(0,0,0,.28) 0)';
+        wrap.appendChild(ring);
+      }
+      kop.appendChild(wrap);
+    } else {
+      kop.appendChild(Game.util.el('span', 'emoji', d.emoji));
+    }
     kop.appendChild(Game.util.el('h2', '', d.naam));
     el.appendChild(kop);
     el.appendChild(Game.util.el('div', 'beschrijving', d.beschrijving || ''));

@@ -17,8 +17,13 @@ die je pas ziet als je even blijft kijken:
 
 Dit plan pakt alle drie aan, in acht fasen die los van elkaar op te leveren zijn.
 
-- **Branch:** `claude/visual-improvements-obr6qm`
-- **Status:** plan — nog niks gebouwd
+- **Branch:** `claude/visual-improvements-obr6qm` (uitgevoerd op `claude/bouwplannen-vorige-sessie-19wqcq`)
+- **Status:** ✅ uitgevoerd — alle acht fasen gebouwd. Twee nieuwe bestanden
+  (`js/render/beweging.js`, `js/render/weer.js`), plus een derde ingreep: de
+  renderlaag kreeg een eigen RNG (`Game.render.rng`) zodat het decor de
+  simulatie niet meer stuurt (het eerste uitgangspunt hieronder, nu ook
+  bewijsbaar: de simulatie levert byte-voor-byte dezelfde toestand met of
+  zonder de rendertick).
 - **Volgt op:** `VISUEEL.md` (uitgevoerd), `ROADMAP.md`, `BOUWPLAN.md`
 
 **Legenda moeite:** 🟢 klein (< ~100 regels) · 🟡 middel · 🔴 groot

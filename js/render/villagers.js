@@ -106,6 +106,22 @@
         ctx.fillStyle = '#8a4438';
         ctx.fillRect(hx - p * 0.05, hy - p * 0.03, p * 0.1, p * 0.07);
         break;
+      case 'fakkel':
+        ctx.strokeStyle = '#4a3018'; ctx.lineWidth = Math.max(1, p * 0.03);
+        ctx.beginPath(); ctx.moveTo(hx, hy + p * 0.06); ctx.lineTo(hx, hy - p * 0.14); ctx.stroke();
+        /* Flame, drawn additively so it glows in the night wash. */
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        var fg = ctx.createRadialGradient(hx, hy - p * 0.17, 0, hx, hy - p * 0.17, p * 0.12);
+        fg.addColorStop(0, 'rgba(255,220,120,.95)');
+        fg.addColorStop(0.5, 'rgba(240,140,50,.7)');
+        fg.addColorStop(1, 'rgba(220,90,30,0)');
+        ctx.fillStyle = fg;
+        ctx.beginPath();
+        ctx.ellipse(hx, hy - p * 0.17, p * 0.06, p * 0.1, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        break;
     }
   }
 
@@ -116,17 +132,38 @@
   V.teken = function (ctx, x, y, p, baan, kijk, stapFase, wandelt, opties) {
     var job = Game.config.jobs[baan] || Game.config.jobs.werkloos;
     var body = job.kleur;
-    var acc = ACCENT[baan] || {};
     opties = opties || {};
+
+    /* Cohort (fase 2.5): a child is smaller and carries no tool; an old villager
+       is a touch smaller, greyer and stooped. Scaling the pixels-per-tile keeps
+       the figure anchored at the same feet, so the whole body shrinks together. */
+    var cohort = opties.cohort;
+    var kind = cohort === 'kind', oud = cohort === 'oud';
+    if (kind) p *= 0.66; else if (oud) p *= 0.92;
+
+    var acc = kind ? {} : (ACCENT[baan] || {});
+    if (oud && !acc.helm && !acc.kap) acc = { hoed: '#b9b4ac' };   /* grey hair */
+
+    /* Raiders (fase 6.1): the same figure your own people are, so it walks with
+       the same gait, but in a dark, battered palette with a hood and an axe or
+       a torch — no longer a floating tinted sprite. */
+    if (opties.rover) {
+      body = '#6b3b34';
+      acc = { kap: '#372924', gereedschap: opties.fakkel ? 'fakkel' : 'bijl' };
+    }
 
     /* At the far end of their route villagers stop and actually work: the arm
        swings a full stroke and the body leans into it. `werktFase` runs on
        real time, so the axe keeps chopping while the figure stands still. */
     var werkt = opties.werktFase != null;
     var slag = werkt ? Math.max(0, Math.sin(opties.werktFase)) : 0;
+    var praat = opties.praat != null;
 
     var legLen = p * 0.15, torsoH = p * 0.17, torsoW = p * 0.15, headR = p * 0.072;
     var broek = verf(body, 0.5);
+
+    /* A stooped lean for the elderly: shift the upper body forward along facing. */
+    var stoop = oud ? kijk * p * 0.03 : 0;
 
     /* Gait: legs swing fore/aft; a very small body bob (twice per stride) so it
        reads as walking, not hopping — the old sprite's big vertical jump was
@@ -134,6 +171,7 @@
     var swing = wandelt ? Math.sin(stapFase) : 0;
     var armSwing = wandelt ? Math.sin(stapFase + Math.PI) : Math.sin(stapFase * 0.5) * 0.15;
     if (werkt) armSwing = 1.1 - slag * 2.3;
+    if (praat) armSwing = Math.sin(opties.praat * 4) * 0.6;   /* small gesturing */
     var bob = wandelt ? -Math.abs(Math.sin(stapFase)) * p * 0.012 : Math.sin(stapFase * 0.6) * p * 0.004;
     if (werkt) bob += slag * p * 0.02;
     var legAmp = p * 0.055;
@@ -206,34 +244,83 @@
       }
     }
 
-    /* --- neck + head --- */
+    /* --- neck + head (leaning forward a touch for the elderly) --- */
+    var hx = x + stoop;
     ctx.strokeStyle = verf(HUID, 0.9);
     ctx.lineWidth = Math.max(1, p * 0.03);
-    ctx.beginPath(); ctx.moveTo(x, shoulderY); ctx.lineTo(x, shoulderY - p * 0.02); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, shoulderY); ctx.lineTo(hx, shoulderY - p * 0.02); ctx.stroke();
 
     ctx.fillStyle = HUID;
-    ctx.beginPath(); ctx.arc(x, headY, headR, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(hx, headY, headR, 0, Math.PI * 2); ctx.fill();
     /* soft shading on the away side of the face */
     ctx.fillStyle = verf(HUID, 0.86);
-    ctx.beginPath(); ctx.arc(x - kijk * headR * 0.35, headY, headR * 0.7, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(hx - kijk * headR * 0.35, headY, headR * 0.7, 0, Math.PI * 2); ctx.fill();
 
     /* --- headwear --- */
-    hoofddeksel(ctx, x, headY, headR, kijk, acc);
+    hoofddeksel(ctx, hx, headY, headR, kijk, acc);
+
+    /* A walking stick for the old. */
+    if (oud) {
+      ctx.strokeStyle = '#7a5a34';
+      ctx.lineWidth = Math.max(1, p * 0.026);
+      ctx.beginPath();
+      ctx.moveTo(x + kijk * p * 0.11, y);
+      ctx.lineTo(x + kijk * p * 0.09, shoulderY + torsoH * 0.5);
+      ctx.stroke();
+    }
 
     /* What they are hauling home, held above the head on the way back. */
-    if (opties.draagt && !werkt) vracht(ctx, x, headY - headR * 1.5, p, opties.draagt);
+    if (opties.draagt && !werkt) vracht(ctx, x, headY - headR * 1.5, p, opties.draagt, opties.bezig);
   };
 
-  /* A small crate of goods above the head, with the resource's own colour and
-     emoji, so you can see what a walker is bringing in. */
-  function vracht(ctx, x, y, p, res) {
+  /* The load a walker is carrying, shaped to fit it: a rounded sack for grain
+     and flour, a bucket for water, a rough lump for stone and ore, a crate for
+     everything else. Same resource colour and (zoomed in) its emoji, so you can
+     still read what it is. */
+  var ZAKKEN = { graan: 1, meel: 1, brood: 1, wol: 1, hop: 1 };
+  var LOMPEN = { steen: 1, ijzer: 1, koper: 1, edelsteen: 1, erts: 1 };
+  function vracht(ctx, x, y, p, res, bezig) {
     var def = Game.config.resources[res];
     if (!def) return;
     var w = p * 0.15, h = p * 0.1;
-    ctx.fillStyle = verf(def.kleur, 0.75);
-    ctx.fillRect(x - w / 2, y - h, w, h);
-    ctx.fillStyle = verf(def.kleur, 1.1);
-    ctx.fillRect(x - w / 2, y - h, w, h * 0.32);
+
+    if (ZAKKEN[res]) {
+      /* A bulging sack. */
+      ctx.fillStyle = verf(def.kleur, 0.82);
+      ctx.beginPath();
+      ctx.ellipse(x, y - h * 0.5, w * 0.5, h * 0.62, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = verf(def.kleur, 1.08);
+      ctx.beginPath();
+      ctx.ellipse(x - w * 0.12, y - h * 0.7, w * 0.22, h * 0.3, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (res === 'water') {
+      /* A bucket. */
+      ctx.fillStyle = '#6a5030';
+      ctx.beginPath();
+      ctx.moveTo(x - w * 0.4, y - h); ctx.lineTo(x + w * 0.4, y - h);
+      ctx.lineTo(x + w * 0.3, y); ctx.lineTo(x - w * 0.3, y);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(120,180,220,.8)';
+      ctx.fillRect(x - w * 0.34, y - h, w * 0.68, h * 0.28);
+    } else if (LOMPEN[res]) {
+      /* A rough lump / block. */
+      ctx.fillStyle = verf(def.kleur, 0.8);
+      ctx.beginPath();
+      ctx.moveTo(x - w * 0.5, y); ctx.lineTo(x - w * 0.34, y - h);
+      ctx.lineTo(x + w * 0.4, y - h * 0.86); ctx.lineTo(x + w * 0.5, y);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = verf(def.kleur, 1.12);
+      ctx.beginPath();
+      ctx.moveTo(x - w * 0.34, y - h); ctx.lineTo(x + w * 0.4, y - h * 0.86);
+      ctx.lineTo(x + w * 0.1, y - h * 0.5); ctx.closePath(); ctx.fill();
+    } else {
+      ctx.fillStyle = verf(def.kleur, 0.75);
+      ctx.fillRect(x - w / 2, y - h, w, h);
+      ctx.fillStyle = verf(def.kleur, 1.1);
+      ctx.fillRect(x - w / 2, y - h, w, h * 0.32);
+    }
+
     if (p >= 26) {
       ctx.font = Math.round(p * 0.13) + 'px serif';
       ctx.textAlign = 'center';

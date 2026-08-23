@@ -75,6 +75,8 @@
     spel.geselecteerd = null;
     spel.plaatsType = null;
     spel.cam.zoom = 1.3;
+    spel.cam.doelZoom = 1.3;
+    spel.cam.stopGlij();
     spel.cam.centreerOpTegel(s.start ? s.start.x : s.kaart.b / 2, s.start ? s.start.y : s.kaart.h / 2);
     if (Game.render.particles) Game.render.particles.reset();
     Game.render.renderer.verversWereld(s);
@@ -246,6 +248,10 @@
       }
     }
 
+    /* Camera inertia + smooth zoom, on real time (fase 8.4). */
+    spel.cam.demp(echteDt);
+    if (spel.state) spel.cam.begrens(spel.state.kaart);
+
     toetsenPan(echteDt);
   }
 
@@ -272,6 +278,7 @@
   /* -------------------------------------------------------------- invoer -- */
 
   var sleept = false, sleepVerplaatst = 0, laatsteMuis = null;
+  var sleepVel = { x: 0, y: 0 }, sleepTijd = 0;
   var toetsen = {};
 
   function koppelInvoer(canvas) {
@@ -290,6 +297,9 @@
       sleept = true;
       sleepVerplaatst = 0;
       laatsteMuis = { x: ev.clientX, y: ev.clientY };
+      sleepVel = { x: 0, y: 0 };
+      sleepTijd = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+      spel.cam.stopGlij();                 /* grab the map: kill any glide */
       canvas.classList.add('dragging');
     });
 
@@ -317,6 +327,14 @@
         if (sleepVerplaatst > 4) {
           spel.cam.beweeg(-dx, -dy);
           spel.cam.begrens(spel.state.kaart);
+          /* Track the world-space velocity, so releasing the drag flings the
+             map on (fase 8.4). */
+          var nu = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+          var dtMove = Math.max(0.001, (nu - sleepTijd) / 1000);
+          var wd = spel.cam.wereldDelta(-dx, -dy);
+          sleepVel.x = wd.x / dtMove;
+          sleepVel.y = wd.y / dtMove;
+          sleepTijd = nu;
         }
         laatsteMuis = { x: ev.clientX, y: ev.clientY };
       }
@@ -328,6 +346,12 @@
       sleept = false;
       canvas.classList.remove('dragging');
       if (sleepVerplaatst <= 4 && ev.target === canvas) klik(ev, canvas);
+      else {
+        /* Fling: keep the last drag velocity so the view glides to a stop, but
+           only if the pointer was actually moving when released. */
+        var nu = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+        if (nu - sleepTijd < 60) spel.cam.glij(sleepVel.x * 0.6, sleepVel.y * 0.6);
+      }
     });
 
     canvas.addEventListener('contextmenu', function (ev) {

@@ -143,12 +143,20 @@ button:active:not(:disabled) { transform: translateY(1px); }
 }
 .resrow.small .res { font-size: 12.5px; padding: 2px 7px; }
 .res .ico { font-size: 14px; align-self: center; filter: saturate(.92); }
-.res .val { font-weight: 700; letter-spacing: .2px; }
+.res .val { font-weight: 700; letter-spacing: .2px; transition: color var(--soepel); }
+/* The rolling counter tints by direction (fase 8.2). */
+.res .val.stijgt { color: var(--goud-licht); }
+.res .val.daalt { color: #e8a07a; }
 .res .cap { font-size: 10px; color: var(--perkament-dof); }
 .res.vol { border-color: rgba(215, 169, 75, .55); }
 .res.vol .val { color: var(--goud-licht); }
-.res.leeg { border-color: rgba(200, 80, 60, .55); }
+/* A quiet red pulse while a resource is running dry. */
+.res.leeg { border-color: rgba(200, 80, 60, .55); animation: tekortPuls 1.5s ease-in-out infinite; }
 .res.leeg .val { color: #e8907c; }
+@keyframes tekortPuls {
+  0%, 100% { box-shadow: none; }
+  50% { box-shadow: 0 0 10px rgba(200, 80, 60, .55); }
+}
 .res .delta { font-size: 10px; color: var(--mos); }
 .res .delta.neg { color: #e08a7a; }
 
@@ -277,6 +285,23 @@ ul.dorpsboek .sinds { color: var(--perkament-dof); font-size: 11px; min-width: 9
 #panel .titelrij { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 #panel .titelrij .emoji { font-size: 26px; }
 #panel .titelrij h2 { margin: 0; font-size: 17px; color: var(--goud-licht); line-height: 1.15; }
+/* The iso miniature + build-progress ring in the panel header (fase 8.1). */
+#panel .paneelmini { position: relative; width: 48px; height: 48px; flex: 0 0 48px; }
+#panel .paneelmini img.mini { width: 48px; height: 48px; object-fit: contain; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .5)); }
+#panel .paneelmini .ring {
+  position: absolute; inset: -3px; border-radius: 50%;
+  -webkit-mask: radial-gradient(circle, transparent 20px, #000 21px);
+  mask: radial-gradient(circle, transparent 20px, #000 21px);
+  pointer-events: none;
+}
+
+/* Panels slide in when they appear, using the same easing as the buttons.
+   Because .hidden toggles display:none, un-hiding restarts the animation; the
+   reduced-motion block above shortens it to nothing. */
+@keyframes paneelInLinks { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: none; } }
+@keyframes paneelInRechts { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+#panel:not(.hidden) { animation: paneelInLinks 160ms cubic-bezier(.3, .7, .4, 1); }
+#stadbox:not(.hidden) { animation: paneelInRechts 160ms cubic-bezier(.3, .7, .4, 1); }
 #panel .beschrijving { font-size: 12px; color: var(--perkament-dof); font-style: italic; margin-bottom: 8px; line-height: 1.35; }
 #panel .regel { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
 #panel .regel .k { color: var(--perkament-dof); }
@@ -469,6 +494,9 @@ ul.dorpsboek .sinds { color: var(--perkament-dof); font-size: 11px; min-width: 9
   filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .5));
 }
 .bouwkaart .em img.sprite { width: 36px; height: 36px; object-fit: contain; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .45)); }
+/* The iso miniature of the building you are about to place (fase 8.1). */
+.bouwkaart .em { height: 42px; }
+.bouwkaart .em img.mini { width: 48px; height: 48px; object-fit: contain; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .5)); }
 .bouwkaart .nm { font-size: 11.5px; font-weight: 700; line-height: 1.15; margin: 1px 0 3px; }
 .bouwkaart .ks { font-size: 10.5px; color: var(--perkament-dof); line-height: 1.4; font-variant-numeric: tabular-nums; }
 .bouwkaart .ks .mist { color: #e8907c; font-weight: 700; }
