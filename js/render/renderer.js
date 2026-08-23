@@ -995,6 +995,13 @@
         ctx.textBaseline = 'middle';
         ctx.fillText('⚠️', fc.cx, fc.cy - p * (0.6 + d.grootte * 0.5));
       }
+      /* Fase 5.2: a figure standing watch on the towers/walls/gates that sit on
+         the raiders' route — sleepy in peacetime, fully manned once a raid is
+         announced. Fase 5.3: sparring on the training ground. */
+      if (p > 20) {
+        if (d.verdediging && d.dekking && d.dekking.straal) tekenWacht(ctx, cam, s, g, d, p);
+        if (g.werkers > 0 && (g.type === 'oefenveld' || g.type === 'kazerne')) tekenExercitie(ctx, cam, s, g, d, p);
+      }
     } else {
       sprites.tekenBouwplaats(ctx, d, sp2.x, sp2.y, p, d.grootte, g.voortgang / d.bouwtijd);
     }
@@ -1047,6 +1054,70 @@
     if (w.draagt && geladen && p > 20 && w.bezig !== bew.WERKEN) opties.draagt = w.draagt;
 
     Game.render.villagers.teken(ctx, sp.x, sp.y, p, w.baan, kijk, stapFase, wandelt, opties);
+  }
+
+  /* Approximate wall-top height per defence building, mirroring the muurH the
+     sprite volume uses, so a figure stands on the parapet and not in mid-air. */
+  var MUURH = { wachttoren: 1.15, bergfried: 1.2, stadsmuur: 0.55, poort: 0.8, kasteel: 1.05 };
+
+  /* Fase 5.2 + 5.4: a watch on the walls. Off-raid, one sentinel dozes at the
+     post; during the warning it is fully manned (a spearman keeping lookout, an
+     archer on a broad enough wall). At dawn and dusk a relief guard walks up —
+     the changing of the watch. */
+  function tekenWacht(ctx, cam, s, g, d, p) {
+    var sp = cam.wereldNaarScherm(g.x * Game.render.TEGEL, g.y * Game.render.TEGEL);
+    var foot = Game.render.diamant(sp.x, sp.y, p * d.grootte);
+    var muurH = (MUURH[g.type] || 0.6) * (0.8 + 0.2 * d.grootte);
+    var topY = foot.cy - p * muurH;
+    var pw = p * 0.7;
+
+    var raid = s.raid && (s.raid.fase === 'waarschuwing' || s.raid.fase === 'beleg');
+    var L = Game.render.sfeer ? Game.render.sfeer.licht(s) : { avond: 0, ochtend: 0 };
+    var t = s.tijd || 0;
+
+    /* The sentinel, slowly scanning left and right. */
+    var kijk = Math.sin(t * 0.6 + g.id) >= 0 ? 1 : -1;
+    Game.render.villagers.teken(ctx, foot.cx - pw * 0.1, topY, pw, 'soldaat', kijk,
+      t * 1.2 + g.id, false, {});
+
+    if (raid) {
+      /* Full manning: an archer on a wide enough parapet, loosing if this piece
+         has already fired at the band. */
+      if (d.grootte >= 1) {
+        var beschoten = s.raid.beschoten && s.raid.beschoten[g.id];
+        Game.render.villagers.teken(ctx, foot.cx + pw * 0.35, topY - p * 0.04, pw, 'jager',
+          -kijk, t * 2 + g.id, false, beschoten ? { werktFase: t * 8 } : {});
+      }
+    } else if (L.avond > 0.4 || L.ochtend > 0.4) {
+      /* Changing of the guard: a relief walks up the side toward the post. */
+      var nadert = (Math.sin(t * 0.8 + g.id) * 0.5 + 0.5);
+      Game.render.villagers.teken(ctx, foot.cx - p * 0.5 + nadert * p * 0.4, foot.cy - p * muurH * 0.5,
+        pw, 'soldaat', 1, t * 6, true, {});
+    }
+  }
+
+  /* Fase 5.3: drill on the training ground — two soldiers sparring with staves
+     and one striking a pell (a training post). Pure decor, but it gives the
+     building a reason to be looked at. */
+  function tekenExercitie(ctx, cam, s, g, d, p) {
+    var basis = cam.wereldNaarScherm((g.x + d.grootte * 0.5) * Game.render.TEGEL,
+                                     (g.y + d.grootte * 0.9) * Game.render.TEGEL);
+    var t = s.tijd || 0;
+    var pw = p * 0.7;
+
+    /* Two sparring: step in and out in antiphase, arms swinging. */
+    var stap = Math.sin(t * 2.2) * p * 0.12;
+    Game.render.villagers.teken(ctx, basis.x - p * 0.3 + stap, basis.y, pw, 'soldaat', 1, t * 5, false, { werktFase: t * 5 });
+    Game.render.villagers.teken(ctx, basis.x + p * 0.3 - stap, basis.y - p * 0.02, pw, 'soldaat', -1, t * 5 + 3, false, { werktFase: t * 5 + 1.6 });
+
+    /* The pell and the soldier drilling on it. */
+    var px = basis.x + p * 0.75, py = basis.y + p * 0.04;
+    ctx.strokeStyle = '#6a4a2c';
+    ctx.lineWidth = Math.max(1, p * 0.05);
+    ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px, py - p * 0.4); ctx.stroke();
+    ctx.fillStyle = '#9a7048';
+    ctx.beginPath(); ctx.arc(px, py - p * 0.42, p * 0.06, 0, Math.PI * 2); ctx.fill();
+    Game.render.villagers.teken(ctx, px - p * 0.28, py, pw, 'soldaat', 1, t * 6, false, { werktFase: t * 7 });
   }
 
   /* Highlights the resource tiles a building needs while you are placing it. */
