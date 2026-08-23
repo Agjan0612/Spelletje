@@ -847,19 +847,23 @@
       if (!g.gebouwd || g.uit || g.waarschuwing) continue;
       var d = Game.core.state.def(g);
 
-      /* Cosy hearth smoke from homes / inns / bakery — no workers required,
-         kept sparse (a chance per cycle) so a large town never floods the
+      /* Cosy hearth smoke, anchored to the chimney on the roof. In winter
+         (economy.brandhout is burning timber then) every inhabited home smokes;
+         the rest of the year it stays sparse so a big town never floods the
          particle budget. */
-      if ((d.woonruimte || g.type === 'herberg' || g.type === 'bakkerij') && Math.random() < 0.22) {
-        var hx = (g.x + d.grootte * 0.62) * TEGEL, hy = (g.y + d.grootte * 0.22) * TEGEL;
-        Game.render.particles.emit('rook', hx, hy, 1, { grootte: 0.62, levenSchaal: 1.3, spreiding: 2, begin: 0.2 });
+      var thuis = d.woonruimte || g.type === 'herberg' || g.type === 'bakkerij';
+      var winterHaard = s.seizoen === 3 && d.woonruimte;
+      if (thuis && (winterHaard ? Math.random() < 0.5 : Math.random() < 0.22)) {
+        var hx = (g.x + d.grootte * 0.62) * TEGEL, hy = (g.y + d.grootte * 0.30) * TEGEL;
+        Game.render.particles.emit('rook', hx, hy, 1, { grootte: 0.6, levenSchaal: 1.3, spreiding: 2, begin: winterHaard ? 0.26 : 0.2 });
       }
 
-      /* Work smoke / sparks / dust only when the workplace is staffed. */
+      /* Work smoke / sparks / dust only when the workplace is staffed. A working
+         forge or bakery draws a thicker column than a house does. */
       if (g.werkers <= 0) continue;
-      var cx = (g.x + d.grootte * 0.66) * TEGEL, cy = (g.y + d.grootte * 0.2) * TEGEL;
+      var cx = (g.x + d.grootte * 0.62) * TEGEL, cy = (g.y + d.grootte * 0.28) * TEGEL;
       if (d.maakt && (d.id === 'bakkerij' || d.id === 'smederij' || d.id === 'wapensmid')) {
-        Game.render.particles.rook(cx, cy, 1);
+        Game.render.particles.emit('rook', cx, cy, d.id === 'bakkerij' ? 1 : 2, { spreiding: 3, grootte: 0.9 });
         if (d.id !== 'bakkerij') Game.render.particles.vonken(cx, cy, 1);
       } else if (d.wint && (d.wint.node === 'steen' || d.wint.node === 'ijzer' ||
                  d.wint.node === 'koper' || d.wint.node === 'edelsteen')) {
@@ -943,9 +947,12 @@
     }
 
     if (g.gebouwd) {
+      /* Whether shutters should be closed: the same darkness at which the warm
+         window glow (sfeer.tekenVensters) comes on. */
+      var nacht = Game.render.sfeer && Game.render.sfeer.licht(s).nacht > 0.42;
       sprites.tekenGebouw(ctx, d, sp2.x, sp2.y, p, d.grootte,
         { tijd: tijd, tijdperk: s.tijdperk, geschroeid: g.geschroeid,
-          seizoen: s.seizoen, zaad: g.id });
+          seizoen: s.seizoen, zaad: g.id, nacht: nacht });
       if (g.waarschuwing && p > 16) {
         var fc = Game.render.diamant(sp2.x, sp2.y, p * d.grootte);
         ctx.font = Math.round(p * 0.34) + 'px serif';

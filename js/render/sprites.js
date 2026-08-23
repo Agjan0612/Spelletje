@@ -848,6 +848,32 @@
     return cfg;
   }
 
+  /* Roof material by building, so a standing's rise reads in the roof too:
+     reed for huts and farms, tile for townhouses and workshops, slate for
+     churches, halls and fortifications. */
+  var RIETDAK = {
+    huisje: 1, boerderij: 1, hoeve: 1, herberg: 1, voorraadschuur: 1, pakhuis: 1,
+    houthakkershut: 1, houtzagerij: 1, jachthut: 1, vissershut: 1,
+    steengroeve: 1, kopermijn: 1, ijzermijn: 1, edelsteenmijn: 1
+  };
+  var LEIDAK = {
+    kapel: 1, kerk: 1, kathedraal: 1, wachttoren: 1, bergfried: 1, poort: 1,
+    kasteel: 1, stadhuis: 1, universiteit: 1, gildehuis: 1
+  };
+  /* Buildings with a hearth get a chimney the smoke rises from. */
+  var SCHOORSTEEN = {
+    huisje: 1, vakwerkhuis: 1, herenhuis: 1, boerderij: 1, hoeve: 1, herberg: 1,
+    bakkerij: 1, smederij: 1, wapensmid: 1, brouwerij: 1
+  };
+
+  function dakstijlVoor(def, tier) {
+    if (LEIDAK[def.id]) return 'lei';
+    /* A tiered house re-roofs as it climbs: reed → tile → slate. */
+    if (TIER_SHAPES[def.id] && tier) return tier >= 4 ? 'lei' : (tier >= 2 ? 'pan' : 'riet');
+    if (RIETDAK[def.id]) return 'riet';
+    return 'pan';
+  }
+
   function isoCfg(def, tier) {
     var basis = ISO[def.id] || ISO._default;
     var cfg = {
@@ -856,6 +882,8 @@
       dakH: basis.dakH != null ? basis.dakH : ISO._default.dakH,
       muur: basis.muur || ISO._default.muur,
       dak: basis.dak || ISO._default.dak,
+      dakstijl: basis.dakstijl || dakstijlVoor(def, tier),
+      schoorsteen: basis.schoorsteen || (SCHOORSTEEN[def.id] ? { u: 0.34, v: 0.34, h: 0.44 } : null),
       smal: basis.smal || 0,
       vlag: basis.vlag, kruis: basis.kruis, kantelen: basis.kantelen,
       torens: basis.torens, wieken: basis.wieken, luifel: basis.luifel,
@@ -909,8 +937,9 @@
 
     var top = isoMuren(ctx, foot, H, cfg.muur);
 
-    /* Door + shuttered windows on the visible wall faces. */
-    if (!NOGEVEL[def.id] && p * grootte >= 30) gevel(ctx, foot, top, cfg);
+    /* Door + shuttered windows on the visible wall faces. Shutters swing closed
+       at night, at the same darkness the warm window glow comes on (fase 1.3). */
+    if (!NOGEVEL[def.id] && p * grootte >= 30) gevel(ctx, foot, top, cfg, opties.nacht);
 
     /* Half-timber frame over the plaster on the top-tier houses. */
     if (cfg.vakwerk && p * grootte >= 26) vakwerk(ctx, foot, top);
@@ -919,7 +948,7 @@
 
     /* Roofs stay proportionate as footprints grow (a big hall gets a broad,
        not a towering, roof). */
-    if (cfg.stijl === 'schuin' || cfg.stijl === 'punt') dakSchuin(ctx, top, dakH, cfg.dak);
+    if (cfg.stijl === 'schuin' || cfg.stijl === 'punt') dakSchuin(ctx, top, dakH, cfg.dak, cfg.dakstijl, p);
     else if (cfg.stijl === 'plat') vulDiamant(ctx, top, verf(cfg.muur, 0.98));
     else vulDiamant(ctx, top, verf(cfg.muur, 0.9));   /* 'geen': open wall top */
 
@@ -929,7 +958,10 @@
 
     if (opties.seizoen === 3) dakSneeuw(ctx, top, dakH, cfg);
 
-    if (cfg.torens) kasteelTorens(ctx, foot, H, dakH, cfg);
+    /* A chimney on the roof, so the ambient smoke rises from something (1.2). */
+    if (cfg.schoorsteen && p >= 26 && cfg.stijl !== 'geen') schoorsteenBlok(ctx, top, dakH, p, cfg);
+
+    if (cfg.torens) kasteelTorens(ctx, foot, H, dakH, cfg, p);
     if (cfg.kruis) kruisTop(ctx, top, dakH, p);
     if (cfg.vlag) vlag(ctx, top, dakH, p);
     if (cfg.wieken) wieken(ctx, foot, H, p, opties.tijd || 0, cfg.dak);
@@ -1069,7 +1101,7 @@
   /* Hip / spire roof rising from a top-face diamond to an apex, with a lit
      ridge line so the two front faces read as a proper roof, plus a few faint
      courses parallel to the eaves that suggest tiles / thatch (C1). */
-  function dakSchuin(ctx, t, dakH, dak, stijl) {
+  function dakSchuin(ctx, t, dakH, dak, dakstijl, p) {
     /* Eaves: the roof springs from a slightly wider diamond than the wall top,
        and hangs a touch lower. That overhang is most of what separates "a house"
        from "a box with a point on it", and it gives the wall below a shadow
@@ -1082,8 +1114,11 @@
     tri(ctx, e.left, e.bottom, apex, verf(dak, 0.92)); /* front-left */
     tri(ctx, e.bottom, e.right, apex, verf(dak, 1.08));/* front-right (lit) */
 
-    dakLagen(ctx, e.left, e.bottom, apex, dak, 0.9);   /* front-left courses  */
-    dakLagen(ctx, e.bottom, e.right, apex, dak, 1.06); /* front-right courses */
+    /* Material of the two front faces: tile courses, thatch or slate. Only the
+       fine grain kicks in when zoomed in (fase 1.1); the flat faces above read
+       identically far out. */
+    dakLagen(ctx, e.left, e.bottom, apex, dak, 0.9, dakstijl, p);   /* front-left  */
+    dakLagen(ctx, e.bottom, e.right, apex, dak, 1.06, dakstijl, p); /* front-right */
 
     /* Lit ridge, then a dark line along the eaves so the roof edge reads. */
     ctx.strokeStyle = verf(dak, 1.28);
@@ -1091,6 +1126,16 @@
     ctx.beginPath();
     ctx.moveTo(e.bottom.x, e.bottom.y); ctx.lineTo(apex.x, apex.y);
     ctx.stroke();
+
+    /* Reed roofs have a ragged, thick lower edge rather than a crisp eave. */
+    if (dakstijl === 'riet' && p > 34) {
+      ctx.strokeStyle = verf(dak, 0.66);
+      ctx.lineWidth = Math.max(1.5, e.hw * 0.09);
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(e.left.x, e.left.y); ctx.lineTo(e.bottom.x, e.bottom.y); ctx.lineTo(e.right.x, e.right.y);
+      ctx.stroke();
+    }
 
     ctx.strokeStyle = 'rgba(26,18,10,.45)';
     ctx.lineWidth = Math.max(1, e.hw * 0.035);
@@ -1102,18 +1147,63 @@
     ctx.stroke();
   }
 
-  /* Courses parallel to a roof face's eave (edge a→b), from eave up to the
-     apex. Thin darker lines that read as tile rows / thatch bands. */
-  function dakLagen(ctx, a, b, apex, dak, licht) {
-    ctx.strokeStyle = verf(dak, licht * 0.82);
+  /* Courses parallel to a roof face's eave (edge a→b), from eave up to the apex,
+     drawn to read as the roof's material. `pan` gets rows of short tile dashes,
+     `lei` fine even slate lines, `riet` a couple of soft thatch bands. The
+     dashes only appear zoomed in (p > 34); far out it is one flat face. */
+  function dakLagen(ctx, a, b, apex, dak, licht, dakstijl, p) {
+    p = p || 0;
+    dakstijl = dakstijl || 'pan';
+    var courses = dakstijl === 'lei' ? 5 : (dakstijl === 'riet' ? 2 : 4);
+
+    /* The faint course lines (always drawn — cheap, and they carry the far
+       view). */
+    ctx.strokeStyle = verf(dak, licht * (dakstijl === 'riet' ? 0.88 : 0.8));
     ctx.lineWidth = 1;
     ctx.beginPath();
-    for (var i = 1; i <= 3; i++) {
-      var u = i / 4;
-      var p1 = lerp(a, apex, u), p2 = lerp(b, apex, u);
-      ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
+    for (var i = 1; i < courses; i++) {
+      var u = i / courses;
+      var q1 = lerp(a, apex, u), q2 = lerp(b, apex, u);
+      ctx.moveTo(q1.x, q1.y); ctx.lineTo(q2.x, q2.y);
     }
     ctx.stroke();
+
+    if (p <= 34 || dakstijl !== 'pan') return;
+
+    /* Rows of little tiles: short dashes offset row-to-row so a tile roof reads
+       as pantiles rather than plain stripes. */
+    ctx.strokeStyle = verf(dak, licht * 0.66);
+    ctx.lineWidth = Math.max(1, p * 0.012);
+    ctx.lineCap = 'butt';
+    ctx.beginPath();
+    for (var r = 1; r < courses; r++) {
+      var v = r / courses;
+      var la = lerp(a, apex, v), lb = lerp(b, apex, v);
+      var n = 5;
+      var schuif = (r % 2) * 0.5;
+      for (var k = 0; k < n; k++) {
+        var f0 = (k + schuif) / n, f1 = (k + schuif + 0.55) / n;
+        if (f1 > 1) continue;
+        var d0 = lerp(la, lb, f0), d1 = lerp(la, lb, f1);
+        ctx.moveTo(d0.x, d0.y); ctx.lineTo(d1.x, d1.y);
+      }
+    }
+    ctx.stroke();
+  }
+
+  /* A brick chimney standing on the roof, offset toward the lit side, with a
+     dark mouth so the ambient smoke has something to rise from (fase 1.2). */
+  function schoorsteenBlok(ctx, top, dakH, p, cfg) {
+    var sc = cfg.schoorsteen || { u: 0.4, v: 0.2, h: 0.5 };
+    var bx = top.cx + top.hw * (sc.u != null ? sc.u : 0.4);
+    var by = top.cy - dakH * (sc.v != null ? sc.v : 0.35);
+    var w = p * 0.11, h = p * (sc.h != null ? sc.h : 0.4);
+    ctx.fillStyle = '#7a5340';
+    ctx.fillRect(bx - w / 2, by - h, w, h);
+    ctx.fillStyle = '#8a6048';
+    ctx.fillRect(bx - w / 2, by - h, w * 0.42, h);
+    ctx.fillStyle = '#3a2a20';
+    ctx.fillRect(bx - w / 2 - w * 0.08, by - h - p * 0.02, w * 1.16, p * 0.04);
   }
 
   /* Buildings whose walls stay plain (fortifications, towers, mills, mines). */
@@ -1126,13 +1216,14 @@
     return lerp(lerp(bl, br, u), lerp(tl, tr, u), v);
   }
 
-  /* Door on the lit face + shuttered windows on both visible faces. */
-  function gevel(ctx, foot, top, cfg) {
-    gevelVlak(ctx, foot.bottom, foot.right, top.bottom, top.right, cfg, true);
-    gevelVlak(ctx, foot.left, foot.bottom, top.left, top.bottom, cfg, false);
+  /* Door on the lit face + shuttered windows on both visible faces. `nacht`
+     closes the shutters over the window openings once it is dark. */
+  function gevel(ctx, foot, top, cfg, nacht) {
+    gevelVlak(ctx, foot.bottom, foot.right, top.bottom, top.right, cfg, true, nacht);
+    gevelVlak(ctx, foot.left, foot.bottom, top.left, top.bottom, cfg, false, nacht);
   }
 
-  function gevelVlak(ctx, bl, br, tl, tr, cfg, lit) {
+  function gevelVlak(ctx, bl, br, tl, tr, cfg, lit, nacht) {
     if (lit) {
       quad(ctx,
         gevelPunt(bl, br, tl, tr, 0.44, 0.02), gevelPunt(bl, br, tl, tr, 0.6, 0.02),
@@ -1147,6 +1238,19 @@
         gevelPunt(bl, br, tl, tr, u - 0.07, 0.56), gevelPunt(bl, br, tl, tr, u + 0.07, 0.56),
         gevelPunt(bl, br, tl, tr, u + 0.07, 0.82), gevelPunt(bl, br, tl, tr, u - 0.07, 0.82),
         raam);
+      /* Fase 1.3: a pair of closed shutters over the opening at night, in the
+         wall's own timber, with a seam down the middle. */
+      if (nacht) {
+        var luik = verf(cfg.dak, 0.8);
+        quad(ctx,
+          gevelPunt(bl, br, tl, tr, u - 0.075, 0.55), gevelPunt(bl, br, tl, tr, u, 0.55),
+          gevelPunt(bl, br, tl, tr, u, 0.83), gevelPunt(bl, br, tl, tr, u - 0.075, 0.83),
+          luik);
+        quad(ctx,
+          gevelPunt(bl, br, tl, tr, u, 0.55), gevelPunt(bl, br, tl, tr, u + 0.075, 0.55),
+          gevelPunt(bl, br, tl, tr, u + 0.075, 0.83), gevelPunt(bl, br, tl, tr, u, 0.83),
+          verf(cfg.dak, 0.66));
+      }
     }
   }
 
@@ -1184,12 +1288,12 @@
     }
   }
 
-  function kasteelTorens(ctx, foot, H, dakH, cfg) {
+  function kasteelTorens(ctx, foot, H, dakH, cfg, p) {
     var th = H * 1.18, r = foot.hw * 0.26;
     [foot.left, foot.top, foot.right].forEach(function (c, i) {
       var base = diamantVan(c.x, c.y, r, r * 0.5);
       var top = isoMuren(ctx, base, th, cfg.muur);
-      dakSchuin(ctx, top, dakH * 1.1, cfg.dak);
+      dakSchuin(ctx, top, dakH * 1.1, cfg.dak, cfg.dakstijl, p);
     });
   }
 
@@ -1256,8 +1360,10 @@
     ctx.restore();
   }
 
-  /* Construction site: a low iso stub grown by progress, plus scaffolding and a
-     floating progress bar. */
+  /* Construction site: a low iso stub grown by progress, scaffolding whose rails
+     rise with it, stacks of the materials the building costs, a rope winch on
+     the bigger sites, and a floating progress bar. Building is a big share of
+     the play time, so it earns a bit more than four poles (fase 1.4). */
   S.tekenBouwplaats = function (ctx, def, sx, sy, p, grootte, deel) {
     var foot = Game.render.diamant(sx, sy, p * grootte);
     deel = Game.util.clamp(deel, 0, 1);
@@ -1271,15 +1377,55 @@
     var top = isoMuren(ctx, foot, H, '#b89a6a');
     vulDiamant(ctx, top, 'rgba(150,120,80,.85)');
 
-    /* Scaffolding poles at the footprint corners. */
+    /* Scaffolding poles at the footprint corners, with horizontal rails that
+       climb as the walls grow. */
     var poleH = p * grootte * 0.5;
+    var hoeken = [foot.left, foot.right, foot.top, foot.bottom];
     ctx.strokeStyle = '#a07b46';
     ctx.lineWidth = Math.max(1, p * 0.04);
     ctx.beginPath();
-    [foot.left, foot.right, foot.top, foot.bottom].forEach(function (c) {
-      ctx.moveTo(c.x, c.y); ctx.lineTo(c.x, c.y - poleH);
-    });
+    hoeken.forEach(function (c) { ctx.moveTo(c.x, c.y); ctx.lineTo(c.x, c.y - poleH); });
     ctx.stroke();
+
+    if (p * grootte >= 22) {
+      /* Rails around the frame at the current build height, plus one mid rail. */
+      ctx.strokeStyle = 'rgba(150,116,66,.85)';
+      ctx.lineWidth = Math.max(1, p * 0.03);
+      [Math.max(p * 0.12, H), poleH * 0.55].forEach(function (rh) {
+        ctx.beginPath();
+        for (var i = 0; i < hoeken.length; i++) {
+          var a = hoeken[i], b = hoeken[(i + 1) % hoeken.length];
+          ctx.moveTo(a.x, a.y - rh); ctx.lineTo(b.x, b.y - rh);
+        }
+        ctx.stroke();
+      });
+
+      /* Material stacks of what the building is made of, along the near edge. */
+      var kleuren = [];
+      for (var kr in (def.kosten || {})) {
+        var rdef = Game.config.resources[kr];
+        if (rdef) kleuren.push(rdef.kleur);
+        if (kleuren.length >= 3) break;
+      }
+      for (var m = 0; m < kleuren.length; m++) {
+        var mx = foot.bottom.x - foot.hw * 0.4 + m * p * 0.22;
+        var my = foot.bottom.y - foot.hh * 0.1;
+        materiaalStapel(ctx, mx, my, p, kleuren[m], 1 - deel * 0.6);
+      }
+
+      /* A winch with a rope on the bigger sites. */
+      if (grootte >= 2) {
+        var wx = foot.cx, wy = foot.cy - poleH;
+        ctx.strokeStyle = '#6a4a28';
+        ctx.lineWidth = Math.max(1, p * 0.03);
+        ctx.beginPath();
+        ctx.moveTo(foot.top.x, foot.top.y - poleH); ctx.lineTo(wx, wy);
+        ctx.moveTo(wx, wy); ctx.lineTo(wx, wy + poleH * (0.3 + deel * 0.4));
+        ctx.stroke();
+        ctx.fillStyle = '#8a6236';
+        ctx.fillRect(wx - p * 0.06, wy + poleH * (0.3 + deel * 0.4), p * 0.12, p * 0.1);
+      }
+    }
 
     if (p * grootte >= 24) {
       ctx.font = Math.round(p * grootte * 0.28) + 'px serif';
@@ -1297,6 +1443,18 @@
     ctx.fillStyle = '#d7a94b';
     ctx.fillRect(bx, by, bw * deel, bh);
   };
+
+  /* A little pile of building material in the resource's colour; shrinks as the
+     work uses it up (`voorraad` 0..1). */
+  function materiaalStapel(ctx, x, y, p, kleur, voorraad) {
+    var n = 1 + Math.round(voorraad * 2);
+    for (var i = 0; i < n; i++) {
+      ctx.fillStyle = verf(kleur, 0.8 + i * 0.12);
+      ctx.beginPath();
+      ctx.ellipse(x + (i % 2) * p * 0.04, y - i * p * 0.05, p * 0.08, p * 0.045, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
 
   Game.render.sprites = S;
 
