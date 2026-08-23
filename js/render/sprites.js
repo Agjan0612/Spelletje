@@ -777,10 +777,16 @@
     ctx.globalAlpha = 1;
   }
 
-  /* Field furrows running along the tile's world-x rows. */
+  /* A field through the year: young green shoots in spring, tall golden grain in
+     summer, harvested stubble with a couple of sheaves in autumn (winter is
+     handled by the snow cover, which returns before this). The furrows are the
+     same rows every season; what grows on them is the season made visible
+     (fase 4.1). */
   function akker(ctx, d, t, p, seizoen) {
     if (seizoen === 3) return;
-    ctx.strokeStyle = ['rgba(150,180,90,.5)', 'rgba(210,190,80,.6)', 'rgba(220,190,70,.7)', ''][seizoen];
+
+    /* The bare furrows first, as ridges of turned earth. */
+    ctx.strokeStyle = 'rgba(120,92,58,.5)';
     ctx.lineWidth = Math.max(1, p * 0.04);
     ctx.beginPath();
     for (var i = 1; i < 4; i++) {
@@ -788,6 +794,65 @@
       var a = lerp(d.top, d.left, f), b = lerp(d.right, d.bottom, f);
       ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
     }
+    ctx.stroke();
+
+    if (p < 20) return;   /* the crop grain only at closer zoom */
+
+    if (seizoen === 0) {
+      /* Spring: short green shoots standing up out of the furrows. */
+      ctx.strokeStyle = 'rgba(120,170,70,.75)';
+      ctx.lineWidth = Math.max(1, p * 0.02);
+      gewasHalmen(ctx, d, p, 0.05, 0);
+    } else if (seizoen === 1) {
+      /* Summer: tall golden grain, heavy-headed. */
+      ctx.strokeStyle = 'rgba(214,182,70,.85)';
+      ctx.lineWidth = Math.max(1, p * 0.022);
+      gewasHalmen(ctx, d, p, 0.12, 0.02);
+    } else {
+      /* Autumn: cut stubble and a couple of sheaves. */
+      ctx.strokeStyle = 'rgba(196,168,96,.6)';
+      ctx.lineWidth = Math.max(1, p * 0.018);
+      gewasHalmen(ctx, d, p, 0.03, 0);
+      schoof(ctx, d.cx - p * 0.12, d.cy + p * 0.02, p, t.v);
+      schoof(ctx, d.cx + p * 0.14, d.cy - p * 0.04, p, t.v * 1.7 % 1);
+    }
+  }
+
+  /* Rows of little upright strokes standing on the furrows: the crop. `h` is
+     stalk height, `buig` a lean for a heavy head. Deterministic offsets so a
+     field does not shimmer between frames. */
+  function gewasHalmen(ctx, d, p, h, buig) {
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (var r = 1; r < 4; r++) {
+      var f = r / 4;
+      var a = lerp(d.top, d.left, f), b = lerp(d.right, d.bottom, f);
+      for (var k = 1; k < 6; k++) {
+        var u = k / 6;
+        var base = lerp(a, b, u);
+        ctx.moveTo(base.x, base.y);
+        ctx.lineTo(base.x + buig * p, base.y - h * p);
+      }
+    }
+    ctx.stroke();
+  }
+
+  /* A tied sheaf of grain standing in a harvested field. */
+  function schoof(ctx, x, y, p, seed) {
+    ctx.strokeStyle = 'rgba(206,176,96,.9)';
+    ctx.lineWidth = Math.max(1, p * 0.02);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (var i = 0; i < 4; i++) {
+      var lean = (i - 1.5) * 0.03 * p;
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + lean, y - p * 0.13);
+    }
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(150,116,40,.8)';
+    ctx.beginPath();
+    ctx.moveTo(x - p * 0.03, y - p * 0.06);
+    ctx.lineTo(x + p * 0.03, y - p * 0.06);
     ctx.stroke();
   }
 
