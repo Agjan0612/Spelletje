@@ -172,6 +172,7 @@
 
       var route = Game.render.paths ? Game.render.paths.route(s, g.x, g.y, doelX, doelY) : null;
       if (!route) route = [{ x: hx, y: hy }, { x: doelX + 0.5, y: doelY + 0.5 }];
+      var opStraat = !!route.straat;
 
       var lengte = routeLengte(route);
       for (var n = 0; n < aantal && lijst.length < limiet; n++) {
@@ -187,12 +188,15 @@
           bestaand.draagtOp = draagtOp;
           bestaand.werkt = !!d.wint;
           bestaand.werkTempo = g.ervaring || 0;
+          bestaand.straat = opStraat;
           lijst.push(bestaand);
         } else {
-          lijst.push(nieuweWandelaar(sleutel, route, lengte, d.banen.baan, {
+          var nw = nieuweWandelaar(sleutel, route, lengte, d.banen.baan, {
             draagt: draagt, draagtOp: draagtOp, werkt: !!d.wint, werkTempo: g.ervaring || 0,
             cohort: (hash1(g.id * 7 + n * 13) < oudDeel) ? 'oud' : 'volwassen'
-          }, g.id * 7 + n * 13));
+          }, g.id * 7 + n * 13);
+          nw.straat = opStraat;
+          lijst.push(nw);
         }
       }
     }
@@ -381,7 +385,7 @@
          a HUISWAARTS walker keeps pace until it is home). */
       var restT = w.richting > 0 ? (1 - w.p) : w.p;      /* fraction of route left */
       var nabij = Game.util.clamp(restT * len / 0.8, 0.25, 1);   /* slow in the last ~0.8 tile */
-      var doelSnel = w.snelheidT * (w.rond ? 1 : nabij);
+      var doelSnel = w.snelheidT * (w.rond ? 1 : nabij) * (w.straat ? 1.2 : 1);
       bew.stuur(w, headingVan(w), doelSnel, dt);
       var stap = w.snelheid * dt;
       w.p += (w.richting * stap) / len;
