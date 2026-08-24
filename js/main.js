@@ -91,7 +91,8 @@
   };
 
   /* `opties` are the choices from the new-game screen:
-     { naam, seed, kaart, moeilijkheid }. Everything may be left out. */
+     { naam, seed, kaart, moeilijkheid, scenario, slot }. Everything may be
+     left out; `slot` says which of the three dorpsboeken it writes to. */
   spel.nieuwSpel = function (opties) {
     opties = opties || {};
     var s = Game.core.state.nieuw(opties.seed, opties.naam || verzinNaam(), opties);
@@ -99,16 +100,16 @@
     spel.zetState(s);
     spel.actief = true;
     saveTimer = 0;
-    Game.core.save.opslaan(s);
+    Game.core.save.opslaan(s, opties.slot);
   };
 
-  spel.laadOpgeslagenSpel = function () {
-    var s = Game.core.save.laden();
+  spel.laadOpgeslagenSpel = function (nr) {
+    var s = Game.core.save.laden(nr);
     if (!s) { spel.nieuwSpel(); return; }
     spel.zetState(s);
-    spel.actief = true;
+    spel.actief = !s.uitgestorven;
     saveTimer = 0;
-    Game.ui.toast('📜 Je dorp is teruggehaald');
+    Game.ui.toast('📜 ' + s.dorpsnaam + ' is teruggehaald');
   };
 
   /* Pick a building up: the ghost follows the cursor and the next click puts
@@ -184,10 +185,11 @@
       if (t) {
         /* Laying and lifting are the same action, so undoing either is the
            other one — and legWeg already handles the refund both ways. */
-        Game.core.construction.legWeg(s, Game.config.gebouw('straat'), item.weg.x, item.weg.y);
+        Game.core.construction.legWeg(s, Game.config.gebouw(item.weg.type || 'straat'),
+          item.weg.x, item.weg.y);
       }
       Game.render.renderer.verversGebouwen(s);
-      Game.ui.toast('↩️ Straatje teruggedraaid');
+      Game.ui.toast('↩️ ' + (Game.config.gebouw(item.weg.type || 'straat').naam) + ' teruggedraaid');
       return;
     }
 
@@ -265,6 +267,10 @@
       Game.render.renderer.verversWandelaars(s);
     }
 
+    /* Een uitgestorven dorp mag de laatste bruikbare save niet overschrijven:
+       dat is precies waar de speler nu naar terug wil. */
+    if (s.uitgestorven) spel.actief = false;
+
     if (spel.actief) {
       saveTimer += echteDt;
       if (saveTimer >= AUTOSAVE) {
@@ -280,7 +286,9 @@
     toetsenPan(echteDt);
   }
 
-  /* One simulation step. */
+  /* One simulation step. Exposed as `spel.stap` because it is the one place
+     the tick order lives: tools/simuleer.js drives the very same function, so
+     a headless balance run can never quietly measure a different game. */
   function stap(s, dt) {
     Game.core.seasons.tick(s, dt);
     Game.core.construction.tick(s, dt);
@@ -296,9 +304,13 @@
     Game.core.buren.tick(s, dt);
     Game.core.arbeid.tick(s, dt);
     Game.core.dorpelingen.tick(s, dt);
+    Game.core.faam.tick(s, dt);
+    Game.core.historie.tick(s, dt);
     Game.ui.quests.controleer(s);
     Game.core.ages.controleerOverwinning(s);
   }
+  spel.stap = stap;
+  spel.TICK = TICK;
 
   /* -------------------------------------------------------------- invoer -- */
 
@@ -496,7 +508,7 @@
       if (!uitkomst.ok) {
         Game.ui.toast('⚠️ ' + uitkomst.reden, 1600);
       } else {
-        if (uitkomst.weg) spel.onthoud({ weg: { x: tegelPos.x, y: tegelPos.y } });
+        if (uitkomst.weg) spel.onthoud({ weg: { x: tegelPos.x, y: tegelPos.y, type: spel.plaatsType } });
         else if (uitkomst.gebouw) spel.onthoud({ gebouwId: uitkomst.gebouw.id });
         Game.render.renderer.verversGebouwen(s);
         Game.ui.buildmenu.ververs(s);
@@ -536,22 +548,48 @@
        the whole row on an empty purse. */
     var isWeg = !!Game.config.gebouw(spel.plaatsType).weg;
 
-    for (var i = 0; i < aantal; i++) {
-      var x = lijn.x0 + stapX * i, y = lijn.y0 + stapY * i;
-      if (!isWeg && !Game.core.state.kanBetalen(s, Game.config.gebouw(spel.plaatsType).kosten)) break;
-      var r = Game.core.construction.plaats(s, spel.plaatsType, x, y);
-      if (r.ok) {
-        gezet++;
-        if (r.weg) spel.onthoud({ weg: { x: x, y: y } });
+    function pass(alleenLege) {
+      var n = 0, opgebroken = 0;
+      for (var i = 0; i < aantal; i++) {
+        var x = lijn.x0 + stapX * i, y = lijn.y0 + stapY * i;
+        if (!isWeg && !Game.core.state.kanBetalen(s, Game.config.gebouw(spel.plaatsType).kosten)) break;
+        if (alleenLege) {
+          var tegel = Game.core.map.tegel(s.kaart, x, y);
+          if (!tegel || tegel.weg) continue;      /* nooit terugnemen wat er net kwam */
+        }
+        var r = Game.core.construction.plaats(s, spel.plaatsType, x, y);
+        if (!r.ok) continue;
+        n++;
+        if (r.opgebroken) opgebroken++;
+        if (r.weg) spel.onthoud({ weg: { x: x, y: y, type: spel.plaatsType } });
         else if (r.gebouw) spel.onthoud({ gebouwId: r.gebouw.id });
+      }
+      return { gezet: n, opgebroken: opgebroken };
+    }
+
+    var eerste = pass(false);
+    gezet = eerste.gezet;
+
+    /* Een brug groeit vanaf de oever: een tegel midden in het water mag pas
+       zodra zijn buurman er ligt. Sleep je van het water naar de kant, dan is
+       één ronde dus niet genoeg. Herhalen tot er niets meer bijkomt — maar
+       alleen als deze sleep niets heeft opgebroken, want dan was het een sleep
+       om de brug juist weg te halen. */
+    if (Game.config.gebouw(spel.plaatsType).overWater && eerste.opgebroken === 0) {
+      for (var ronde = 0; ronde < aantal; ronde++) {
+        var extra = pass(true);
+        if (!extra.gezet) break;
+        gezet += extra.gezet;
       }
     }
 
     if (gezet) {
       Game.render.renderer.verversGebouwen(s);
       Game.ui.buildmenu.ververs(s, true);
+      var def = Game.config.gebouw(spel.plaatsType);
       Game.ui.toast(isWeg
-        ? '🛣️ ' + Game.util.telwoord(gezet, 'tegel straat', 'tegels straat')
+        ? def.emoji + ' ' + Game.util.telwoord(gezet, 'tegel ' + def.naam.toLowerCase(),
+            'tegels ' + def.naam.toLowerCase())
         : '🏗️ ' + Game.util.telwoord(gezet, 'gebouw geplaatst', 'gebouwen geplaatst'));
     }
     if (!isWeg && !Game.core.state.kanBetalen(s, Game.config.gebouw(spel.plaatsType).kosten)) spel.kiesBouw(null);
@@ -604,6 +642,10 @@
     el.style.left = links + 'px';
     el.style.top = Math.min(boven, Math.max(0, stage.height - hoog - 20)) + 'px';
   }
+
+  /* De sleeprij ook zonder muis, als onderdeel van de automatiseringskant van
+     `window.spel` (zie CLAUDE.md): { x0, y0, x1, y1 } in tegels. */
+  spel.plaatsRij = function (lijn) { plaatsLijn(lijn); };
 
   window.addEventListener('DOMContentLoaded', start);
 

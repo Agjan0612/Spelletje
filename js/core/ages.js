@@ -125,7 +125,22 @@
     return false;
   };
 
+  /* De andere afloop. Tot nu toe kon alleen een scenario mislukken: in een
+     vrij spel kon de bevolking naar nul zakken en tikte het spel gewoon door
+     op een lege kaart. Daarmee had honger geen bodem, en dus de winter geen
+     spanning. Dit is die bodem — en het is een scherm, geen stilte. */
+  A.controleerEinde = function (s) {
+    if (s.uitgestorven || s.bevolking.totaal > 0) return false;
+    s.uitgestorven = true;
+    s.snelheid = 0;
+    Game.ui.log.schrijf(s, '⚰️ De laatste inwoner van ' + s.dorpsnaam + ' is niet meer.', 'slecht');
+    if (Game.ui.overlay.uitgestorven) Game.ui.overlay.uitgestorven(s);
+    return true;
+  };
+
   A.controleerOverwinning = function (s) {
+    if (A.controleerEinde(s)) return;
+    if (s.uitgestorven) return;
     if (A.controleerScenario(s)) return;
     if (s.gewonnen || s.tijdperk < 4) return;
     /* A scenario with its own goal does not also win the standard way. */

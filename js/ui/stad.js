@@ -43,7 +43,10 @@
       s.feest.id || '-',
       s.handel.fase, s.handel.nummer,
       s.opdracht.actief ? s.opdracht.actief.id + s.opdracht.actief.aantal : '-',
-      Game.core.opdrachten.kanLeveren(s) ? 1 : 0
+      Game.core.opdrachten.kanLeveren(s) ? 1 : 0,
+      s.faam && s.faam.termijn ? 'f' + s.faam.termijn.id + s.faam.termijn.aantal : '-',
+      Game.core.faam.kanLeveren(s) ? 1 : 0,
+      s.gewonnen ? Game.core.faam.rang(s).nr : '-'
     ];
     (s.handel.aanbod || []).forEach(function (a, i) {
       stukken.push(i + (a.gedaan ? 'x' : (Game.core.handel.kanHandelen(s, i) ? 'k' : 'n')));
@@ -87,6 +90,7 @@
     if (s.feest.resterend > 0) bouwFeest(s);
     if (s.handel.fase === 'aanwezig') bouwHandel(s);
     if (s.opdracht.actief) bouwOpdracht(s);
+    if (s.gewonnen) bouwHandvest(s);
     bouwBuren(s);
     bouwProblemen(s);
 
@@ -283,6 +287,81 @@
     knop.disabled = !Game.core.opdrachten.kanLeveren(s);
     knop.addEventListener('click', function () {
       Game.core.opdrachten.lever(spel.state);
+      S.ververs(spel.state, true);
+      Game.ui.hud.ververs(spel.state);
+    });
+    el.appendChild(knop);
+  }
+
+  /* ------------------------------------------------------------- handvest */
+
+  /* Het handvest van de vrijstad. Staat er alleen ná de overwinning, want
+     daarvóór is het niet de vraag die je bezighoudt — en daarna is het de
+     enige die er nog is. */
+  function bouwHandvest(s) {
+    var f = s.faam;
+    var rang = Game.core.faam.rang(s);
+    var el = blok('handvest', '📯 ' + rang.emoji + ' ' + rang.naam);
+
+    var volgende = Game.core.faam.volgendeRang(s);
+    var stand = Game.util.el('div', 'stadregel dof');
+    stand.innerHTML = 'Faam <b>' + f.punten + '</b>' +
+      (volgende ? ' · ' + volgende.emoji + ' ' + volgende.naam + ' bij ' + volgende.drempel
+                : ' · hoger kom je niet');
+    el.appendChild(stand);
+
+    if (!f.termijn) {
+      var wacht = Game.util.el('div', 'stadregel cursief', '');
+      volg(wacht, function (st) {
+        var over = Math.max(0, Math.ceil(st.faam.rust));
+        return 'De kroon beraadt zich — over ongeveer ' + over + ' seconden volgt een nieuwe termijn.';
+      });
+      el.appendChild(wacht);
+      return;
+    }
+
+    var t = f.termijn;
+    var res = Game.config.resources[t.res];
+    el.appendChild(Game.util.el('div', 'stadregel cursief', t.tekst));
+
+    var regel = Game.util.el('div', 'stadregel');
+    regel.innerHTML = 'Lever <b>' + res.emoji + ' ' + t.aantal + '</b> · beloning <b>🪙 ' + t.munten + '</b>';
+    el.appendChild(regel);
+
+    var balk = Game.util.el('div', 'balk');
+    var vul = Game.util.el('div');
+    balk.appendChild(vul);
+    el.appendChild(balk);
+    dyn.push(function (st) {
+      vul.style.width = Math.round(Game.util.clamp(st.res[t.res] / t.aantal, 0, 1) * 100) + '%';
+    });
+
+    /* De norm apart, want dat is het punt van het handvest: niet hoe groot je
+       stapel is maar hoe goed je stad staat. Twee faampunten in plaats van
+       één, en je ziet meteen of je hem haalt. */
+    var norm = Game.util.el('div', 'stadregel dof');
+    volg(norm, function (st) {
+      var gehaald = Game.core.faam.normGehaald(st);
+      return (gehaald ? '✅ ' : '○ ') + 'Norm: ' + t.norm.bevolking + ' inwoners (' +
+        st.bevolking.totaal + ') en ' + t.norm.tevredenheid + '% tevreden (' +
+        Math.round(st.tevredenheid) + '%) — ' + (gehaald ? 'dubbele faam' : 'anders half zoveel faam');
+    });
+    el.appendChild(norm);
+
+    var klok = Game.util.el('div', 'stadregel dof');
+    var kt = Game.util.el('span', '', '');
+    volg(kt, function (st) {
+      var over = Game.core.faam.dagenOver(st);
+      return over === 1 ? 'nog 1 dag' : 'nog ' + over + ' dagen';
+    });
+    klok.appendChild(Game.util.el('span', '', 'Termijn: '));
+    klok.appendChild(kt);
+    el.appendChild(klok);
+
+    var knop = Game.util.el('button', 'handelknop', '📯 Leveren aan de kroon');
+    knop.disabled = !Game.core.faam.kanLeveren(s);
+    knop.addEventListener('click', function () {
+      Game.core.faam.lever(spel.state);
       S.ververs(spel.state, true);
       Game.ui.hud.ververs(spel.state);
     });

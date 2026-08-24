@@ -40,10 +40,18 @@
     /* --- the haul home ------------------------------------------------- */
     if (def.wint || def.maakt) {
       var f = Game.core.logistiek.factorOpTegel(s, mid.x, mid.y);
+      /* Zeg wát er in de weg zit. Water tussen deze plek en het depot is een
+         ander probleem dan afstand, en het heeft een andere oplossing. */
+      var bij = Game.core.logistiek.depotVoorPunt(s, mid.x, mid.y);
+      var nat = bij.depot
+        ? Game.core.logistiek.route(s, mid.x, mid.y, bij.depot.x, bij.depot.y).water
+        : 0;
+      var raad = f >= 0.999 ? ' — vlak bij je opslag'
+        : nat > 0.08 ? ' — de karren moeten om het water heen, een brug scheelt veel'
+        : f < 0.8 ? ' — ver van je opslag, leg een straat of zet een schuur dichterbij' : '';
       uit.push({
         emoji: '🚚',
-        tekst: 'Aanvoer ' + pct(f) + (f >= 0.999 ? ' — vlak bij je opslag'
-          : f < 0.8 ? ' — ver van je opslag, leg een straat of zet een schuur dichterbij' : ''),
+        tekst: 'Aanvoer ' + pct(f) + raad,
         soort: f >= 0.999 ? 'goed' : (f < 0.8 ? 'slecht' : 'matig')
       });
     }

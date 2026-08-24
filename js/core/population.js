@@ -287,6 +287,11 @@
   function groei(s, dt) {
     var vrij = s.bevolking.ruimte - s.bevolking.totaal;
 
+    /* Een dorp zonder mensen groeit niet meer aan. Zonder deze regel kan een
+       uitgestorven dorp zichzelf opnieuw bevolken puur omdat de tevredenheid
+       van niemand toevallig hoog staat — en dan is de winter geen deadline. */
+    if (s.bevolking.totaal <= 0) return;
+
     if (s.tevredenheid < 25 && s.bevolking.totaal > 3) {
       s.krimpTimer = (s.krimpTimer || 0) + dt;
       if (s.krimpTimer > 25) {

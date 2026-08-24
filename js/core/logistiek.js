@@ -30,6 +30,17 @@
      whole return on a street. */
   L.WEGWINST = 0.45;
 
+  /* Water on the route is a detour, not a shortcut. A cart cannot ford a
+     river, so every stretch of unbridged water between a workplace and its
+     depot is walked around — and the way around is longer than the way
+     across. Expressed as extra effective distance: a route that is entirely
+     water would cost L.OMWEG times its own length on top.
+
+     This is what makes the river in map.js a decision instead of scenery, and
+     what makes a bridge worth its timber. A bridge tile carries `t.weg` like
+     any street, so it both removes the detour and shortens what is left. */
+  L.OMWEG = 2.2;
+
   var cache = { handtekening: '', depots: [], perGebouw: {} };
 
   function handtekening(s) {
@@ -64,23 +75,43 @@
 
   L.depots = function (s) { L.ververs(s); return cache.depots; };
 
-  /* What share of the straight line between two points runs over paved road.
+  /* What the straight line between two points is made of: the share that runs
+     over paved road, and the share that is water nobody has bridged.
      Sampling beats pathfinding here: it is cheap, it is stable, and it says
-     something the player can act on — pave the route you actually use. */
-  L.wegDeel = function (s, ax, ay, bx, by) {
+     something the player can act on — pave the route you actually use, and
+     bridge the water it crosses.
+
+     One pass answers both questions, because both are read on every tile when
+     the aanvoer overlay rebuilds. */
+  L.route = function (s, ax, ay, bx, by) {
     var dx = bx - ax, dy = by - ay;
     var lengte = Math.sqrt(dx * dx + dy * dy);
-    if (lengte < 1) return 1;
-    /* Capped low on purpose: this runs once per tile when the aanvoer overlay
-       rebuilds, and a dozen samples already tell paved from unpaved. */
+    if (lengte < 1) return { lengte: lengte, weg: 1, water: 0 };
+    /* Capped low on purpose: a dozen samples already tell paved from unpaved. */
     var stappen = Math.min(14, Math.max(2, Math.round(lengte)));
-    var op = 0;
+    var op = 0, nat = 0;
     for (var i = 0; i <= stappen; i++) {
       var t = i / stappen;
       var tegel = Game.core.map.tegel(s.kaart, Math.round(ax + dx * t), Math.round(ay + dy * t));
-      if (tegel && tegel.weg) op++;
+      if (!tegel) continue;
+      if (tegel.weg) op++;
+      /* A bridged tile is road, not water: it is exactly the tile the player
+         paid to stop being an obstacle. */
+      else if (tegel.t === 'water') nat++;
     }
-    return op / (stappen + 1);
+    return { lengte: lengte, weg: op / (stappen + 1), water: nat / (stappen + 1) };
+  };
+
+  /* Kept as the old, narrower question — some callers only want the road. */
+  L.wegDeel = function (s, ax, ay, bx, by) {
+    return L.route(s, ax, ay, bx, by).weg;
+  };
+
+  /* Straight-line distance turned into what the cart actually walks: shorter
+     over pavement, longer around water it cannot cross. */
+  L.effectieveAfstand = function (s, ax, ay, bx, by) {
+    var r = L.route(s, ax, ay, bx, by);
+    return r.lengte * (1 - L.WEGWINST * r.weg + L.OMWEG * r.water);
   };
 
   /* The nearest depot to a point on the map, and the effective — that is,
@@ -93,9 +124,11 @@
       var dep = cache.depots[i];
       var ddx = dep.x - gx, ddy = dep.y - gy;
       var ruw = Math.sqrt(ddx * ddx + ddy * ddy);
-      /* Even fully paved, a further depot cannot beat this — skip the sampling. */
+      /* Even fully paved and bone dry, a further depot cannot beat this —
+         skip the sampling. The water penalty only ever adds distance, so this
+         bound stays safe. */
       if (ruw * (1 - L.WEGWINST) >= besteAfstand) continue;
-      var effectief = ruw * (1 - L.WEGWINST * L.wegDeel(s, gx, gy, dep.x, dep.y));
+      var effectief = L.effectieveAfstand(s, gx, gy, dep.x, dep.y);
       if (effectief < besteAfstand) { besteAfstand = effectief; beste = dep; besteRuw = ruw; }
     }
     return { depot: beste, afstand: besteAfstand, ruweAfstand: besteRuw };
@@ -142,6 +175,20 @@
     var bij = L.dichtstbijDepot(s, g);
     if (!bij.depot) return { factor: f, tekst: 'Geen opslag om naartoe te brengen', slecht: true };
     if (f >= 0.999) return { factor: f, tekst: 'Vlak bij de opslag', slecht: false };
+
+    /* Zeg wát er ver is. "Ver van de opslag" terwijl de opslag tien tegels
+       verderop aan de andere oever ligt, is geen bruikbaar advies. */
+    var d = Game.core.state.def(g);
+    var route = L.route(s, g.x + (d.grootte - 1) / 2, g.y + (d.grootte - 1) / 2,
+      bij.depot.x, bij.depot.y);
+    if (route.water > 0.08) {
+      return {
+        factor: f,
+        tekst: 'De karren moeten om het water heen — ' + Math.round(f * 100) +
+          '% komt aan. Een brug scheelt veel.',
+        slecht: f < 0.8
+      };
+    }
     return {
       factor: f,
       tekst: 'Ver van de opslag — ' + Math.round(f * 100) + '% komt aan',
