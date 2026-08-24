@@ -37,6 +37,11 @@
  *   plaats.aantrekkelijkheid  same demand, but for a fresh placement
  *   verborgen       true = never in the build menu; only reachable as an
  *                   upgrade target (same footprint as what it grows out of)
+ *   overWater       only on a `weg` entry: this one is laid *on* water, from
+ *                   the bank or from another bridge. The tile stays water (the
+ *                   fishing ground under it is untouched), it only gains the
+ *                   road flag, so js/core/logistiek.js carries a cart over it
+ *                   like any street.
  *   weg             true = not a building at all but a paved tile: it sets a
  *                   flag on the map tile instead of creating a building, is
  *                   finished the moment it is laid, and shortens the haul to
@@ -62,6 +67,12 @@
       kosten: { hout: 3, steen: 2 }, bouwtijd: 0, weg: true,
       muur: '#a89272', dak: '#8a7658',
       beschrijving: 'Een verhard karrenspoor. Werkplaatsen langs een geplaveide route brengen veel meer van hun opbrengst thuis. Sleep met Shift voor een hele straat; klik op een bestaand straatje om het weer op te breken.'
+    },
+    {
+      id: 'brug', naam: 'Brug', emoji: '🌉', tijdperk: 1, grootte: 1,
+      kosten: { hout: 16, steen: 6 }, bouwtijd: 0, weg: true, overWater: true,
+      muur: '#a3844f', dak: '#7d6438',
+      beschrijving: 'Een houten brug over het water. Je bouwt hem vanaf de oever of vanaf een brug die er al ligt, tegel voor tegel. Over de brug komen je karren net zo hard vooruit als over een straatje — zonder brug is de overkant van de rivier ver weg.'
     },
     {
       id: 'huisje', naam: 'Huisje', emoji: '🏠', tijdperk: 1, grootte: 1,

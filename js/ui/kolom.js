@@ -85,6 +85,7 @@
 
     if (s.handel && s.handel.fase === 'aanwezig') return 'goud';
     if (s.opdracht && s.opdracht.actief && Game.core.opdrachten.kanLeveren(s)) return 'goud';
+    if (s.gewonnen && Game.core.faam.kanLeveren(s)) return 'goud';
     for (var j = 0; j < (s.buren || []).length; j++) if (s.buren[j].verzoek) return 'goud';
     return probl.length ? 'goud' : '';
   }

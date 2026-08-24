@@ -12,7 +12,31 @@ There is no npm, no build, no test runner in the repo.
 
 - **Play locally:** open `index.html` directly (`file://`). This is the primary target — it must keep working.
 - **Pages-like check:** the game is also served over HTTP from a **subdirectory** (GitHub Pages at `/Spelletje/`). All asset paths are relative so this works unchanged, but when touching paths, verify both routes.
-- **Automated / headless testing:** `main.js` exposes the live game object as `window.spel` (and `window.spel.state`). Drive the simulation from the browser console or via Playwright (Chromium is preinstalled at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`). The pattern used for playtesting: call `window.spel.nieuwSpel()`, then repeatedly call the tick functions with a fixed `dt` (see the tick order below) while scripting `Game.core.construction.plaats(...)` and `Game.core.population.zetWerkers(...)`, and read back `s.res`, `s.bevolking`, `s.verzameld`. Balance changes must be validated this way — that a fresh village can reach age 4 without starving.
+- **Balance measurement — use `tools/simuleer.js`.** `node tools/simuleer.js` plays the
+  whole game in Node with no browser, no npm and no dependencies. It reads the script
+  order out of `index.html`, loads only `js/config/`, `js/core/`, `js/ui/log.js`,
+  `js/ui/quests.js` (both do real simulation work), `js/devcheck.js` and `js/main.js`,
+  stubs the drawing layer, pins `Math.random` per seed and lets a fixed bot build a town.
+  Flags: `--zaden=8 --tijd=9000 --kaart= --moeilijkheid= --scenario= --parallel= --json`.
+  The seeds are independent, so it forks them across cores by default; `--parallel=1`
+  keeps everything in one process. It prints
+  per seed the time to each age, deaths from hunger and cold, the low-water mark of the
+  larder and which age requirement it ended up stuck on — plus the **median**, which is
+  the point: raids, events and births run on `Math.random`, so one run reads noise (age 3
+  has been measured anywhere between 1135s and 2968s). Always measure before *and* after
+  a balance change, with the same seeds; a git worktree at the old commit gives the
+  before.
+  The bot in that file is deliberately mediocre and deliberately fixed — the number it
+  produces is only worth anything because it is the *same* player on both sides. Its
+  absolute numbers are **not** comparable to a human's (it reaches age 3 around 1000s,
+  faster than the 1135–2968s range measured by hand), only to its own numbers from another
+  commit. And do not compare a single seed across a change that touches `map.js`: carving
+  a river consumes draws from the map's `Rng`, so the same seed produces a different world
+  before and after. Compare distributions, never rows.
+- **The tick order lives in exactly one place.** `main.js` exposes its `stap(s, dt)` as
+  `window.spel.stap`, and the harness drives that same function. Do not re-list the tick
+  order anywhere else — a second copy is a second game.
+- **Automated / headless testing in a browser:** `main.js` exposes the live game object as `window.spel` (and `window.spel.state`). Drive the simulation from the browser console or via Playwright (Chromium is preinstalled at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`): call `window.spel.nieuwSpel()`, set `s.snelheid = 0` and step with `window.spel.stap(s, 0.1)` while scripting `Game.core.construction.plaats(...)` and `Game.core.population.zetWerkers(...)`. Use this for anything that touches the DOM or the canvas; use the harness above for balance.
   A headless run must also answer choices for the systems that wait for the
   player: `s.gebeurtenis.actief` needs `Game.core.gebeurtenissen.kies(s, 0)`,
   otherwise no further events fire.
@@ -34,8 +58,33 @@ City life adds a handful of plain-JSON fields next to `s.raid`, each a phase or 
 
 ### Layer separation
 
-- `js/config/` — **pure data**, the balance knobs. `buildings.js` is the heart (costs, production `wint`/`maakt`, worker slots, placement rules, plus `verbetering`/`verborgen` for upgrades). Also `resources.js`, `jobs.js`, `ages.js` (age-up requirements + victory), `quests.js` (objective list), `instellingen.js` (map sizes + difficulties), `handel.js` (trade values), `opdrachten.js` (contract templates), `gebeurtenissen.js` (events with choices — their effects are functions in config, which is fine: config is not state), `onderzoek.js` (research).
+- `js/config/` — **pure data**, the balance knobs. `buildings.js` is the heart (costs, production `wint`/`maakt`, worker slots, placement rules, plus `verbetering`/`verborgen` for upgrades). Also `resources.js`, `jobs.js`, `ages.js` (age-up requirements + victory), `quests.js` (objective list), `instellingen.js` (map sizes + difficulties), `handel.js` (trade values), `opdrachten.js` (contract templates), `gebeurtenissen.js` (events with choices — their effects are functions in config, which is fine: config is not state), `onderzoek.js` (research), `faam.js` (the free-city ranks and what the crown asks for each term).
 **Place matters, and it is computed in one place.** `js/core/buurt.js` answers two questions about any tile: what services a household there can reach (`dienstenOp`), and how pleasant the spot is (`aantrekkelijkOp`). Happiness reads the first — `herbereken` stores the town-wide averages as `s.dienstdekking` (0..1) and `s.sfeer` — so a chapel now only comforts the homes that can walk to it, and a smithy only sours the street it stands on. A building offering happiness **must** declare a `bereik`; `devcheck.js` fails the build if it does not, because points without a reach would silently never arrive. Desirability also gates growth: `verbetering.aantrekkelijkheid` and `plaats.aantrekkelijkheid` refuse an upgrade or a placement in an ugly corner. The height map that `map.js` already generated for the hillshade now feeds the simulation too (`buurt.relief`): mills catch more wind up high, fields want low well-watered ground, and watchtowers see further from a rise.
+
+**There is a river, and it is a wall until you bridge it.** `map.js` carves one river per
+64×48 of map (`graafRivier`) before anything is seeded: a source on the most landlocked
+high ground, a walk that mixes downhill with "towards the nearest sea tile" plus a
+perpendicular lurch for the meander, and a `t.rivier` flag on the tiles it turns to water.
+It matters mechanically before it matters visually, and it does so through the module that
+already owned the question. `logistiek.route` samples the straight line from a workplace
+to its depot in one pass and returns two shares: how much of it is paved (`weg`) and how
+much is **water nobody has bridged** (`water`). `L.effectieveAfstand` turns that into what
+the cart actually walks — `lengte * (1 - WEGWINST*weg + OMWEG*water)` — because a cart
+cannot ford a river, it goes around, and around is longer. `L.OMWEG` (2.2) is that detour.
+Measured on a 20-tile haul across the river: 0.50 of the output arrives with nothing built,
+0.58 with a paved road that stops at the bank, 0.69 once the bridge closes the gap. That is
+the whole point of the feature, and the aanvoer overlay shows it because it asks the same
+function. The **bridge** (`brug` in `buildings.js`) is a `weg: true` entry with
+`overWater: true`: `construction.controleerWeg` lets it onto a water tile only when
+`C.aanDeOever` finds land or an existing bridge orthogonally adjacent, so it is built out
+from the bank span by span. The tile **stays water** — `t.t` is untouched, the fishing
+ground under it survives, buildings still cannot stand there — it only gains `t.weg` and
+`t.brug`. Because `t.weg` is all logistics, `paths.js` and the aanvoer overlay know about,
+they all pick the bridge up for free. `paths.tekenBruggen` draws it as a raised deck with
+planks, a shadow on the water and a rail on the sides that face open water, because a
+paved diamond on water reads as a raft. `logistiek.omschrijving` says *why* a workplace is
+badly supplied when the route crosses water — "ver van de opslag" is useless advice when
+the barn is ten tiles away on the other bank.
 
 **Goods have to get home.** `js/core/logistiek.js` gives every workplace one number: the share of its output that actually reaches a depot (anything with `opslag` — the square, a barn, a warehouse). Full within 10 tiles, sliding to a floor of `L.MIN` (0.5) at 26; `economy.js` multiplies production by it. Streets shorten that haul by up to `L.WEGWINST` (45%), measured by sampling the straight line for `t.weg` tiles rather than by pathfinding — cheap, stable, and it tells the player something they can act on. A **street is not a building**: `weg: true` in `buildings.js` marks a config entry that sets a tile flag instead of pushing to `s.gebouwen`, finishes instantly, and toggles off (with a refund) when placed on itself. `s.wegTeller` exists purely to invalidate the logistics cache. Keeping streets out of `s.gebouwen` matters: they would otherwise swamp the MST in `paths.js`, the depth sort in `renderer.js` and every loop over buildings in the codebase.
 
@@ -45,7 +94,7 @@ The decorative walkers now route to the depot the simulation actually delivers t
 
 `js/render/lagen.js` + `js/ui/lagen.js` are the eye for all of this: five map overlays (voorzieningen, aantrekkelijkheid, verdediging, aanvoer, grondstoffen), toggled with **L** or the bar at the bottom of the stage. The grondstoffen layer paints endless nodes — fertile ground, fishing grounds — at full rather than leaving them blank, because those are the two a new player is hunting for. The aanvoer layer asks `logistiek.factorOpTegel` per tile — routed through the very same formula as the economy, so the map can never drift away from the simulation. Treat them as part of the feature, not decoration — a locality rule the player cannot see is a locality rule they will experience as randomness.
 
-- `js/core/` — the simulation. Each module owns one concern and exposes a `tick(s, dt)` where relevant: `economy` (production/crafting/upkeep/storage), `population` (food/happiness/growth/jobs), `seasons`, `raids`, `feesten` (festivals → `s.moreel`), `handel` (the travelling merchant), `opdrachten` (contracts with a deadline), `gebeurtenissen` (random events, which open a choice overlay and auto-resolve when there is no UI — that is what makes headless runs work), `construction` (place/build/**move**/**upgrade**/demolish), `ages`, `dorpelingen` (the village register: named inhabitants kept in step with the headcount, flavour only), plus `map` (generation), `state`, `onderzoek` (research bonuses, all derived), `rng` (seeded), `save`.
+- `js/core/` — the simulation. Each module owns one concern and exposes a `tick(s, dt)` where relevant: `economy` (production/crafting/upkeep/storage), `population` (food/happiness/growth/jobs), `seasons`, `raids`, `feesten` (festivals → `s.moreel`), `handel` (the travelling merchant), `opdrachten` (contracts with a deadline), `gebeurtenissen` (random events, which open a choice overlay and auto-resolve when there is no UI — that is what makes headless runs work), `construction` (place/build/**move**/**upgrade**/demolish), `ages` (age-up, victory and extinction), `dorpelingen` (the village register: named inhabitants kept in step with the headcount, flavour only), `faam` (the post-victory charter), `historie` (one sample per season), plus `map` (generation, including the rivers), `state`, `onderzoek` (research bonuses, all derived), `rng` (seeded), `save` (three slots).
 
 `buurt.js` caches its building lists on a signature (the `handtekening` trick from `paths.js`) and is queried on demand, so `herbereken` staying cheap does not depend on how often workers change.
 
@@ -56,6 +105,42 @@ The decorative walkers now route to the depot the simulation actually delivers t
 **There is a world outside the walls.** `js/core/buren.js` generates three neighbouring towns per map (plain JSON on `s.buren`), each with a speciality, a reputation and an optional trade route. A route is an *investment*: it costs a wagon and a purse once and then pays every second — but it also hauls goods away, so a route you cannot supply quietly stops earning, and a raid that breaks through calls `buren.onderbreek` and cuts every route for a while. That is the first time a lost raid costs more than a pile of stolen timber. Requests from neighbours are the main way to move reputation.
 
 **Scenarios** (`js/config/scenarios.js`) are the cheapest replayability the codebase can buy: one object gives a starting position (`start`), rules the simulation reads (`regels.verboden`, `regels.moeilijkheid`, `regels.kaart`, `regels.roverTempo`), and an ending (`doel.klaar` / `doel.faal` / `tijdslimiet`). `state.nieuw` applies the opening, `construction.controleer` honours `verboden`, `raids.volgendeRust` honours `roverTempo`, and `ages.controleerScenario` runs **before** the standard victory so a scenario never falls back on "build a cathedral". Adding one is a config edit and nothing else.
+
+**The town has a memory.** `js/core/historie.js` writes one sample per in-game season into
+`s.historie` — a ring buffer of 240 (sixty years), short keys (`k` quarter, `b` population,
+`t` happiness, `v` food, `m` coins, `g` buildings, `p` age) because they land in every
+save. `js/ui/grafiek.js` draws them as four small charts stacked in the statistics screen,
+one per metric with its own y-scale: putting population and happiness on one axis would
+tell a story that is not in the data. The age boundaries run through all four as gold
+lines, because that is the one thing they share. Everything sampled is derived from the
+state at that moment — nothing here is authoritative anywhere else.
+
+**Losing is an ending, not silence.** `ages.controleerEinde(s)` fires the moment
+`s.bevolking.totaal` hits zero: it sets `s.uitgestorven`, pauses, and opens
+`overlay.uitgestorven`. `population.groei` refuses to grow a town of zero (without that a
+dead town could repopulate itself out of nobody's happiness, and the winter would stop
+being a deadline). `main.js` clears `spel.actief` on `s.uitgestorven`, so the autosave
+stops instead of overwriting the last playable town with a corpse — the offer on that
+screen is "go back twenty seconds", and it has to be real.
+
+**Three save slots, not one.** `save.js` writes `dorp-tot-stad-boek-1..3` plus a small
+separate register (`dorp-tot-stad-boeken-v1`) holding only what the picker shows — name,
+year, age, points. Keeping that register apart is the whole trick: listing three towns
+must not parse three multi-hundred-kilobyte saves. `SL.migreer()` moves the old single
+`dorp-tot-stad-save-v1` key into book 1 once. `SL.huidig` is where the autosave writes and
+is deliberately **not** in `Game.state`: it says something about this browser, not about
+this town.
+
+**There is a game after the cathedral.** `js/config/faam.js` + `js/core/faam.js` are the
+free-city charter, and they only run once `s.gewonnen`. Same shape as `opdrachten.js` —
+one open term with a deadline, all plain JSON — with two differences that matter: it never
+stops, so the economy you built keeps a reason to run, and it pays **faam points**, which
+buy ranks. A rank is derived exactly like research: `s.faam` stores only the points, and
+`faam.bonus(s)` returns the same shape as `onderzoek.bonus(s)` so `herbereken` can run
+both through one mill (`faam.meng`). A term also carries a **norm** (a minimum population
+and happiness, both scaling with the rank): delivering is one point, delivering while the
+town also meets the norm is two. That is the whole design — the charter is about how well
+the town is built, not how big the pile is.
 
 **The chronicle** (`js/core/kroniek.js`) turns the log, the register, the raid tally and the neighbours into a few paragraphs. Generated on demand, never stored.
 
@@ -95,7 +180,7 @@ Buildings get a cast shadow, a dark contour over the wall corners and eaves, and
 **Watch the fill count.** All of the above is per-tile canvas work on a grid that can be several thousand tiles at low zoom, so two things are load-bearing: `verf()` is memoised on (colour, factor/200) because it used to re-parse a hex string several times per tile per frame, and the flat full-screen washes in `tekenGradatie` are composited into a single `fillRect` rather than one per layer. Measured in headless Chromium (software rendering, so a pessimistic floor) the whole visual pass costs roughly a quarter of the frame budget versus the flat-shaded version.
 `css/style.css` is hand-written and has no framework. Two custom properties carry the material: `--eik` for the wooden frame (top bar, build bar) and `--paneel` for anything you are meant to read. Buttons share one transition and one `:focus-visible` ring so the game stays playable from the keyboard, and everything animated is switched off under `prefers-reduced-motion`. A new panel should reach for those variables rather than inventing its own brown.
 
-- `js/ui/` — DOM panels (`hud`, `buildmenu`, `panel`, `quests`, `log`, `overlay`, `stad`, `onderzoek`, `audio`, `tip`, `kolom`, `lagen`). `panel.js`, `buildmenu.js` and `stad.js` use a `handtekening()` signature-diff so they only rebuild when something visible changed, otherwise the buttons would be ripped out from under the cursor each frame; `stad.js` additionally keeps a list of small updater closures so its countdowns tick without a rebuild. `stad.js` owns the "Stadszaken" card (festival, caravan, contract), the event dialog and the overview; `overlay.js` owns the welcome/new-game/help/menu/statistics screens.
+- `js/ui/` — DOM panels (`hud`, `buildmenu`, `panel`, `quests`, `log`, `overlay`, `stad`, `onderzoek`, `audio`, `tip`, `kolom`, `lagen`, `grafiek`). `panel.js`, `buildmenu.js` and `stad.js` use a `handtekening()` signature-diff so they only rebuild when something visible changed, otherwise the buttons would be ripped out from under the cursor each frame; `stad.js` additionally keeps a list of small updater closures so its countdowns tick without a rebuild. `stad.js` owns the "Stadszaken" card (festival, caravan, contract), the event dialog and the overview; `overlay.js` owns the welcome/new-game/help/menu/statistics screens.
 
 **The interface earns its space.** Four rules that a new panel should keep:
 
@@ -113,10 +198,14 @@ Buildings get a cast shadow, a dark contour over the wall corners and eaves, and
 `js/main.js` runs a fixed-timestep accumulator (10 logic ticks/sec) decoupled from render framerate; speed buttons multiply the number of ticks, not `dt`. One simulation step, `stap(s, dt)`, runs modules in this order — **preserve it**, later steps read state the earlier ones wrote:
 
 ```
-seasons → construction → economy → population → raids
-        → feesten → handel → opdrachten → gebeurtenissen
-        → dorpelingen → quests(check) → ages(victory)
+seasons → construction → economy → population → demografie → standen
+        → raids → feesten → handel → opdrachten → gebeurtenissen
+        → buren → arbeid → dorpelingen → faam → historie
+        → quests(check) → ages(victory / extinction)
 ```
+
+`historie` is deliberately last of the simulation steps: it is a recorder, so it must see
+the state everything else has already written.
 
 Rendering, decorative walkers, HUD refresh, and autosave run on real time outside the fixed step.
 
@@ -126,7 +215,7 @@ A new building is one object appended to the `B` array in `js/config/buildings.j
 
 **Upgrades** are two edits: `verbetering: { naar, tijdperk, kosten }` on the base building, and the target building itself with `verborgen: true` (kept out of the build menu) and the **same `grootte`** — the footprint must not change, since the move keeps the same tiles. `devcheck.js` checks both.
 
-New **events**, **contracts** and **research** are likewise one object appended to their config list; nothing else needs touching.
+New **events**, **contracts**, **research** and **charter terms** (`faamEisen`) are likewise one object appended to their config list; nothing else needs touching. `devcheck.js` checks each of them — a charter term for a resource nothing produces, or a rank whose thresholds do not rise, fails the build.
 
 **Difficulty and map size** come from `js/config/instellingen.js` and are chosen on the new-game screen; `state.nieuw(seed, naam, opties)` stores the ids and `raids.js` reads the difficulty.
 

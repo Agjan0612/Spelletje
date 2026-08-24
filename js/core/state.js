@@ -46,6 +46,8 @@
 
       tijdperk: 1,
       gewonnen: false,
+      /* De andere afloop: gezet zodra de laatste inwoner weg is. */
+      uitgestorven: false,
 
       snelheid: 1,
 
@@ -135,6 +137,14 @@
       questsGedaan: {},
       log: [],
 
+      /* Eén meting per seizoen, zestig jaar diep (core/historie.js). */
+      historie: [],
+
+      /* Het handvest van de vrijstad — pas in werking ná de overwinning.
+         core/faam.js vult het in; alleen de punten worden bewaard, de rang en
+         zijn bonussen zijn afgeleid, net als bij onderzoek. */
+      faam: null,
+
       /* Bumped whenever a street is laid or lifted, so core/logistiek.js
          knows its cached hauling distances went stale. The streets themselves
          live on the map tiles as `t.weg`. */
@@ -191,6 +201,8 @@
     });
 
     s.bevolking.totaal = begin.bevolking || 5;
+    if (Game.core.faam) Game.core.faam.zorg(s);
+    if (Game.core.historie) Game.core.historie.zorg(s);
     S.herbereken(s);
 
     /* Give the farm two workers so the village is alive from the first second. */
@@ -307,8 +319,10 @@
 
     /* Research multiplies what the buildings already give. It is derived
        like everything else here — `s.onderzoek` only stores which studies
-       were bought. */
+       were bought. The rank of a free city works exactly the same way and
+       goes through the same mill: core/faam.js stores nothing but points. */
     var o = Game.core.onderzoek.bonus(s);
+    if (Game.core.faam) o = Game.core.faam.meng(o, Game.core.faam.bonus(s));
 
     s.bevolking.ruimte = ruimte;
     s.capaciteit = Math.round(opslag * o.opslag);
@@ -409,6 +423,9 @@
 
     var onderzoek = Object.keys(s.onderzoek || {}).length;
     var opdrachten = (s.opdracht && s.opdracht.gedaan) || 0;
+    /* Faam telt zwaar mee: het is het enige dat ná de overwinning nog groeit,
+       en zonder dat zou de score daar stil blijven staan. */
+    var faam = (s.gewonnen && s.faam) ? s.faam.punten : 0;
 
     var punten = Math.round(
       s.bevolking.totaal * 8 +
@@ -417,6 +434,7 @@
       (s.tijdperk - 1) * 120 +
       onderzoek * 60 +
       opdrachten * 30 +
+      faam * 90 +
       verzameld / 50 +
       (s.gewonnen ? 500 : 0)
     );
@@ -430,6 +448,7 @@
       onderzoek: onderzoek,
       opdrachten: opdrachten,
       rooftochten: (s.raid && s.raid.nummer) || 0,
+      faam: faam,
       punten: punten,
       rang: rang(punten)
     };

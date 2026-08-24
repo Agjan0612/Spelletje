@@ -40,7 +40,7 @@ Je verzamelt zes grondstoffen uit het land — 🥩 vlees, 🪵 hout, 🪨 steen
 
 | Tijdperk | Wat je krijgt |
 |---|---|
-| 1 · **Nederzetting** | Boerderij, huisjes, houthakker, jacht, visserij, steengroeve, waterput, **straatjes**, **graanschuur** |
+| 1 · **Nederzetting** | Boerderij, huisjes, houthakker, jacht, visserij, steengroeve, waterput, **straatjes**, **bruggen**, **graanschuur** |
 | 2 · **Dorp** | Molen, bakkerij, marktplaats, kapel, koper- en ijzermijn, wachttoren, **haven**, **oefenveld**, **schaapskooi**, **hopveld** |
 | 3 · **Handelsstad** | Smederij, wapensmid, kazerne, muren, **stadspoort**, kerk, herberg, edelsteenmijn, gildehuis, **school**, **weverij**, **brouwerij**, **schatkamer** |
 | 4 · **Middeleeuwse stad** | Stadhuis, herenhuizen, juwelier, handelshuis, universiteit, kathedraal, kasteel |
@@ -117,6 +117,15 @@ verloren. Voortdurend mensen heen en weer schuiven kost je dus iets.
   depot gaat de halve dag op aan lopen — bouw een voorraadschuur dichterbij, of leg een
   **straatje**: een geplaveide route scheelt bijna de helft van de afstand. Shift-slepen
   legt een hele straat; klik op een bestaand straatje om het weer op te breken.
+- **De rivier.** Door elke kaart loopt een rivier van de bergen naar zee. Je karren gaan
+  daar niet overheen: ze lopen eromheen, en dat is een flink stuk verder. Een werkplaats
+  aan de overkant levert daardoor merkbaar minder af. Een 🌉 **brug** (bij *Straten*) leg
+  je vanaf de oever het water op, tegel voor tegel — of vanaf een brug die er al ligt.
+  Daarna rijden je karren erover als over een straatje. Op een haul van twintig tegels
+  over de rivier scheelt dat het verschil tussen de helft en ruim tweederde van je
+  opbrengst. Het visgebied onder de brug blijft gewoon liggen, dus je vissershut vist door.
+  De kaartlaag **Aanvoer** laat precies zien welke hoek van je kaart aan de verkeerde kant
+  ligt.
 - **Feesten.** Via de kaart **"Het dorp"** (rechts) vier je een feest — kost graan en
   munten en tilt het humeur van de hele gemeenschap tijdelijk op.
 - **Een reizende koopman** komt af en toe langs met ruilaanbiedingen, en de **heer** stuurt
@@ -327,6 +336,27 @@ Bij **Nieuw dorp stichten** kies je waar je aan begint:
 | 🐺 **Het jaar van de wolven** | Rovers, aan de lopende band. Versla er tien. |
 | 🧳 **De vluchtelingen** | Veertig monden, bijna niets om ze te voeden. Breng ze door de eerste jaren. |
 
+## Na de overwinning: het handvest van de vrijstad
+
+Je stad is "af" zodra je 100 inwoners hebt, 70% tevredenheid, en de kathedraal, het
+kasteel, de universiteit en het stadhuis staan. Dat was vroeger het einde — je mocht
+doorbouwen, maar nergens meer naartoe.
+
+Nu verleent de kroon je stad op dat moment een **handvest**. Vanaf dan opent er telkens
+een nieuwe **termijn**: een levering met een deadline, plus een **norm** waar je stad aan
+moet blijven voldoen (een minimum aantal inwoners en een minimum tevredenheid, die allebei
+meegroeien met je rang). Leveren geeft munten, moreel en een faampunt; leveren terwijl je
+óók aan de norm voldoet geeft er twee. Een termijn laten verlopen kost je er één.
+
+Met faam klim je door vijf rangen — 🏙️ stad met stadsrechten, 🕊️ vrijstad, ⚓ hanzestad,
+🦅 rijksstad, 👑 keizerlijke vrijstad — en elke rang geeft je stad iets blijvends, precies
+zoals onderzoek dat doet. Het handvest staat in het tabblad **Stad**.
+
+Het punt is de norm, niet de stapel: je kunt een termijn halen door alles op te potten,
+maar de dubbele faam krijg je alleen als je stad ook echt goed staat.
+
+---
+
 ## De kroniek
 
 Via **☰ → 📜 De kroniek** schrijft het spel de geschiedenis van je stad uit: hoe ze
@@ -354,11 +384,28 @@ dan gaat bouwen ineens heel traag. Houd er dus altijd een paar vrij.
 
 ---
 
-## Opslaan
+## Opslaan — drie dorpsboeken
 
 Het spel slaat zichzelf elke 20 seconden op in je browser. Sluit je het tabblad, dan
 staat je dorp er de volgende keer gewoon weer. Via **☰ → Menu** kun je je save ook als
 tekst kopiëren en op een andere computer weer inplakken.
+
+Er passen **drie dorpen** naast elkaar in je browser. Bij **☰ → Dorpsboeken** zie je ze
+alle drie staan — naam, jaar, tijdperk, inwoners en punten — en wissel je met één klik.
+Sticht je een nieuw dorp, dan kies je op datzelfde scherm in welk boek het komt; standaard
+pakt hij een leeg boek, zodat een scenario proberen je bestaande stad niet kost.
+
+Loopt je dorp helemaal leeg — de laatste inwoner verhongert of vertrekt — dan is dat een
+echt einde: je krijgt de eindstand en de kroniek te zien, en de automatische opslag stopt
+meteen. Wat er in je dorpsboek staat is dan het dorp van hooguit twintig seconden geleden,
+dus je kunt gewoon teruggaan en het anders doen.
+
+## Het verloop van je stad
+
+Bij **☰ → Statistieken** staat naast de eindstand ook de **geschiedenis**: inwoners,
+tevredenheid, voedselvoorraad en munten, één meting per seizoen, met de tijdperken als
+gouden strepen. Eén getal zegt hoe het er nú voor staat; de lijn zegt of het de goede
+kant op gaat — en dat is meestal de vraag.
 
 ---
 
@@ -378,6 +425,7 @@ js/config/            De speldata — hier pas je de balans aan
   buildings.js          Alle gebouwen: kosten, opbrengst, werkers, plaatsingsregels
   jobs.js               Beroepen
   ages.js               De vier tijdperken en hun eisen
+  faam.js               Het handvest na de overwinning: rangen en termijnen
   quests.js             De doelenlijst
   handel.js             Wat de koopman voor je spullen geeft
   opdrachten.js         De opdrachten van de heer
@@ -431,10 +479,32 @@ js/ui/                De schermelementen
   stad.js               Stadszaken: feest, koopman, opdracht, overzicht
   onderzoek.js          Het onderzoeksscherm
   audio.js              Geluid (volledig gesynthetiseerd)
+  grafiek.js            Het verloop van je stad in vier grafiekjes
 
 js/devcheck.js        Controleert bij het opstarten of de speldata klopt
 js/main.js            Spel-loop, muis en toetsenbord
+
+tools/simuleer.js     Speelt het spel zonder browser, voor het meten van de balans
 ```
+
+### De balans meten
+
+`tools/simuleer.js` draait het hele spel in Node — geen browser, geen npm, geen
+dependencies. Hij leest de laadvolgorde uit `index.html`, laadt alleen de config-, core-
+en spel-loopbestanden, zet `Math.random` vast en laat een simpele bot een dorp bouwen:
+
+```
+node tools/simuleer.js                          acht zaden, standaardinstellingen
+node tools/simuleer.js --zaden=16 --tijd=9000
+node tools/simuleer.js --scenario=kust --moeilijkheid=pittig
+node tools/simuleer.js --json
+node tools/simuleer.js --parallel=1              alles in één proces
+```
+
+Je krijgt per zaad de tijd tot elk tijdperk, het aantal doden door honger en kou, de
+laagste voedselvoorraad en waar het uiteindelijk op vastliep — plus de mediaan. Die
+mediaan is het punt: rooftochten, gebeurtenissen en geboortes lopen op `Math.random`, dus
+één run leest ruis. Meet altijd vóór én na een balanswijziging, met dezelfde zaden.
 
 ### Zelf iets toevoegen
 

@@ -255,6 +255,7 @@
       for (var x = zicht.x0; x < zicht.x1; x++) {
         var t = Game.core.map.tegel(s.kaart, x, y);
         if (!t || !t.weg) continue;
+        if (t.brug) continue;              /* planks over water, drawn below */
         var sp = cam.wereldNaarScherm(x * TEGEL, y * TEGEL);
         var dia = Game.render.diamant(sp.x, sp.y, p);
         ctx.fillStyle = basis;
@@ -343,8 +344,86 @@
     ctx.stroke();
   }
 
+  /* Bridges. A bridge tile is still water — the fishing ground under it is
+     untouched — so it cannot be drawn as a paved diamond: it needs a deck that
+     visibly stands above the surface. Planks across the span, a shadow on the
+     water beneath, and a rail on the two sides that have water next to them,
+     so a bridge across a river reads as a crossing and not as a raft. */
+  P.tekenBruggen = function (ctx, cam, s, p) {
+    var TEGEL = Game.render.TEGEL;
+    var zicht = cam.zichtbaar(s.kaart);
+    var hoogte = p * 0.14;                 /* how far the deck sits above water */
+
+    for (var y = zicht.y0; y < zicht.y1; y++) {
+      for (var x = zicht.x0; x < zicht.x1; x++) {
+        var t = Game.core.map.tegel(s.kaart, x, y);
+        if (!t || !t.brug) continue;
+        var sp = cam.wereldNaarScherm(x * TEGEL, y * TEGEL);
+
+        /* The shadow the deck throws on the water. */
+        ctx.fillStyle = 'rgba(18,32,44,.34)';
+        Game.render.padDiamant(ctx, Game.render.diamant(sp.x, sp.y + hoogte * 0.5, p * 0.92));
+        ctx.fill();
+
+        var dek = Game.render.diamant(sp.x, sp.y - hoogte, p * 0.94);
+        ctx.fillStyle = 'rgba(146,116,74,.98)';
+        Game.render.padDiamant(ctx, dek);
+        ctx.fill();
+
+        if (p > 20) {
+          /* Planks: a handful of lines across the deck. */
+          ctx.strokeStyle = 'rgba(96,72,44,.45)';
+          ctx.lineWidth = Math.max(1, p * 0.022);
+          for (var i = -2; i <= 2; i++) {
+            var f = i / 3;
+            ctx.beginPath();
+            ctx.moveTo(dek.cx + f * dek.hw, dek.cy + f * dek.hh);
+            ctx.lineTo(dek.cx + f * dek.hw + dek.hw, dek.cy + f * dek.hh - dek.hh);
+            ctx.stroke();
+          }
+          /* A rail on every side that faces open water. */
+          ctx.strokeStyle = 'rgba(112,86,54,.9)';
+          ctx.lineWidth = Math.max(1, p * 0.035);
+          relingen(ctx, s, x, y, dek);
+        }
+      }
+    }
+  };
+
+  /* Only the sides with water next to them get a rail: the ends of the bridge
+     have to stay open, or you would be fencing off the road onto the bank.
+     The four edges of the diamond, in world directions: +x is the right-bottom
+     edge, -x the left-top one, +y bottom-left and -y top-right. */
+  function relingen(ctx, s, x, y, dek) {
+    var hw = dek.hw, hh = dek.hh;
+    var zijden = [
+      { dx: 1, dy: 0, van: [hw, 0], naar: [0, hh] },
+      { dx: -1, dy: 0, van: [-hw, 0], naar: [0, -hh] },
+      { dx: 0, dy: 1, van: [0, hh], naar: [-hw, 0] },
+      { dx: 0, dy: -1, van: [0, -hh], naar: [hw, 0] }
+    ];
+    var op = hh * 0.55;                    /* rail height above the deck */
+    for (var i = 0; i < zijden.length; i++) {
+      var z = zijden[i];
+      var buur = Game.core.map.tegel(s.kaart, x + z.dx, y + z.dy);
+      if (!buur || buur.t !== 'water' || buur.brug) continue;
+      ctx.beginPath();
+      ctx.moveTo(dek.cx + z.van[0], dek.cy + z.van[1] - op);
+      ctx.lineTo(dek.cx + z.naar[0], dek.cy + z.naar[1] - op);
+      ctx.stroke();
+      /* Two posts, so the rail is attached to something. */
+      ctx.beginPath();
+      ctx.moveTo(dek.cx + z.van[0], dek.cy + z.van[1]);
+      ctx.lineTo(dek.cx + z.van[0], dek.cy + z.van[1] - op);
+      ctx.moveTo(dek.cx + z.naar[0], dek.cy + z.naar[1]);
+      ctx.lineTo(dek.cx + z.naar[0], dek.cy + z.naar[1] - op);
+      ctx.stroke();
+    }
+  }
+
   P.teken = function (ctx, cam, s, p) {
     P.tekenWegen(ctx, cam, s, p);
+    P.tekenBruggen(ctx, cam, s, p);
     if (!netwerk.randen.length) return;
     var TEGEL = Game.render.TEGEL;
 

@@ -874,3 +874,45 @@ ul.overzicht li.slecht { border-left-color: var(--bloed); }
 .stadregel.probleem { line-height: 1.35; }
 .stadregel.klikbaar { cursor: pointer; text-decoration: underline dotted transparent; }
 .stadregel.klikbaar:hover { color: var(--goud-licht); text-decoration-color: var(--goud); }
+
+/* ------------------------------------------------------------- grafieken -- */
+
+.grafiekblok { margin: 4px 0 2px; }
+
+.grafiek {
+  margin: 0 0 10px;
+}
+
+.grafiekkop {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 8px; margin: 0 0 3px;
+  font-size: 12px;
+}
+.grafiekkop .naam { color: var(--perkament); font-weight: 600; }
+.grafiekkop .waarde { color: var(--perkament-stil); font-size: 11.5px; }
+
+.grafiekdoek {
+  display: block; width: 100%; height: auto;
+  border: 1px solid var(--rand-licht);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, .18);
+}
+
+/* ----------------------------------------------------------- dorpsboeken -- */
+
+.boekenlijst { display: flex; flex-direction: column; gap: 7px; margin: 8px 0 2px; }
+
+.boekrij { display: flex; align-items: stretch; gap: 6px; }
+
+.boekrij .boekknop {
+  flex: 1; text-align: left; padding: 8px 11px;
+  display: flex; flex-direction: column; gap: 2px;
+  background: rgba(0, 0, 0, .18);
+  border: 1px solid var(--rand-licht);
+  border-radius: 5px;
+  color: var(--perkament);
+}
+.boekrij .boekknop b { font-size: 13.5px; }
+.boekrij .boekknop span { font-size: 11.5px; color: var(--perkament-stil); }
+.boekrij .boekknop:disabled { opacity: .6; cursor: default; }
+.boekrij.huidig .boekknop { border-color: var(--goud-dof); }

@@ -1,9 +1,29 @@
 /* Saving and loading via localStorage, plus export/import as text so a save
-   can be copied to another computer. */
+   can be copied to another computer.
+
+   Er zijn drie dorpsboeken in plaats van één. Eén sleutel betekende dat een
+   nieuw scenario proberen je bestaande stad kostte — en met vijf scenario's op
+   het beginscherm is dat een val die je precies één keer per stad in loopt.
+
+   De sloten zijn drie losse sleutels plus een klein register met alleen wat
+   het keuzescherm moet tonen (naam, jaar, punten). Dat register apart houden
+   is het hele punt: een lijst met dorpen opbouwen mag geen drie saves van een
+   paar honderd kilobyte parsen. */
 (function (Game) {
 
   var SL = {};
-  var SLEUTEL = 'dorp-tot-stad-save-v1';
+
+  /* De oude, enkele sleutel. Blijft bestaan om één keer uit te lezen. */
+  var SLEUTEL_OUD = 'dorp-tot-stad-save-v1';
+  var SLEUTEL_REGISTER = 'dorp-tot-stad-boeken-v1';
+
+  SL.AANTAL = 3;
+
+  /* In welk boek dit spel schrijft. Bewust géén onderdeel van Game.state: het
+     zegt iets over deze browser, niet over deze stad. */
+  SL.huidig = 1;
+
+  function sleutel(nr) { return 'dorp-tot-stad-boek-' + nr; }
 
   SL.beschikbaar = function () {
     try {
@@ -15,32 +35,140 @@
     }
   };
 
+  function geldig(nr) {
+    nr = parseInt(nr, 10);
+    return nr >= 1 && nr <= SL.AANTAL ? nr : SL.huidig;
+  }
+
+  /* ------------------------------------------------------------ register -- */
+
+  SL.register = function () {
+    if (!SL.beschikbaar()) return {};
+    try {
+      return JSON.parse(window.localStorage.getItem(SLEUTEL_REGISTER)) || {};
+    } catch (e) {
+      return {};
+    }
+  };
+
+  function schrijfRegister(reg) {
+    try {
+      window.localStorage.setItem(SLEUTEL_REGISTER, JSON.stringify(reg));
+    } catch (e) {
+      console.warn('Register opslaan mislukt:', e);
+    }
+  }
+
+  /* Wat het keuzescherm van een boek moet weten, zonder de save te lezen. */
+  function samenvatting(s) {
+    var st = Game.core.state.statistiek(s);
+    return {
+      naam: s.dorpsnaam,
+      jaar: s.jaar,
+      tijdperk: s.tijdperk,
+      bevolking: s.bevolking.totaal,
+      punten: st.punten,
+      scenario: s.scenario,
+      gewonnen: !!s.gewonnen,
+      uitgestorven: !!s.uitgestorven,
+      opgeslagen: Date.now()
+    };
+  }
+
+  /* De drie boeken zoals het menu ze toont: altijd alle drie, ook de lege. */
+  SL.boeken = function () {
+    SL.migreer();
+    var reg = SL.register();
+    var uit = [];
+    for (var nr = 1; nr <= SL.AANTAL; nr++) {
+      var meta = reg[nr];
+      var erIsIets = SL.beschikbaar() && !!window.localStorage.getItem(sleutel(nr));
+      uit.push(erIsIets && meta
+        ? { nr: nr, leeg: false, naam: meta.naam, jaar: meta.jaar, tijdperk: meta.tijdperk,
+            bevolking: meta.bevolking, punten: meta.punten, scenario: meta.scenario,
+            gewonnen: meta.gewonnen, uitgestorven: meta.uitgestorven, opgeslagen: meta.opgeslagen }
+        : { nr: nr, leeg: !erIsIets, naam: erIsIets ? 'Onbekend dorp' : '' });
+    }
+    return uit;
+  };
+
+  /* Het boek waarin het laatst geschreven is — waar "verder spelen" heen gaat. */
+  SL.laatste = function () {
+    var beste = 0, besteTijd = -1;
+    SL.boeken().forEach(function (b) {
+      if (b.leeg) return;
+      var tijd = b.opgeslagen || 0;
+      if (tijd >= besteTijd) { besteTijd = tijd; beste = b.nr; }
+    });
+    return beste;
+  };
+
+  /* Het eerste lege boek, of 0 als ze alle drie vol zitten. */
+  SL.vrijBoek = function () {
+    var boeken = SL.boeken();
+    for (var i = 0; i < boeken.length; i++) if (boeken[i].leeg) return boeken[i].nr;
+    return 0;
+  };
+
+  /* Eén keer: de save van vóór de dorpsboeken verhuist naar boek 1. */
+  var gemigreerd = false;
+  SL.migreer = function () {
+    if (gemigreerd || !SL.beschikbaar()) return;
+    gemigreerd = true;
+    var oud = window.localStorage.getItem(SLEUTEL_OUD);
+    if (!oud) return;
+    if (!window.localStorage.getItem(sleutel(1))) {
+      try {
+        window.localStorage.setItem(sleutel(1), oud);
+        var s = SL.uitTekst(oud);
+        if (s) {
+          var reg = SL.register();
+          reg[1] = samenvatting(s);
+          schrijfRegister(reg);
+        }
+      } catch (e) {
+        console.warn('Oude save verhuizen mislukt:', e);
+        return;
+      }
+    }
+    window.localStorage.removeItem(SLEUTEL_OUD);
+  };
+
   SL.naarTekst = function (s) {
     return JSON.stringify(s);
   };
 
-  SL.opslaan = function (s) {
+  SL.opslaan = function (s, nr) {
     if (!SL.beschikbaar()) return false;
+    SL.migreer();
+    nr = geldig(nr === undefined ? SL.huidig : nr);
     try {
-      window.localStorage.setItem(SLEUTEL, SL.naarTekst(s));
-      s.laatsteOpslag = Date.now();
-      return true;
+      window.localStorage.setItem(sleutel(nr), SL.naarTekst(s));
     } catch (e) {
+      /* Vol of geweigerd. Het register niet bijwerken, anders wijst het naar
+         een boek dat er niet in past. */
       console.warn('Opslaan mislukt:', e);
       return false;
     }
+    var reg = SL.register();
+    reg[nr] = samenvatting(s);
+    schrijfRegister(reg);
+    SL.huidig = nr;
+    s.laatsteOpslag = Date.now();
+    return true;
   };
 
-  SL.erIsEenSave = function () {
-    if (!SL.beschikbaar()) return false;
-    return !!window.localStorage.getItem(SLEUTEL);
-  };
+  SL.erIsEenSave = function () { return SL.laatste() > 0; };
 
-  SL.laden = function () {
+  SL.laden = function (nr) {
     if (!SL.beschikbaar()) return null;
-    var tekst = window.localStorage.getItem(SLEUTEL);
+    SL.migreer();
+    nr = geldig(nr === undefined ? (SL.laatste() || SL.huidig) : nr);
+    var tekst = window.localStorage.getItem(sleutel(nr));
     if (!tekst) return null;
-    return SL.uitTekst(tekst);
+    var s = SL.uitTekst(tekst);
+    if (s) SL.huidig = nr;
+    return s;
   };
 
   SL.uitTekst = function (tekst) {
@@ -135,6 +263,11 @@
     s.moeilijkheid = s.moeilijkheid || 'normaal';
     s.questsGedaan = s.questsGedaan || {};
     s.log = s.log || [];
+    /* Geschiedenis en de andere afloop, later toegevoegd: een oudere save
+       begint zijn grafiek gewoon vanaf nu. */
+    if (Game.core.historie) Game.core.historie.zorg(s);
+    if (Game.core.faam) Game.core.faam.zorg(s);
+    s.uitgestorven = !!s.uitgestorven;
     /* Walkers now live in the render layer, not the save. Drop the field an
        older save may still carry so a fresh save never writes it again. */
     delete s.wandelaars;
@@ -173,8 +306,13 @@
     return s;
   };
 
-  SL.wissen = function () {
-    if (SL.beschikbaar()) window.localStorage.removeItem(SLEUTEL);
+  SL.wissen = function (nr) {
+    if (!SL.beschikbaar()) return;
+    nr = geldig(nr === undefined ? SL.huidig : nr);
+    window.localStorage.removeItem(sleutel(nr));
+    var reg = SL.register();
+    delete reg[nr];
+    schrijfRegister(reg);
   };
 
   Game.core.save = SL;
