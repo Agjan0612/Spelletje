@@ -34,6 +34,10 @@
      how dark it is, and sfeer.licht is pure maths on s.tijd. */
   var licht = null;
 
+  /* Scratch for sprites.deelPositie, so enumerating a few thousand trees a
+     frame allocates nothing. Read and used immediately, never held. */
+  var deelSchets = { dx: 0, dy: 0 };
+
   /* Ambient world life, all real-time and never stored in Game.state:
        - wolken: a few soft shadow blobs drifting over the ground (B5)
        - vogels: the odd flock crossing the sky (B2)
@@ -599,11 +603,20 @@
        soort: 0 = feature, 1 = building, 2 = walker (ties break to that order). */
     var laag = [];
 
+    /* Trees and boulders are enumerated one by one rather than per tile: they
+       now stand up to half a tile off their tile's centre (sprites.deelPositie),
+       so an item has to be sorted where it actually is. Sorting them by their
+       tile would put a tree that wandered towards the camera behind the house
+       it visibly stands in front of. */
     for (var fy = zicht.y0; fy < zicht.y1; fy++) {
       for (var fx = zicht.x0; fx < zicht.x1; fx++) {
         var ft = map.tegel(s.kaart, fx, fy);
-        if (ft && sprites.heeftKenmerk(ft)) {
-          laag.push({ d: fx + fy + 1, yy: fy, soort: 0, tegel: ft, x: fx, y: fy });
+        if (!ft || !sprites.heeftKenmerk(ft)) continue;
+        var nDelen = sprites.aantalDelen(ft);
+        for (var di = 0; di < nDelen; di++) {
+          var off = sprites.deelPositie(ft, di, deelSchets);
+          laag.push({ d: fx + fy + 1 + off.dx + off.dy, yy: fy + off.dy,
+                      soort: 0, tegel: ft, x: fx, y: fy, deel: di });
         }
       }
     }
@@ -640,7 +653,7 @@
       var e = laag[li];
       if (e.soort === 0) {
         var fsp = cam.wereldNaarScherm(e.x * TEGEL, e.y * TEGEL);
-        sprites.tekenKenmerk(ctx, e.tegel, fsp.x, fsp.y, p, s.seizoen, tijd);
+        sprites.tekenDeel(ctx, e.tegel, fsp.x, fsp.y, p, s.seizoen, tijd, e.deel);
       } else if (e.soort === 0.5) {
         Game.render.props.teken(ctx, cam, p, e.prop);
       } else if (e.soort === 0.6) {

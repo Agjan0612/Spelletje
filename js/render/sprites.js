@@ -64,8 +64,74 @@
     schaduwCache = {
       seed: kaart.seed, arr: arr,
       diepte: bouwDiepte(kaart),
-      randen: bouwRanden(kaart)
+      randen: bouwRanden(kaart),
+      ruis: bouwRuis(kaart)
     };
+  };
+
+  /* ------------------------------------------------------------- ruisveld
+
+     Every tile carries `tegel.v`, a stable random of its own, and the ground
+     used to take its brightness straight from it. That is noise with a
+     wavelength of exactly one tile, and the eye reads wavelength-one noise as
+     a grid — it was the single loudest reason you could count the tiles on a
+     screenshot.
+
+     This is the same idea at the right scale: three octaves of value noise at
+     wavelengths of about 12, 5 and 2 tiles, bilinearly interpolated off a
+     coarse lattice and summed. Grass then has patches of drier and damper
+     ground tens of tiles across, the way an Age of Empires map does, and
+     `tegel.v` goes back to being what it is good at: deciding *which* tree
+     sprite and *how many* boulders, things that genuinely differ per tile.
+
+     Built once per map, next to the hillshade, keyed on kaart.seed and never
+     in Game.state. */
+  var OCTAVEN = [[13, 0.54], [5, 0.31], [2, 0.15]];
+
+  function ruisHash(seed, o, i) {
+    var n = (seed | 0) + o * 374761393 + i * 668265263;
+    n = Math.imul(n ^ (n >>> 13), 1274126177);
+    return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
+  }
+
+  function zacht(t) { return t * t * (3 - 2 * t); }
+
+  function bouwRuis(kaart) {
+    var b = kaart.b, h = kaart.h;
+    var arr = new Float32Array(b * h);
+
+    for (var o = 0; o < OCTAVEN.length; o++) {
+      var golf = OCTAVEN[o][0], gewicht = OCTAVEN[o][1];
+      var nb = Math.ceil(b / golf) + 2, nh = Math.ceil(h / golf) + 2;
+      var rooster = new Float32Array(nb * nh);
+      for (var r = 0; r < rooster.length; r++) rooster[r] = ruisHash(kaart.seed, o, r);
+
+      for (var y = 0; y < h; y++) {
+        var gy = y / golf, y0 = gy | 0, fy = zacht(gy - y0);
+        var rij0 = y0 * nb, rij1 = (y0 + 1) * nb;
+        for (var x = 0; x < b; x++) {
+          var gx = x / golf, x0 = gx | 0, fx = zacht(gx - x0);
+          var a = rooster[rij0 + x0], bb = rooster[rij0 + x0 + 1];
+          var c = rooster[rij1 + x0], dd = rooster[rij1 + x0 + 1];
+          var boven = a + (bb - a) * fx;
+          var onder = c + (dd - c) * fx;
+          arr[y * b + x] += (boven + (onder - boven) * fy) * gewicht;
+        }
+      }
+    }
+    return arr;
+  }
+
+  /* The noise at a tile, 0..1. Falls back to the tile's own random when the
+     cache is not for this map (the first frame after a new game). */
+  function ruisOp(kaart, idx, tegel) {
+    var R = schaduwCache.ruis;
+    if (!R || schaduwCache.seed !== kaart.seed) return tegel ? tegel.v : 0.5;
+    return R[idx];
+  }
+  S.ruisOp = function (kaart, x, y) {
+    if (!kaart) return 0.5;
+    return ruisOp(kaart, y * kaart.b + x, null);
   };
 
   /* How far every water tile is from the nearest land, in tiles (a flood fill
@@ -98,7 +164,34 @@
       }
     }
     for (var j = 0; j < n; j++) if (diep[j] === 255) diep[j] = MAXDIEPTE;
-    return diep;
+
+    /* Smooth it. The flood fill counts whole tiles, so the sea came out in
+       concentric diamond steps — a staircase of blues that was one of the
+       clearest places you could read the grid off the screen. Two box-blur
+       passes turn those steps into a gradient, at the cost of one float array
+       built once per map. */
+    var zacht = new Float32Array(n);
+    for (var q = 0; q < n; q++) zacht[q] = diep[q];
+    var tmp = new Float32Array(n);
+    for (var ronde = 0; ronde < 2; ronde++) {
+      for (var yy = 0; yy < h; yy++) {
+        for (var xx = 0; xx < b; xx++) {
+          var som = 0, tel = 0;
+          for (var oy = -1; oy <= 1; oy++) {
+            var ny = yy + oy;
+            if (ny < 0 || ny >= h) continue;
+            for (var ox = -1; ox <= 1; ox++) {
+              var nx = xx + ox;
+              if (nx < 0 || nx >= b) continue;
+              som += zacht[ny * b + nx]; tel++;
+            }
+          }
+          tmp[yy * b + xx] = som / tel;
+        }
+      }
+      zacht.set(tmp);
+    }
+    return zacht;
   }
 
   /* Which of a tile's four edges border a *different* terrain, and which
@@ -141,6 +234,7 @@
     return Game.util.clamp((schaduwCache.diepte[i] - 1) / (MAXDIEPTE - 1), 0, 1);
   }
 
+
   /* -------------------------------------------------------- colour helpers */
 
   function ontleed(kleur) {
@@ -176,6 +270,70 @@
   /* Final tile colour: base hex, per-tile brightness `v`, and the hillshade. */
   function eindKleur(hex, v, shade) {
     return verf(hex, (0.88 + v * 0.24) * shade);
+  }
+
+  /* ------------------------------------------------------- grondpalet ----
+
+     The colour of a land tile is a pure function of four things: which terrain,
+     which season, where it sits in the noise field, and its hillshade. All four
+     are small and bounded, so the whole answer is a lookup table — built once,
+     lazily, and indexed with four integers per tile. No hex parsing, no string
+     building and no cache probe on the hottest path in the renderer: at minimum
+     zoom this runs several thousand times a frame, and that headroom is what
+     pays for the material work in fase D.
+
+     The ramp does two things at once, which is the point. Brightness carries
+     the patch, and a warm/cool shift carries what *kind* of patch: the dry side
+     leans yellow-brown, the damp side blue-green. One shift is all it takes to
+     stop a brightness ramp reading as a lighting error. */
+  var RUISN = 12, SCHADUWN = 14;
+  var SCHADUW_MIN = 0.8, SCHADUW_SPAN = 0.42;   /* matches the clamp in bereidTerreinVoor */
+  var grondPalet = null;
+
+  /* How far the dry/damp shift swings per terrain: bare rock barely changes
+     colour with the damp, grass changes a lot. */
+  var RUISKRACHT = {
+    gras: 1, vruchtbaar: 0.85, bos: 0.8, rots: 0.45, berg: 0.4
+  };
+
+  function bouwGrondPalet() {
+    grondPalet = {};
+    for (var t in TERREIN) {
+      if (t === 'water') continue;               /* depth decides water, not noise */
+      var kracht = RUISKRACHT[t] != null ? RUISKRACHT[t] : 1;
+      var perSeizoen = [];
+      for (var sz = 0; sz < 4; sz++) {
+        var c = ontleed(TERREIN[t][sz] || TERREIN[t][0]);
+        var rijen = [];
+        for (var r = 0; r < RUISN; r++) {
+          var u = r / (RUISN - 1);
+          var f = 1 + (u - 0.5) * 0.30 * kracht;
+          var warm = (u - 0.5) * 26 * kracht;
+          var schaduwen = [];
+          for (var q = 0; q < SCHADUWN; q++) {
+            var sh = SCHADUW_MIN + (q / (SCHADUWN - 1)) * SCHADUW_SPAN;
+            schaduwen.push('rgb(' + kanaal(c[0] * f + warm, sh) + ',' +
+                                    kanaal(c[1] * f + warm * 0.3, sh) + ',' +
+                                    kanaal(c[2] * f - warm * 0.75, sh) + ')');
+          }
+          rijen.push(schaduwen);
+        }
+        perSeizoen.push(rijen);
+      }
+      grondPalet[t] = perSeizoen;
+    }
+  }
+
+  function kanaal(v, sh) { return Game.util.clamp(Math.round(v * sh), 0, 255); }
+
+  function grondKleur(terrein, seizoen, r, shade) {
+    if (!grondPalet) bouwGrondPalet();
+    var rij = grondPalet[terrein] || grondPalet.gras;
+    var ri = (r * RUISN) | 0;
+    if (ri < 0) ri = 0; else if (ri >= RUISN) ri = RUISN - 1;
+    var qi = ((shade - SCHADUW_MIN) / SCHADUW_SPAN * SCHADUWN) | 0;
+    if (qi < 0) qi = 0; else if (qi >= SCHADUWN) qi = SCHADUWN - 1;
+    return rij[seizoen][ri][qi];
   }
 
   /* Slight per-tile brightness so a field of grass is not a flat colour. */
@@ -231,9 +389,16 @@
   S.tekenGrond = function (ctx, tegel, sx, sy, p, seizoen, tijd, kaart, x, y) {
     var d = Game.render.diamant(sx, sy, p);
     var idx = kaart ? y * kaart.b + x : 0;
-    var basis = S.terreinKleur(tegel, seizoen);
-    if (tegel.t === 'water') basis = waterKleur(basis, diepteDeel(kaart, idx));
-    var kleur = eindKleur(basis, tegel.v, schaduwFactor(kaart, idx));
+    var schaduw = schaduwFactor(kaart, idx);
+    var ruis = kaart ? ruisOp(kaart, idx, tegel) : tegel.v;
+    var kleur;
+    if (tegel.t === 'water') {
+      /* Water takes its colour from how deep it is, not from the noise. */
+      kleur = eindKleur(waterKleur(S.terreinKleur(tegel, seizoen), diepteDeel(kaart, idx)),
+                        ruis, schaduw);
+    } else {
+      kleur = grondKleur(tegel.t, seizoen, ruis, schaduw);
+    }
     vulDiamant(ctx, d, kleur);
     /* Hairline-seam guard: a 1px stroke in the same colour closes the sub-pixel
        cracks between neighbouring diamonds without changing the look. */
@@ -242,19 +407,29 @@
 
     if (tegel.t === 'water' && kaart) {
       if (p >= 12) water(ctx, d, tegel, p, tijd, kaart, x, y, seizoen); else kust(ctx, d, kaart, x, y, tijd, p);
-      if (seizoen === 3) ijs(ctx, d, tegel, p, kaart, x, y);
+      if (seizoen === 3) ijs(ctx, d, tegel, p, kaart, x, y, ruis);
       return;
     }
+
+    /* Deep inside a wood, a dark canopy under the trees. A forest in Age of
+       Empires is a mass you cannot see the ground through; here you could see
+       grass between every trunk, which is what made a wood read as "tiles that
+       happen to have trees on them". Only on tiles whose four neighbours are
+       also forest (randen.masker === 0 means no edge borders another terrain),
+       so the wood's edge keeps its individual trees — and since every interior
+       tile is darkened by the same rule, the darkening itself shows no seams.
+       The noise still modulates it, so the canopy is not a flat sheet. */
+    if (tegel.t === 'bos' && kaart) bladerdek(ctx, d, kaart, idx, ruis, seizoen);
 
     /* Soft edges between terrains: the neighbour's colour bleeds a little way
        into this tile, so grass runs into forest and land runs into a beach
        instead of meeting along a hard diamond edge. */
-    if (kaart && p >= 9) overgangen(ctx, d, tegel, kaart, seizoen, idx);
+    if (kaart && p >= 9) overgangen(ctx, d, tegel, kaart, seizoen, idx, ruis);
 
-    /* Winter really lies on the land: a mottled snow cover whose depth varies
-       per tile (from the tile's stable `v`, so it never flickers), with a
-       brighter drift on the light-facing half. */
-    if (seizoen === 3) { sneeuwdek(ctx, d, tegel, p); return; }
+    /* Winter really lies on the land: a mottled snow cover whose depth comes
+       from the noise field (so it drifts in patches instead of per tile), with
+       a brighter drift on the light-facing half. */
+    if (seizoen === 3) { sneeuwdek(ctx, d, tegel, p, ruis); return; }
 
     if (p >= 12 && tegel.t === 'vruchtbaar') akker(ctx, d, tegel, p, seizoen);
 
@@ -294,13 +469,22 @@
     return waterKleur(TERREIN.water[seizoen] || TERREIN.water[0], 1);
   };
 
+  /* The dark floor of a closed wood — see the note at the call site. */
+  var DEK = ['rgba(22,44,20,', 'rgba(18,40,17,', 'rgba(40,36,14,', 'rgba(30,40,44,'];
+
+  function bladerdek(ctx, d, kaart, idx, ruis, seizoen) {
+    var R = schaduwCache.randen;
+    if (!R || schaduwCache.seed !== kaart.seed || R.masker[idx]) return;
+    vulDiamant(ctx, d, (DEK[seizoen] || DEK[0]) + (0.30 + ruis * 0.22).toFixed(3) + ')');
+  }
+
   /* Sand along a coast, per season — winter sand is pale and frozen. */
   var ZAND = ['#d5c290', '#dbc994', '#cfb87f', '#d9d5c8'];
 
   /* Two bands of the neighbour's colour along every edge this tile shares with
      a different terrain: close to the edge nearly opaque, further in faint.
      Two flat quads read as a gradient and cost a fraction of a real one. */
-  function overgangen(ctx, d, tegel, kaart, seizoen, idx) {
+  function overgangen(ctx, d, tegel, kaart, seizoen, idx, ruis) {
     var R = schaduwCache.randen;
     if (!R || schaduwCache.seed !== kaart.seed) return;
     var masker = R.masker[idx];
@@ -314,16 +498,25 @@
 
       var kleur;
       if (buurT === 'water') kleur = ZAND[seizoen] || ZAND[0];
-      else kleur = schakering(S.terreinKleur({ t: buurT }, seizoen), tegel.v);
+      else kleur = schakering(S.terreinKleur({ t: buurT }, seizoen), ruis);
 
       var a = d[e.a], b = d[e.b], c = { x: d.cx, y: d.cy };
       if (fijn) {
-        band(ctx, a, b, c, 0, 0.32, kleur, 0.6);
-        band(ctx, a, b, c, 0.32, 0.66, kleur, 0.24);
+        /* Two nested bands with a scalloped inner boundary. Straight was the
+           problem: a rock field met a meadow along a ruler-perfect diamond
+           edge, and that reads as a map of coloured areas rather than as a
+           landscape. The wave is a pure function of the tile index and the
+           edge, so it is stable across frames, and the two bands share a phase
+           so the deeper one nests inside the shallower one instead of crossing
+           it. Nothing has to agree with the neighbouring tile: each tile paints
+           its own side of the border. */
+        var zaad = (idx * 7 + i * 13) % 1000;
+        golfband(ctx, a, b, c, 0, 0.30, 0.14, kleur, 0.62, zaad);
+        golfband(ctx, a, b, c, 0.30, 0.62, 0.20, kleur, 0.24, zaad);
       } else {
-        /* Zoomed out there are several thousand tiles on screen, so one band
-           per edge instead of two — at that size the softness is carried by
-           the sheer number of edges anyway. */
+        /* Zoomed out there are several thousand tiles on screen, so one flat
+           band per edge — at that size the softness is carried by the sheer
+           number of edges anyway, and the scallop would be sub-pixel. */
         band(ctx, a, b, c, 0, 0.45, kleur, 0.5);
       }
     }
@@ -336,34 +529,59 @@
     ctx.globalAlpha = 1;
   }
 
+  /* Two sine waves of different periods, in [-1, 1]. Two rather than one so the
+     boundary does not repeat visibly along an edge. */
+  function golf(zaad, u) {
+    return Math.sin(u * 6.9 + zaad) * 0.62 + Math.sin(u * 13.7 + zaad * 2.3) * 0.38;
+  }
+
+  /* Like band(), but the far boundary waves along its length: the strip runs
+     from depth u0 (straight, on the shared edge side) to u1 ± amp. */
+  var GOLFSTAPPEN = 5;
+
+  function golfband(ctx, a, b, c, u0, u1, amp, kleur, alpha, zaad) {
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = kleur;
+    ctx.beginPath();
+    var p0 = lerp(a, c, u0), p1 = lerp(b, c, u0);
+    ctx.moveTo(p0.x, p0.y);
+    ctx.lineTo(p1.x, p1.y);
+    for (var k = GOLFSTAPPEN; k >= 0; k--) {
+      var u = k / GOLFSTAPPEN;
+      var diep = u1 + amp * golf(zaad, u);
+      if (diep < u0) diep = u0;
+      var px = a.x + (b.x - a.x) * u, py = a.y + (b.y - a.y) * u;
+      ctx.lineTo(px + (c.x - px) * diep, py + (c.y - py) * diep);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
   /* Snow cover on a land tile. Bare rock and mountains keep more of their own
      colour; fields and grass go nearly white. */
-  function sneeuwdek(ctx, d, t, p) {
-    var basis = (t.t === 'rots' || t.t === 'berg') ? 0.2 : (t.t === 'bos' ? 0.28 : 0.42);
-    var alpha = basis + (t.v % 0.4) * 0.32;
+  /* Snow was the clearest proof that the game drew per tile: the cover took its
+     depth from `t.v` (noise with a wavelength of one tile), and on top of that
+     every single tile got a bright top-left triangle and a cool bottom-right
+     one — a perfect diamond lattice stamped over the whole map. Both are gone.
+     The depth comes from the coherent noise field, so snow lies in drifts tens
+     of tiles across, and the light and shade are wavy-edged bands whose phase
+     differs per tile, so they read as drift rather than as a grid. */
+  function sneeuwdek(ctx, d, t, p, ruis) {
+    var basis = (t.t === 'rots' || t.t === 'berg') ? 0.18 : (t.t === 'bos' ? 0.24 : 0.38);
+    var alpha = basis + ruis * 0.34;
     vulDiamant(ctx, d, 'rgba(244,248,252,' + alpha.toFixed(3) + ')');
 
-    /* A brighter drift on the up-light (top-left) half of the diamond. */
     if (p >= 14 && !t.b) {
-      ctx.fillStyle = 'rgba(255,255,255,' + (0.10 + (t.v % 0.3) * 0.2).toFixed(3) + ')';
-      ctx.beginPath();
-      ctx.moveTo(d.top.x, d.top.y);
-      ctx.lineTo(d.left.x, d.left.y);
-      ctx.lineTo(d.cx, d.cy);
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    /* ...and a cool shadow on the away half, so a snowfield has form instead
-       of being one white sheet. */
-    if (p >= 14 && !t.b) {
-      ctx.fillStyle = 'rgba(150,176,206,.16)';
-      ctx.beginPath();
-      ctx.moveTo(d.bottom.x, d.bottom.y);
-      ctx.lineTo(d.right.x, d.right.y);
-      ctx.lineTo(d.cx, d.cy);
-      ctx.closePath();
-      ctx.fill();
+      var c = { x: d.cx, y: d.cy };
+      var zaad = (t.v * 997) % 1000;
+      /* The lit face of the drift, from the top-left edge inwards. */
+      golfband(ctx, d.top, d.left, c, 0, 0.52 + ruis * 0.3, 0.26,
+               'rgb(255,255,255)', 0.10 + ruis * 0.16, zaad);
+      /* ...and the cool side away from the light, so a snowfield has form
+         instead of being one white sheet. */
+      golfband(ctx, d.right, d.bottom, c, 0, 0.46 + (1 - ruis) * 0.3, 0.24,
+               'rgb(150,176,206)', 0.14, zaad + 3.1);
     }
 
     /* Stubble poking through a snowy field. */
@@ -383,8 +601,12 @@
 
   /* Ice on the water in winter: a pale sheen plus a couple of floes, and a
      frozen white rim wherever the water meets land. */
-  function ijs(ctx, d, t, p, kaart, tx, ty) {
-    vulDiamant(ctx, d, 'rgba(214,232,240,' + (0.2 + (t.v % 0.3) * 0.4).toFixed(3) + ')');
+  function ijs(ctx, d, t, p, kaart, tx, ty, ruis) {
+    /* The sheen follows the noise field, not the tile's own random: with a
+       per-tile alpha a frozen bay came out as a chessboard of light and dark
+       diamonds, which in the winter screenshot was the loudest grid on the
+       map. Now the ice thickens and thins in patches. */
+    vulDiamant(ctx, d, 'rgba(214,232,240,' + (0.16 + ruis * 0.36).toFixed(3) + ')');
     if (p < 14) return;
 
     for (var i = 0; i < 2; i++) {
@@ -396,17 +618,15 @@
       ctx.fill();
     }
 
-    /* Frozen rim on the shoreline edges. */
-    ctx.strokeStyle = 'rgba(250,253,255,.75)';
-    ctx.lineWidth = Math.max(1, p * 0.05);
+    /* Frozen rim where the ice meets the shore, with a scalloped inner edge
+       like the surf it replaces for the winter. */
+    var c = { x: d.cx, y: d.cy };
     for (var b = 0; b < BUUREDGE.length; b++) {
       var e = BUUREDGE[b];
       var buur = Game.core.map.tegel(kaart, tx + e.dx, ty + e.dy);
       if (!buur || buur.t === 'water') continue;
-      ctx.beginPath();
-      ctx.moveTo(d[e.a].x, d[e.a].y);
-      ctx.lineTo(d[e.b].x, d[e.b].y);
-      ctx.stroke();
+      golfband(ctx, d[e.a], d[e.b], c, 0, 0.2, 0.1, 'rgb(250,253,255)', 0.72,
+               (tx * 7 + ty * 13 + b) % 1000);
     }
   }
 
@@ -445,19 +665,84 @@
            (tegel.t === 'gras' && tegel.n === 'wild' && tegel.amt > 0);
   };
 
-  S.tekenKenmerk = function (ctx, tegel, sx, sy, p, seizoen, tijd) {
+  /* ------------------------------------------------- decor per exemplaar --
+
+     Trees and boulders used to be drawn as "everything on this tile", from the
+     tile's centre, with a jitter of ±0.23 of a tile sideways and ±0.06 forward.
+     Six percent of forward spread is why they stood in *rows*: they were
+     allowed to wander along the street but never off it, and a wood came out as
+     a lattice of green cones.
+
+     So decoration is now enumerated: a tile says how many things stand on it
+     (S.aantalDelen) and where each one is (S.deelPositie, in tile fractions,
+     now ±0.45 in both directions). The renderer pushes one entry per item into
+     its depth-sorted layer, so an item that strays half a tile forward is
+     sorted where it actually stands rather than where its tile is — without
+     that, a tree that wandered towards the camera would be drawn behind the
+     house it stands in front of.
+
+     No allocation on the hot path: deelPositie fills a scratch object the
+     caller owns, and the positions are a pure function of (tegel.v, i), so
+     working them out twice a frame — once to sort, once to draw — is cheaper
+     than building a list. */
+
+  S.aantalDelen = function (tegel) {
+    switch (tegel.t) {
+      case 'bos': return boomAantal(tegel);
+      case 'rots': return 1 + Math.floor(((tegel.v * 5.7) % 1) * 3);
+      default: return 1;      /* a mountain, a herd of deer: one thing, centred */
+    }
+  };
+
+  S.deelPositie = function (tegel, i, uit) {
+    uit = uit || { dx: 0, dy: 0 };
+    if (tegel.t === 'bos' || tegel.t === 'rots') {
+      var h1 = ((i * 37 + tegel.v * 613) % 91) / 91;
+      var h2 = ((i * 61 + tegel.v * 419) % 89) / 89;
+      uit.dx = (h1 - 0.5) * 0.9;
+      uit.dy = (h2 - 0.5) * 0.9;
+    } else if (tegel.t === 'berg') {
+      /* A range wants less wander than a wood — a peak that strays half a tile
+         floats off its own mountain — but enough that the summits do not sit
+         on a lattice. */
+      uit.dx = (((tegel.v * 733) % 1) - 0.5) * 0.44;
+      uit.dy = (((tegel.v * 947) % 1) - 0.5) * 0.44;
+    } else {
+      uit.dx = 0; uit.dy = 0;
+    }
+    return uit;
+  };
+
+  var deelPos = { dx: 0, dy: 0 };
+
+  /* Draws item `i` of a tile. (sx, sy) is still the tile's projected top
+     corner; the offset is applied here, in screen space, through the same iso
+     transform the tile diamond uses (a tile step of +1 in world x moves the
+     screen point by (+hw, +hh); +1 in world y by (-hw, +hh)). */
+  S.tekenDeel = function (ctx, tegel, sx, sy, p, seizoen, tijd, i) {
     if (p < 12) return;
     tijd = tijd || 0;
     var d = Game.render.diamant(sx, sy, p);
+    S.deelPositie(tegel, i, deelPos);
+    if (deelPos.dx || deelPos.dy) {
+      d = diamantVan(d.cx + (deelPos.dx - deelPos.dy) * d.hw,
+                     d.cy + (deelPos.dx + deelPos.dy) * d.hh, d.hw, d.hh);
+    }
     switch (tegel.t) {
-      case 'bos': bomen(ctx, d, tegel, p, seizoen, tijd); break;
-      case 'rots': rotsen(ctx, d, tegel, p); break;
+      case 'bos': boom(ctx, d, tegel, p, seizoen, tijd, i); break;
+      case 'rots': rots(ctx, d, tegel, p, i); break;
       case 'berg':
         berg(ctx, d, tegel, p, seizoen);
         if (tegel.n && ADERKLEUR[tegel.n]) ader(ctx, d, tegel, p);
         break;
       case 'gras': if (tegel.n === 'wild') wild(ctx, d, tegel, p, tijd); break;
     }
+  };
+
+  /* Everything on a tile at once. Kept for callers that do not depth-sort. */
+  S.tekenKenmerk = function (ctx, tegel, sx, sy, p, seizoen, tijd) {
+    var n = S.aantalDelen(tegel);
+    for (var i = 0; i < n; i++) S.tekenDeel(ctx, tegel, sx, sy, p, seizoen, tijd, i);
   };
 
   /* Which diamond edge a tile shares with each 4-neighbour. */
@@ -626,51 +911,58 @@
      sways while the trunk base stays planted. Sway is a slow sine keyed to the
      tile's stable `v` (and the tree index) so a wood ripples rather than moving
      as one block. */
-  function bomen(ctx, d, t, p, seizoen, tijd) {
+  /* How many trees stand on a forest tile. A denser tile carries more, so a
+     wood thins out as it is felled instead of every tile losing height at the
+     same rate. */
+  function boomAantal(t) {
     var deel = t.max > 0 ? Game.util.clamp(t.amt / t.max, 0, 1) : 0;
-    var aantal = Math.max(1, Math.round(1 + deel * 2));
+    return Math.max(1, Math.round(1 + deel * 3));
+  }
+
+  /* One tree, at the offset the caller has already applied to `d`. */
+  function boom(ctx, d, t, p, seizoen, tijd, i) {
+    var deel = t.max > 0 ? Game.util.clamp(t.amt / t.max, 0, 1) : 0;
     var atlas = Game.render.atlas;
+    var ox = d.cx, oy = d.cy;
+    /* Size varies per tree, not just per tile: a stand of identical cones is
+       the other half of why a wood used to read as wallpaper. */
+    var maat = 0.76 + (((i * 53 + t.v * 271) % 67) / 67) * 0.56;
+    var wind = Math.sin(tijd * 0.9 + t.v * 6.28 + i * 1.3) * 0.05;   /* ~3° */
+    var hoog = p * (0.6 + deel * 0.24) * maat;
 
-    for (var i = 0; i < aantal; i++) {
-      var ox = d.cx + p * (((i * 37 + t.v * 100) % 46) / 100 - 0.23);
-      var oy = d.cy + p * (((i * 61 + t.v * 70) % 20) / 100 - 0.06);
-      var wind = Math.sin(tijd * 0.9 + t.v * 6.28 + i * 1.3) * 0.05;   /* ~3° */
+    grondschaduw(ctx, ox, oy + p * 0.03, p * 0.11 * maat, hoog * 0.9, 0.2);
 
-      grondschaduw(ctx, ox, oy + p * 0.03, p * 0.11, p * (0.34 + deel * 0.16), 0.2);
+    ctx.save();
+    ctx.translate(ox, oy);
+    ctx.rotate(wind);
 
-      ctx.save();
-      ctx.translate(ox, oy);
-      ctx.rotate(wind);
-
-      var img = atlas && atlas.boom(t.v, i);
-      if (img) {
-        var st = p * (0.6 + deel * 0.24);
-        ctx.drawImage(img, -st / 2, -st * 0.82, st, st);
-      } else {
-        boomVorm(ctx, p, deel, seizoen, t.v + i);
-      }
-
-      /* A dusting of snow on the crown — the atlas trees are summer trees, so
-         winter has to be painted on top of them as well as on the fallback.
-         One soft cap, not stripes: it should read as snow, not as bunting. */
-      if (seizoen === 3) {
-        var boomH = p * (0.6 + deel * 0.24);
-        ctx.fillStyle = 'rgba(248,252,255,.72)';
-        ctx.beginPath();
-        ctx.ellipse(0, -boomH * 0.62, p * 0.075, p * 0.03, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = 'rgba(248,252,255,.34)';
-        ctx.beginPath();
-        ctx.ellipse(-p * 0.02, -boomH * 0.34, p * 0.1, p * 0.035, 0, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.restore();
+    var img = atlas && atlas.boom(t.v, i);
+    if (img) {
+      ctx.drawImage(img, -hoog / 2, -hoog * 0.82, hoog, hoog);
+    } else {
+      boomVorm(ctx, p * maat, deel, seizoen, t.v + i);
     }
 
-    if (deel < 0.25) {
+    /* A dusting of snow on the crown — the atlas trees are summer trees, so
+       winter has to be painted on top of them as well as on the fallback.
+       One soft cap, not stripes: it should read as snow, not as bunting. */
+    if (seizoen === 3) {
+      ctx.fillStyle = 'rgba(248,252,255,.72)';
+      ctx.beginPath();
+      ctx.ellipse(0, -hoog * 0.62, p * 0.075 * maat, p * 0.03 * maat, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(248,252,255,.34)';
+      ctx.beginPath();
+      ctx.ellipse(-p * 0.02, -hoog * 0.34, p * 0.1 * maat, p * 0.035 * maat, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    /* A felled stump on a nearly bare tile, once, on the first tree. */
+    if (deel < 0.25 && i === 0) {
       ctx.fillStyle = 'rgba(70,50,30,.5)';
       ctx.beginPath();
-      ctx.arc(d.cx + p * 0.2, d.cy + p * 0.16, p * 0.06, 0, Math.PI * 2);
+      ctx.arc(ox + p * 0.2, oy + p * 0.16, p * 0.06, 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -701,43 +993,39 @@
     }
   }
 
-  function rotsen(ctx, d, t, p) {
+  /* One boulder, at the offset the caller has already applied to `d`. */
+  function rots(ctx, d, t, p, i) {
     var atlas = Game.render.atlas;
-    /* One to three boulders, from the tile's own stable random: a rock field
-       of exactly three stones per tile reads as wallpaper. */
-    var aantal = 1 + Math.floor(((t.v * 5.7) % 1) * 3);
-    for (var i = 0; i < aantal; i++) {
-      var ox = d.cx + p * (((i * 41 + t.v * 90) % 50) / 100 - 0.25);
-      var oy = d.cy + p * (((i * 67 + t.v * 60) % 26) / 100 - 0.1);
+    var ox = d.cx, oy = d.cy;
+    var maat = 0.7 + (((i * 29 + t.v * 331) % 71) / 71) * 0.7;
 
-      grondschaduw(ctx, ox, oy + p * 0.05, p * 0.1, p * 0.14, 0.18);
+    grondschaduw(ctx, ox, oy + p * 0.05, p * 0.1 * maat, p * 0.14 * maat, 0.18);
 
-      var img = atlas && atlas.rots(t.v, i);
-      if (img) {
-        var rs = p * (0.34 + ((i * 13 + t.v * 30) % 10) / 100);
-        ctx.drawImage(img, ox - rs / 2, oy - rs * 0.62, rs, rs);
-        continue;
-      }
-
-      var r = p * (0.1 + ((i * 13 + t.v * 30) % 8) / 100);
-      /* Two-tone boulder (shadow body + lit top facet) rather than a flat
-         pentagon, so it reads as a rock when the atlas sprite is missing. */
-      ctx.fillStyle = '#7f7b72';
-      ctx.beginPath();
-      ctx.moveTo(ox - r, oy + r * 0.5);
-      ctx.lineTo(ox - r * 0.4, oy - r);
-      ctx.lineTo(ox + r * 0.6, oy - r * 0.8);
-      ctx.lineTo(ox + r, oy + r * 0.5);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = '#b3afa4';
-      ctx.beginPath();
-      ctx.moveTo(ox - r * 0.4, oy - r);
-      ctx.lineTo(ox + r * 0.6, oy - r * 0.8);
-      ctx.lineTo(ox + r * 0.15, oy + r * 0.1);
-      ctx.closePath();
-      ctx.fill();
+    var img = atlas && atlas.rots(t.v, i);
+    if (img) {
+      var rs = p * 0.38 * maat;
+      ctx.drawImage(img, ox - rs / 2, oy - rs * 0.62, rs, rs);
+      return;
     }
+
+    var r = p * 0.12 * maat;
+    /* Two-tone boulder (shadow body + lit top facet) rather than a flat
+       pentagon, so it reads as a rock when the atlas sprite is missing. */
+    ctx.fillStyle = '#7f7b72';
+    ctx.beginPath();
+    ctx.moveTo(ox - r, oy + r * 0.5);
+    ctx.lineTo(ox - r * 0.4, oy - r);
+    ctx.lineTo(ox + r * 0.6, oy - r * 0.8);
+    ctx.lineTo(ox + r, oy + r * 0.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#b3afa4';
+    ctx.beginPath();
+    ctx.moveTo(ox - r * 0.4, oy - r);
+    ctx.lineTo(ox + r * 0.6, oy - r * 0.8);
+    ctx.lineTo(ox + r * 0.15, oy + r * 0.1);
+    ctx.closePath();
+    ctx.fill();
   }
 
   /* An iso mountain: a shaded pyramid rising out of the tile diamond. Height
