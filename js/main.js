@@ -20,6 +20,7 @@
     lijn: null,
     geselecteerd: null,
     muisTegel: null,
+    toonNamen: false,
     /* Stays false until the player picks "new village" or "continue", so the
        autosave can never overwrite a saved town from behind the welcome screen. */
     actief: false
@@ -244,7 +245,8 @@
       muisTegel: spel.muisTegel,
       geselecteerd: spel.geselecteerd,
       verplaatst: spel.verplaatst,
-      lijn: spel.lijn
+      lijn: spel.lijn,
+      namen: spel.toonNamen || altIngedrukt
     });
     if (spel.plaatsType) toonGhostInfo();
 
@@ -318,6 +320,13 @@
   var sleepVel = { x: 0, y: 0 }, sleepTijd = 0;
   var toetsen = {};
 
+  /* Held Alt shows every building's icon badge at any zoom (see
+     sprites.bordjeDekking) — the RTS convention for "show me the labels".
+     Read from ev.altKey on every key and mouse event rather than from the
+     `toetsen` map: on most desktops Alt is also a window-manager chord, so its
+     keyup can go missing, and a stuck label key is worse than no label key. */
+  var altIngedrukt = false;
+
   function koppelInvoer(canvas) {
     canvas.addEventListener('mousedown', function (ev) {
       if (ev.button === 2) return;
@@ -344,6 +353,7 @@
       var r = canvas.getBoundingClientRect();
       spel.muisTegel = spel.cam.tegelOnder(ev.clientX - r.left, ev.clientY - r.top);
       spel.muisScherm = { x: ev.clientX, y: ev.clientY };
+      altIngedrukt = ev.altKey;
 
       /* While drawing a row, the drag is the row — not a camera pan. */
       if (spel.lijn && spel.muisTegel) {
@@ -434,6 +444,7 @@
 
     window.addEventListener('keydown', function (ev) {
       toetsen[ev.key.toLowerCase()] = true;
+      altIngedrukt = ev.altKey;
 
       if (ev.key === 'Escape') {
         if (Game.ui.overlay.isOpen()) return;
@@ -448,6 +459,11 @@
       /* And one steps through the three tabs of the right-hand column. */
       if (ev.key.toLowerCase() === 'c' && !ev.shiftKey && !ev.ctrlKey && !ev.metaKey) {
         Game.ui.kolom.volgende();
+      }
+      /* N pins the building labels on, for those who would rather not hold Alt. */
+      if (ev.key.toLowerCase() === 'n' && !ev.shiftKey && !ev.ctrlKey && !ev.metaKey) {
+        spel.toonNamen = !spel.toonNamen;
+        Game.ui.lagen.ververs();
       }
       if (ev.key.toLowerCase() === 'z' && (ev.ctrlKey || ev.metaKey)) {
         ev.preventDefault();
@@ -472,8 +488,11 @@
       if (ev.key === '-') spel.cam.zoomOp(spel.cam.breedte / 2, spel.cam.hoogte / 2, -1);
     });
 
-    window.addEventListener('keyup', function (ev) { toetsen[ev.key.toLowerCase()] = false; });
-    window.addEventListener('blur', function () { toetsen = {}; });
+    window.addEventListener('keyup', function (ev) {
+      toetsen[ev.key.toLowerCase()] = false;
+      altIngedrukt = ev.altKey;
+    });
+    window.addEventListener('blur', function () { toetsen = {}; altIngedrukt = false; });
   }
 
   function toetsenPan(dt) {

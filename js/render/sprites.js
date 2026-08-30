@@ -1079,13 +1079,10 @@
 
     if (opties.geschroeid) schroei(ctx, foot, H, dakH, opties.geschroeid);
 
-    /* Icon badge so every building stays recognisable at a glance. It hangs on
-       a little wooden board rather than floating loose over the roof, and it
-       fades as you zoom in — close up the silhouette and the facade already
-       say what this is, and a giant emoji on every roof is the one thing that
-       still reads as placeholder art. */
-    if (p >= 22 && def.id !== 'stadsmuur' && !cfg.wieken) {
-      bordje(ctx, def.emoji, top.cx, top.cy - (cfg.stijl === 'plat' ? p * 0.1 : dakH * 0.46), p);
+    /* Icon badge, for the zoom range where a roof is too small to read. See
+       bordjeDekking: it is a wayfinding aid when zoomed out, not decoration. */
+    if (def.id !== 'stadsmuur' && !cfg.wieken) {
+      bordje(ctx, def.emoji, top.cx, top.cy - (cfg.stijl === 'plat' ? p * 0.1 : dakH * 0.46), p, opties);
     }
   };
 
@@ -1128,13 +1125,30 @@
   /* A small dark plaque with the building's icon on it, with a peg and a
      shadow so it hangs rather than floats. Fades out as the building grows on
      screen. */
-  function bordje(ctx, emoji, cx, cy, p) {
-    /* Tied to the zoom, not to the building: far out every roof is a few
-       pixels and the icon is the only thing that identifies it; close up the
-       silhouette, the facade and the yard already say what this is, and a
-       badge on every house is just clutter. */
-    if (p > 70) return;
-    var alpha = Game.util.clamp((70 - p) / 22, 0, 1);
+  /* The zoom window in which the badge is the only thing identifying a roof.
+     It used to be full strength up to p = 48 and only fade out between 48 and
+     70 — which is to say: on every normal playing distance every roof wore an
+     emoji, and that was the loudest thing on the screen. It is the other way
+     round now. Below LAAG a building is a few pixels and the badge would swamp
+     it; above UIT the silhouette, the facade and the yard already say what this
+     is. Hovering, selecting, or holding the labels key brings it back at any
+     zoom, the way an RTS shows its health bars. */
+  var BORDJE_LAAG = 16, BORDJE_AAN = 20, BORDJE_UIT = 32, BORDJE_WEG = 42;
+
+  function bordjeDekking(p, opties) {
+    if (opties && opties.toonBordje) return 1;
+    if (p <= BORDJE_LAAG || p >= BORDJE_WEG) return 0;
+    if (p < BORDJE_AAN) return (p - BORDJE_LAAG) / (BORDJE_AAN - BORDJE_LAAG);
+    if (p > BORDJE_UIT) return (BORDJE_WEG - p) / (BORDJE_WEG - BORDJE_UIT);
+    return 1;
+  }
+
+  function bordje(ctx, emoji, cx, cy, p, opties) {
+    var alpha = bordjeDekking(p, opties);
+    if (alpha <= 0.01) return;
+    /* Dim with the night wash, otherwise the badges float over a dark town at
+       full daylight brightness — the one thing that gave the night away. */
+    if (opties && opties.nachtF) alpha *= 1 - opties.nachtF * 0.45;
     var r = Game.util.clamp(p * 0.26, 8, 17);
 
     ctx.save();

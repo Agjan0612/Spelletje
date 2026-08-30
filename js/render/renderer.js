@@ -29,6 +29,11 @@
   /* A brief full-screen colour flash for the big moments (raid hit, age-up). */
   var flits = 0, flitsKleur = '255,255,255';
 
+  /* The state of the light this frame (js/render/sfeer.js). Worked out once at
+     the top of R.teken instead of per building: half the drawing wants to know
+     how dark it is, and sfeer.licht is pure maths on s.tijd. */
+  var licht = null;
+
   /* Ambient world life, all real-time and never stored in Game.state:
        - wolken: a few soft shadow blobs drifting over the ground (B5)
        - vogels: the odd flock crossing the sky (B2)
@@ -521,6 +526,7 @@
   R.teken = function (s, cam, ui) {
     if (!ctx) return;
     var p = cam.px();
+    licht = Game.render.sfeer ? Game.render.sfeer.licht(s) : null;
 
     /* Screen shake: offset the whole transform by a decaying jitter. */
     if (schud > 0.05) {
@@ -1011,6 +1017,41 @@
            ui.muisTegel.y >= g.y && ui.muisTegel.y < g.y + d.grootte;
   }
 
+  /* A building that is stuck. This used to be a full-strength ⚠️ emoji at a
+     third of a tile, and with ten stuck buildings the town became a field of
+     yellow triangles with houses somewhere underneath. The information is not
+     wrong, only far too loud: the *decision* is made from ui/stad.problemen,
+     which lists them sorted by urgency with a click that takes you there, so
+     out here a marker only has to say "look at me sometime".
+
+     So: a small amber pennant, half transparent, breathing slowly (real time,
+     like the marching ants — it keeps breathing while paused). Pointing at it
+     or selecting it makes it full strength, because then it *is* the subject. */
+  function waarschuwingsMerk(ctx, cx, cy, p, sterk) {
+    var puls = Game.render.beweging.rustig ? 0 : Math.sin(Date.now() * 0.004) * 0.5 + 0.5;
+    var r = p * (sterk ? 0.16 : 0.105) * (1 + puls * 0.08);
+    ctx.save();
+    ctx.globalAlpha = sterk ? 0.95 : 0.4 + puls * 0.14;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r);
+    ctx.lineTo(cx + r * 0.92, cy + r * 0.72);
+    ctx.lineTo(cx - r * 0.92, cy + r * 0.72);
+    ctx.closePath();
+    ctx.fillStyle = '#f0b429';
+    ctx.fill();
+    ctx.lineWidth = Math.max(1, r * 0.16);
+    ctx.strokeStyle = 'rgba(48,32,6,.75)';
+    ctx.stroke();
+    /* The bar of the exclamation mark, only once the triangle is big enough
+       for it to be a mark rather than a smudge. */
+    if (r >= 5) {
+      ctx.fillStyle = 'rgba(48,32,6,.85)';
+      ctx.fillRect(cx - r * 0.09, cy - r * 0.34, r * 0.18, r * 0.62);
+      ctx.fillRect(cx - r * 0.09, cy + r * 0.4, r * 0.18, r * 0.16);
+    }
+    ctx.restore();
+  }
+
   /* One building, from a depth-sorted entry: body (or construction site),
      raid warning, and selection outline. */
   function tekenGebouwEntry(ctx, cam, s, ui, g, d, p, tijd) {
@@ -1035,17 +1076,17 @@
 
     if (g.gebouwd) {
       /* Whether shutters should be closed: the same darkness at which the warm
-         window glow (sfeer.tekenVensters) comes on. */
-      var nacht = Game.render.sfeer && Game.render.sfeer.licht(s).nacht > 0.42;
+         window glow (sfeer.tekenVensters) comes on. `nachtF` is the same light
+         as a number, so the icon badge can dim with it instead of shining
+         through the night wash. */
+      var nachtF = licht ? licht.nacht : 0;
       sprites.tekenGebouw(ctx, d, sp2.x, sp2.y, p, d.grootte,
         { tijd: tijd, tijdperk: s.tijdperk, geschroeid: g.geschroeid,
-          seizoen: s.seizoen, zaad: g.id, nacht: nacht });
-      if (g.waarschuwing && p > 16) {
+          seizoen: s.seizoen, zaad: g.id, nacht: nachtF > 0.42, nachtF: nachtF,
+          toonBordje: gekozen || gewezen || !!ui.namen });
+      if (g.waarschuwing && p > 19) {
         var fc = Game.render.diamant(sp2.x, sp2.y, p * d.grootte);
-        ctx.font = Math.round(p * 0.34) + 'px serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('⚠️', fc.cx, fc.cy - p * (0.6 + d.grootte * 0.5));
+        waarschuwingsMerk(ctx, fc.cx, fc.cy - p * (0.6 + d.grootte * 0.5), p, gewezen || gekozen);
       }
       /* Fase 5.2: a figure standing watch on the towers/walls/gates that sit on
          the raiders' route — sleepy in peacetime, fully manned once a raid is
