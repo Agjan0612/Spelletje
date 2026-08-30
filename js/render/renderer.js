@@ -552,6 +552,10 @@
     var zicht = cam.zichtbaar(s.kaart);
     var tijd = s.tijd;
 
+    /* Anchor the terrain textures to the world for this frame (see
+       sprites.stelPatronenIn) before anything asks for one. */
+    sprites.stelPatronenIn(ctx, cam, s.seizoen);
+
     /* --- flat ground: the tile diamonds and everything in the tile plane.
        Raised features (trees, rocks, mountains) are drawn later, depth-sorted
        together with the buildings and walkers. --- */
@@ -573,6 +577,13 @@
 
     /* --- roads, drawn under the buildings --- */
     if (Game.render.paths && p > 12) Game.render.paths.teken(ctx, cam, s, p);
+
+    /* --- one grain over the whole ground, roads included: the ground stops
+       being an even fill for the cost of a single blended fillRect. It goes
+       here, above the roads and below the map overlay and everything that
+       stands up — the overlay is information and the buildings have material
+       of their own. --- */
+    sprites.tekenKorrel(ctx, cam);
 
     /* --- map overlay: tints the ground to answer one question at a time.
        Above the roads, below everything that stands up. --- */

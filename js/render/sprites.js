@@ -342,6 +342,224 @@
   }
   S.schakering = schakering;
 
+  /* ------------------------------------------------------------- korrel ---
+
+     The cheapest real texture there is, and the largest single step away from
+     "flat vector" that this file makes: one tiling noise bitmap, composited
+     over the whole ground in a single fillRect with soft-light. Every square
+     centimetre of ground in the game stops being an even fill, for the cost of
+     one full-screen blend a frame.
+
+     Two things make it work rather than merely cheap:
+
+       - It is anchored to the *world*, not the screen. Without that the grain
+         swims over the ground as you pan, which is far more noticeable than
+         having no grain at all. It does not scale with the zoom, though — it is
+         the tooth of the paper, not a thing lying in the world.
+       - It goes under the standing layer. Buildings and trees have material of
+         their own and do not want this on top of them.
+
+     The bitmap is two octaves of wrapping value noise (fine and coarse), and it
+     is *pre-multiplied into black and white speckles with an alpha* rather than
+     being mid-grey under a soft-light blend. Both give the same picture — mid
+     grey under soft-light is a no-op, and so is alpha zero — but soft-light is
+     branchy per-pixel maths over a million-odd pixels every frame, and a plain
+     source-over blend is the one path every renderer has optimised to death.
+     Measured on presented frames in headless Chromium (software rendering, so
+     a pessimistic floor) that swap was worth tens of milliseconds a frame. */
+  var KORREL = 128;
+  var korrelDoek = null, korrelPatroon = null;
+
+  /* Wrapping value noise, `blok` pixels per lattice cell. The lattice indices
+     wrap, so the bitmap tiles seamlessly. */
+  function wrapRuis(n, blok, zaad) {
+    var m = Math.max(1, Math.round(n / blok));
+    var rooster = new Float32Array(m * m);
+    for (var i = 0; i < rooster.length; i++) rooster[i] = ruisHash(zaad, blok, i);
+    var uit = new Float32Array(n * n);
+    for (var y = 0; y < n; y++) {
+      var gy = y / blok, y0 = gy | 0, fy = zacht(gy - y0);
+      var r0 = (y0 % m) * m, r1 = ((y0 + 1) % m) * m;
+      for (var x = 0; x < n; x++) {
+        var gx = x / blok, x0 = gx | 0, fx = zacht(gx - x0);
+        var c0 = x0 % m, c1 = (x0 + 1) % m;
+        var boven = rooster[r0 + c0] + (rooster[r0 + c1] - rooster[r0 + c0]) * fx;
+        var onder = rooster[r1 + c0] + (rooster[r1 + c1] - rooster[r1 + c0]) * fx;
+        uit[y * n + x] = boven + (onder - boven) * fy;
+      }
+    }
+    return uit;
+  }
+
+  function bouwKorrel() {
+    var doek = document.createElement('canvas');
+    doek.width = doek.height = KORREL;
+    var k = doek.getContext('2d');
+    var beeld = k.createImageData(KORREL, KORREL), dat = beeld.data;
+    var fijn = wrapRuis(KORREL, 2, 11);
+    var grof = wrapRuis(KORREL, 9, 29);
+    for (var i = 0; i < KORREL * KORREL; i++) {
+      /* -1..1, zero meaning "leave this pixel alone". */
+      var v = (fijn[i] - 0.5) * 1.05 + (grof[i] - 0.5) * 0.95;
+      var o = i * 4;
+      var licht = v > 0;
+      dat[o] = dat[o + 1] = dat[o + 2] = licht ? 255 : 0;
+      dat[o + 3] = Game.util.clamp(Math.round(Math.abs(v) * 168), 0, 255);
+    }
+    k.putImageData(beeld, 0, 0);
+    korrelDoek = doek;
+  }
+
+  /* ---------------------------------------------------- terreinpatronen ---
+
+     The grain above gives every surface tooth; this gives the ground a *grain
+     direction*. One transparent 64px texture per terrain — blades for grass,
+     furrow streaks for ploughed earth, mottle for a wood, chipped speckle for
+     rock — laid over the tile's own colour.
+
+     Two rules keep it affordable. It is filled straight into the diamond path
+     that is already being traced, with no ctx.save()/clip()/restore() per tile:
+     a pattern fills a path directly, and the clip trio is the one canvas call
+     that genuinely hurts across thousands of tiles. And it is gated on zoom,
+     because a blade of grass drawn onto an eight-pixel tile costs a fill and
+     shows nothing.
+
+     The patterns are anchored to the world and scaled with the zoom, set once a
+     frame in stelPatronenIn — without that the texture swims over the ground
+     while you pan, which is far worse than having no texture at all. If the
+     browser has no CanvasPattern.setTransform we skip the whole thing rather
+     than ship the swimming version. */
+  var PATROON = 64;
+  var patroonDoek = {};      /* "terrein|seizoen" -> canvas */
+  var patroonBron = {};      /* "terrein|seizoen" -> CanvasPattern */
+  var patroonKan = null;     /* does this browser support setTransform? */
+  S.PATROON_ZOOM = 52;       /* pixels per tile below which it is not drawn */
+
+  /* Honest note on what this costs, measured on presented frames in headless
+     Chromium (software rendering — a pessimistic floor, as VISUEEL.md sets out):
+     the fills cost is entirely a function of how many tiles are on screen — at
+     p = 44 they added 81 ms to a 193 ms frame, at p = 88 only 35 ms, because
+     there are a quarter as many tiles. Skipping CanvasPattern.setTransform
+     changes nothing, so the cost is not the transform but the per-pixel texture
+     sampling of the fill itself, which is precisely the work a GPU canvas does
+     for free.
+
+     Hence the threshold: 52 px per tile, above the 44 that a new game opens at.
+     The grain carries the ground at playing distance; this comes on when the
+     player leans in, which is both where it shows and where there are fewest
+     tiles to pay for. It is the one knob if it ever needs to move. */
+
+  function patroonVerf(k, seizoen) {
+    var doek = document.createElement('canvas');
+    doek.width = doek.height = PATROON;
+    var c = doek.getContext('2d');
+    var n = PATROON;
+    var tel = 0;
+    function r() { tel++; return ruisHash(9137, tel, seizoen * 31 + k.length); }
+
+    if (k === 'gras' || k === 'bos') {
+      /* Blades: short strokes leaning slightly, denser and darker for a wood. */
+      var bos = k === 'bos';
+      var aantal = bos ? 240 : 320;
+      for (var i = 0; i < aantal; i++) {
+        var x = r() * n, y = r() * n, h = 2 + r() * (bos ? 3 : 4);
+        var licht = r() > 0.5;
+        c.strokeStyle = licht ? 'rgba(255,255,255,.22)' : 'rgba(0,0,0,.22)';
+        c.lineWidth = 1;
+        c.beginPath();
+        c.moveTo(x, y);
+        c.lineTo(x + (r() - 0.5) * 2, y - h);
+        c.stroke();
+      }
+      if (bos) {
+        for (var b = 0; b < 22; b++) {
+          c.fillStyle = 'rgba(0,0,0,.15)';
+          c.beginPath();
+          c.ellipse(r() * n, r() * n, 3 + r() * 6, 2 + r() * 4, r() * 3, 0, Math.PI * 2);
+          c.fill();
+        }
+      }
+    } else if (k === 'vruchtbaar') {
+      /* Furrow streaks: long, low, roughly along one axis, like turned earth. */
+      for (var f = 0; f < 90; f++) {
+        var fx = r() * n, fy = r() * n, len = 4 + r() * 12;
+        c.strokeStyle = r() > 0.5 ? 'rgba(255,244,214,.2)' : 'rgba(40,24,10,.26)';
+        c.lineWidth = 1 + r();
+        c.beginPath();
+        c.moveTo(fx, fy);
+        c.lineTo(fx + len, fy + (r() - 0.5) * 2);
+        c.stroke();
+      }
+    } else {
+      /* Rock and mountain: angular chips and pits. */
+      for (var s2 = 0; s2 < 120; s2++) {
+        var sx = r() * n, sy = r() * n, sr = 1 + r() * 3;
+        c.fillStyle = r() > 0.5 ? 'rgba(255,255,255,.22)' : 'rgba(0,0,0,.24)';
+        c.beginPath();
+        c.moveTo(sx, sy - sr);
+        c.lineTo(sx + sr, sy);
+        c.lineTo(sx, sy + sr * 0.8);
+        c.lineTo(sx - sr * 0.9, sy);
+        c.closePath();
+        c.fill();
+      }
+    }
+    return doek;
+  }
+
+  function terreinPatroon(ctx, terrein, seizoen) {
+    if (patroonKan === false) return null;
+    var sleutel = terrein + '|' + seizoen;
+    if (patroonBron[sleutel] !== undefined) return patroonBron[sleutel];
+    if (!patroonDoek[sleutel]) patroonDoek[sleutel] = patroonVerf(terrein, seizoen);
+    var pat = ctx.createPattern(patroonDoek[sleutel], 'repeat');
+    if (pat && typeof pat.setTransform !== 'function') { patroonKan = false; return null; }
+    patroonKan = true;
+    patroonBron[sleutel] = pat || null;
+    return patroonBron[sleutel];
+  }
+
+  /* Anchor every built pattern to the world once a frame. */
+  S.stelPatronenIn = function (ctx, cam, seizoen) {
+    if (patroonKan === false || typeof DOMMatrix === 'undefined') { patroonKan = false; return; }
+    var p = cam.px();
+    if (p < S.PATROON_ZOOM) return;
+    var oor = cam.wereldNaarScherm(0, 0);
+    /* Anchored to the world so it never swims while panning, but only loosely
+       scaled with the zoom: at full scale a 64px texture is stretched to 170px
+       at maximum zoom and the blades drift so far apart that the whole thing
+       measures as nothing (0.9 of a standard deviation on a grass field, against
+       4.1 for the grain). A blade of grass should stay blade-sized. */
+    var schaal = Game.util.clamp(cam.zoom, 0.9, 1.4);
+    var m = new DOMMatrix([schaal, 0, 0, schaal, oor.x, oor.y]);
+    for (var k in patroonBron) {
+      if (patroonBron[k]) patroonBron[k].setTransform(m);
+    }
+    /* Build the ones this season needs, so the first frame after a season
+       change is not the one that pays for four new textures. */
+    if (seizoen === 3) return;
+    var soorten = ['gras', 'vruchtbaar', 'bos', 'rots', 'berg'];
+    for (var i = 0; i < soorten.length; i++) {
+      var pat = terreinPatroon(ctx, soorten[i], seizoen);
+      if (pat) pat.setTransform(m);
+    }
+  };
+
+  S.tekenKorrel = function (ctx, cam) {
+    if (!korrelDoek) bouwKorrel();
+    if (!korrelPatroon) korrelPatroon = ctx.createPattern(korrelDoek, 'repeat');
+    if (!korrelPatroon) return;
+    var oor = cam.wereldNaarScherm(0, 0);
+    var ox = ((oor.x % KORREL) + KORREL) % KORREL;
+    var oy = ((oor.y % KORREL) + KORREL) % KORREL;
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    ctx.translate(ox, oy);
+    ctx.fillStyle = korrelPatroon;
+    ctx.fillRect(-ox, -oy, cam.breedte, cam.hoogte);
+    ctx.restore();
+  };
+
   /* ------------------------------------------------------- iso primitives */
 
   function lerp(a, b, t) { return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }; }
@@ -409,6 +627,20 @@
       if (p >= 12) water(ctx, d, tegel, p, tijd, kaart, x, y, seizoen); else kust(ctx, d, kaart, x, y, tijd, p);
       if (seizoen === 3) ijs(ctx, d, tegel, p, kaart, x, y, ruis);
       return;
+    }
+
+    /* The terrain's own grain, straight into the diamond path — no clip, no
+       save/restore. Never under a building: the footprint hides it. */
+    /* Not under a building (the footprint hides it) and not in winter (the
+       snow cover sits over it at 20–70% white, so every one of those fills
+       would be paying for something nobody can see). */
+    if (p >= S.PATROON_ZOOM && !tegel.b && seizoen !== 3) {
+      var pat = terreinPatroon(ctx, tegel.t, seizoen);
+      if (pat) {
+        Game.render.padDiamant(ctx, d);
+        ctx.fillStyle = pat;
+        ctx.fill();
+      }
     }
 
     /* Deep inside a wood, a dark canopy under the trees. A forest in Age of
@@ -572,7 +804,11 @@
     var alpha = basis + ruis * 0.34;
     vulDiamant(ctx, d, 'rgba(244,248,252,' + alpha.toFixed(3) + ')');
 
-    if (p >= 14 && !t.b) {
+    /* The drift's lit and shaded faces are detail, and detail gets a zoom gate:
+       two wavy polygons per tile across a whole snowed-in map measured at +68%
+       of the frame when this ran from p = 14. From here up it is a couple of
+       hundred tiles, not five thousand. */
+    if (p >= 30 && !t.b) {
       var c = { x: d.cx, y: d.cy };
       var zaad = (t.v * 997) % 1000;
       /* The lit face of the drift, from the top-left edge inwards. */
@@ -818,20 +1054,41 @@
        BUUREDGE already tell us which edges face land (fase 3.1). */
     if (p >= 16 && kaart) spiegeling(ctx, d, p, tijd, kaart, tx, ty, seizoen);
 
-    /* Three drifting ripple lines instead of two static ones. */
-    ctx.strokeStyle = 'rgba(226,244,250,.09)';
-    ctx.lineWidth = Math.max(1, p * 0.03);
-    ctx.lineCap = 'round';
-    ctx.beginPath();
+    /* Ripples. Water without light and shade in it is a blue field with
+       stripes on it; what makes a swell read as a swell is that a crest is
+       lighter than the water and the trough right under it is darker. So the
+       same three ripples are drawn twice — a bright crest and, a hair below it,
+       its own shadow — and they ride two beat frequencies rather than one, so
+       the pattern never settles into a rhythm. Two strokes for the tile, not
+       six: the loop builds both paths and each is stroked once. */
+    var kruinen = [], dalen = [];
     for (var i = 0; i < 3; i++) {
       var ph = tijd * (1.0 + i * 0.33) + t.v * 9 + i * 2.1;
+      var ph2 = tijd * (0.41 + i * 0.17) + t.v * 5.5;
       /* Offsets keyed to the tile's own random, so the ripples do not line up
          into rows that give the grid away. */
-      var yy = d.cy + ((t.v * 3.3 + i) % 1 - 0.5) * d.hh * 1.1 + Math.sin(ph) * p * 0.04;
-      var xx = d.cx + ((t.v * 7.9 + i * 0.4) % 1 - 0.5) * d.hw * 0.5 + Math.cos(ph) * p * 0.05;
-      var len = p * (0.08 + ((t.v * 11 + i) % 1) * 0.08);
-      ctx.moveTo(xx - len, yy);
-      ctx.lineTo(xx + len, yy);
+      var yy = d.cy + ((t.v * 3.3 + i) % 1 - 0.5) * d.hh * 1.1
+             + Math.sin(ph) * p * 0.04 + Math.sin(ph2) * p * 0.02;
+      var xx = d.cx + ((t.v * 7.9 + i * 0.4) % 1 - 0.5) * d.hw * 0.5
+             + Math.cos(ph) * p * 0.05;
+      var len = p * (0.08 + ((t.v * 11 + i) % 1) * 0.08) * (0.7 + 0.3 * Math.sin(ph2));
+      kruinen.push([xx - len, yy, xx + len, yy]);
+      dalen.push([xx - len * 0.9, yy + p * 0.022, xx + len * 0.9, yy + p * 0.022]);
+    }
+
+    ctx.lineCap = 'round';
+    ctx.lineWidth = Math.max(1, p * 0.026);
+    ctx.strokeStyle = 'rgba(10,26,44,.16)';
+    ctx.beginPath();
+    for (var q = 0; q < dalen.length; q++) {
+      ctx.moveTo(dalen[q][0], dalen[q][1]); ctx.lineTo(dalen[q][2], dalen[q][3]);
+    }
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(232,248,254,.15)';
+    ctx.beginPath();
+    for (var w = 0; w < kruinen.length; w++) {
+      ctx.moveTo(kruinen[w][0], kruinen[w][1]); ctx.lineTo(kruinen[w][2], kruinen[w][3]);
     }
     ctx.stroke();
 
@@ -916,7 +1173,7 @@
      same rate. */
   function boomAantal(t) {
     var deel = t.max > 0 ? Game.util.clamp(t.amt / t.max, 0, 1) : 0;
-    return Math.max(1, Math.round(1 + deel * 3));
+    return Math.max(1, Math.round(1 + deel * 2));
   }
 
   /* One tree, at the offset the caller has already applied to `d`. */
@@ -1382,7 +1639,7 @@
     ctx.ellipse(scx, scy, sr, sr * 0.5, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    var top = isoMuren(ctx, foot, H, cfg.muur);
+    var top = isoMuren(ctx, foot, H, cfg.muur, p, opties.zaad || 0);
 
     /* Door + shuttered windows on the visible wall faces. Shutters swing closed
        at night, at the same darkness the warm window glow comes on (fase 1.3). */
@@ -1552,11 +1809,59 @@
   /* Left + right visible walls; returns the raised top-face diamond. The dark
      (left) face is lifted a touch by a soft fill light so the shadow side does
      not crush to a flat block. */
-  function isoMuren(ctx, foot, H, muur) {
+  function isoMuren(ctx, foot, H, muur, p, zaad) {
     var top = diamantVan(foot.cx, foot.cy - H, foot.hw, foot.hh);
     quad(ctx, foot.left, foot.bottom, top.bottom, top.left, verf(muur, 0.72));    /* left face  */
     quad(ctx, foot.bottom, foot.right, top.right, top.bottom, verf(muur, 0.88));  /* right face */
+    if (p >= 26) {
+      pleister(ctx, foot.left, foot.bottom, top.bottom, top.left, muur, 0.72, p, zaad);
+      pleister(ctx, foot.bottom, foot.right, top.right, top.bottom, muur, 0.88, p, zaad + 7);
+    }
     return top;
+  }
+
+  /* What a rendered wall actually looks like: uneven, and dirty where it meets
+     the ground. A flat quad of one cream is the single clearest "vector" tell
+     on a building at close zoom, and two cheap passes fix it.
+
+       - A handful of soft blotches of lighter and darker plaster, placed from
+         the building's own seed so a street is not one repeated wall.
+       - A band of damp and splashed mud along the bottom. This is an old
+         painter's trick and it does something no shadow can: it *sets the
+         building on the ground* instead of letting it hover on a clean line. */
+  function pleister(ctx, bl, br, tr, tl, muur, licht, p, zaad) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(bl.x, bl.y); ctx.lineTo(br.x, br.y);
+    ctx.lineTo(tr.x, tr.y); ctx.lineTo(tl.x, tl.y);
+    ctx.closePath();
+    ctx.clip();
+
+    for (var i = 0; i < 4; i++) {
+      var h1 = ((zaad * 37 + i * 131) % 97) / 97;
+      var h2 = ((zaad * 61 + i * 89) % 83) / 83;
+      var q = gevelPunt(bl, br, tl, tr, h1, h2);
+      var r = p * (0.1 + h2 * 0.16);
+      ctx.fillStyle = verf(muur, licht * (i % 2 ? 1.07 : 0.93));
+      ctx.globalAlpha = 0.4;
+      ctx.beginPath();
+      ctx.ellipse(q.x, q.y, r, r * 0.7, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    /* The dirt band along the foot of the wall. */
+    var hoogte = bl.y - tl.y;
+    var g = ctx.createLinearGradient(0, bl.y, 0, bl.y - Math.abs(hoogte) * 0.3);
+    g.addColorStop(0, 'rgba(58,44,28,.34)');
+    g.addColorStop(1, 'rgba(58,44,28,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(bl.x, bl.y); ctx.lineTo(br.x, br.y);
+    ctx.lineTo(tr.x, tr.y); ctx.lineTo(tl.x, tl.y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
   }
 
   /* Hip / spire roof rising from a top-face diamond to an apex, with a lit
@@ -1608,46 +1913,94 @@
     ctx.stroke();
   }
 
-  /* Courses parallel to a roof face's eave (edge a→b), from eave up to the apex,
-     drawn to read as the roof's material. `pan` gets rows of short tile dashes,
-     `lei` fine even slate lines, `riet` a couple of soft thatch bands. The
-     dashes only appear zoomed in (p > 34); far out it is one flat face. */
+  /* The material of one roof face, between its eave (edge a→b) and the apex.
+     This used to be four faint lines and, only above p = 34, five short dashes
+     per row — which is to say that on a roof forty pixels tall you got four
+     stripes, and the roof read as a coloured triangle. The course count now
+     follows the face's actual height on screen, so a roof carries pantiles at
+     the scale pantiles have, and each style is drawn as the thing it is:
+
+       pan  — courses of staggered tiles with a lit top edge and a dark joint,
+              which is what gives a tiled roof its corrugation.
+       lei  — many fine courses of small slates, staggered, cooler and flatter.
+       riet — few, thick, soft bands with a combed grain running up the slope
+              and a ragged bottom edge.
+
+     One path per pass, so a roof is a handful of strokes however many tiles it
+     has. Buildings are counted in dozens, not thousands: this is the cheapest
+     place in the renderer to spend detail. */
   function dakLagen(ctx, a, b, apex, dak, licht, dakstijl, p) {
     p = p || 0;
     dakstijl = dakstijl || 'pan';
-    var courses = dakstijl === 'lei' ? 5 : (dakstijl === 'riet' ? 2 : 4);
 
-    /* The faint course lines (always drawn — cheap, and they carry the far
-       view). */
-    ctx.strokeStyle = verf(dak, licht * (dakstijl === 'riet' ? 0.88 : 0.8));
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (var i = 1; i < courses; i++) {
-      var u = i / courses;
-      var q1 = lerp(a, apex, u), q2 = lerp(b, apex, u);
-      ctx.moveTo(q1.x, q1.y); ctx.lineTo(q2.x, q2.y);
+    /* How tall this face is on screen decides how many courses fit. */
+    var hoogte = Math.abs(apex.y - (a.y + b.y) / 2);
+    var perLaag = dakstijl === 'riet' ? p * 0.3 : (dakstijl === 'lei' ? p * 0.075 : p * 0.1);
+    var lagen = Game.util.clamp(Math.round(hoogte / Math.max(2, perLaag)), 2, 20);
+
+    if (p < 16) {
+      /* Far out: two hint lines, no more. The silhouette carries the roof. */
+      lijnLagen(ctx, a, b, apex, verf(dak, licht * 0.82), 1, 3);
+      return;
     }
-    ctx.stroke();
 
-    if (p <= 34 || dakstijl !== 'pan') return;
+    if (dakstijl === 'riet') {
+      /* Soft bands, then a comb of strokes running up the slope. */
+      lijnLagen(ctx, a, b, apex, verf(dak, licht * 0.86), Math.max(1, p * 0.02), lagen);
+      if (p >= 34) {
+        ctx.strokeStyle = verf(dak, licht * 0.94);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (var c = 1; c < 9; c++) {
+          var voet = lerp(a, b, c / 9);
+          var kruin = lerp(voet, apex, 0.82);
+          ctx.moveTo(voet.x, voet.y); ctx.lineTo(kruin.x, kruin.y);
+        }
+        ctx.stroke();
+      }
+      return;
+    }
 
-    /* Rows of little tiles: short dashes offset row-to-row so a tile roof reads
-       as pantiles rather than plain stripes. */
-    ctx.strokeStyle = verf(dak, licht * 0.66);
-    ctx.lineWidth = Math.max(1, p * 0.012);
+    /* Tile and slate: a lit edge along the top of every course and a dark
+       joint under it. Two strokes for the whole face. */
+    lijnLagen(ctx, a, b, apex, verf(dak, licht * 1.16), 1, lagen, 0.012);
+    lijnLagen(ctx, a, b, apex, verf(dak, licht * 0.62), Math.max(1, p * 0.008), lagen);
+
+    if (p < 30) return;
+
+    /* The individual tiles: a staggered dash per tile along each course. */
+    var perRij = dakstijl === 'lei' ? 9 : 6;
+    ctx.strokeStyle = verf(dak, licht * 0.5);
+    ctx.lineWidth = Math.max(1, p * 0.006);
     ctx.lineCap = 'butt';
     ctx.beginPath();
-    for (var r = 1; r < courses; r++) {
-      var v = r / courses;
-      var la = lerp(a, apex, v), lb = lerp(b, apex, v);
-      var n = 5;
+    for (var r = 1; r < lagen; r++) {
+      var u = r / lagen;
+      var la = lerp(a, apex, u), lb = lerp(b, apex, u);
+      var lo = lerp(a, apex, Math.min(1, u + 1 / lagen));
+      var lp = lerp(b, apex, Math.min(1, u + 1 / lagen));
       var schuif = (r % 2) * 0.5;
-      for (var k = 0; k < n; k++) {
-        var f0 = (k + schuif) / n, f1 = (k + schuif + 0.55) / n;
-        if (f1 > 1) continue;
-        var d0 = lerp(la, lb, f0), d1 = lerp(la, lb, f1);
-        ctx.moveTo(d0.x, d0.y); ctx.lineTo(d1.x, d1.y);
+      for (var k = 0; k < perRij; k++) {
+        var f = (k + schuif) / perRij;
+        if (f > 1) continue;
+        var onder = lerp(la, lb, f), boven = lerp(lo, lp, f);
+        ctx.moveTo(onder.x, onder.y); ctx.lineTo(boven.x, boven.y);
       }
+    }
+    ctx.stroke();
+  }
+
+  /* `n` lines parallel to the eave a→b, spread up towards the apex. `verschuif`
+     nudges them a hair up the slope, which is how the lit edge of a course sits
+     just above its own joint. */
+  function lijnLagen(ctx, a, b, apex, kleur, dikte, n, verschuif) {
+    ctx.strokeStyle = kleur;
+    ctx.lineWidth = dikte;
+    ctx.beginPath();
+    for (var i = 1; i < n; i++) {
+      var u = i / n + (verschuif || 0);
+      var q1 = lerp(a, apex, u), q2 = lerp(b, apex, u);
+      ctx.moveTo(q1.x, q1.y); ctx.lineTo(q2.x, q2.y);
     }
     ctx.stroke();
   }
