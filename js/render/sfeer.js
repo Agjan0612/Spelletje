@@ -241,6 +241,27 @@
     }
   };
 
+  /* ---------------------------------------------------------- curve ------
+
+     There is no full-frame grade here, and that is a measured decision rather
+     than an omission.
+
+     Everything in this file lays colour *onto* the picture, and source-over can
+     only pull an image towards a colour — which is contrast reduction. No
+     amount of washing gives a screenshot the snap that separates a game from a
+     drawing; for that you have to pull the picture's own contrast and
+     saturation apart. The canvas way to do that is ctx.filter over a copy of
+     the canvas onto itself, and it was built and measured: on presented frames
+     in headless Chromium it cost +440 ms at playing zoom and +870 ms zoomed
+     out, against a whole frame of about 200 ms. A filtered self-copy defeats
+     the deferred rasterisation the rest of the frame depends on, so it does not
+     merely add its own cost — it makes everything already drawn cost more.
+
+     The grade lives in js/render/sprites.js instead, baked into the ground
+     palette per season at build time (SEIZOENSGRADATIE), where it costs
+     nothing at all: the ground is most of the screen, and a lookup table can
+     carry a curve just as well as a filter can.
+
   /* Source-over of two translucent colours, so two washes can be laid on the
      screen in a single fill. [r, g, b, a] in, [r, g, b, a] out. */
   function overElkaar(onder, boven) {

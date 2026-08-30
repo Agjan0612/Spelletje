@@ -660,6 +660,22 @@
       return a.d !== b.d ? a.d - b.d : (a.yy !== b.yy ? a.yy - b.yy : a.soort - b.soort);
     });
 
+    /* Every ground shadow of the terrain features, before any of their bodies.
+       They all lie in the same plane, so unlike the things casting them they
+       need no sorting among themselves — and going down first means a shadow
+       can never land on top of the trunk of a tree drawn earlier in the pass.
+       (One path filled once was tried here and measured slower; see the note in
+       js/render/sprites.js.) */
+    if (p >= 12) {
+      sprites.zetLicht(licht);
+      for (var si = 0; si < laag.length; si++) {
+        var se = laag[si];
+        if (se.soort !== 0) continue;
+        var ssp = cam.wereldNaarScherm(se.x * TEGEL, se.y * TEGEL);
+        sprites.deelSchaduw(ctx, se.tegel, ssp.x, ssp.y, p, se.deel);
+      }
+    }
+
     for (var li = 0; li < laag.length; li++) {
       var e = laag[li];
       if (e.soort === 0) {

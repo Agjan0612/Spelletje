@@ -12,13 +12,30 @@
   var S = {};
 
   /* Base colours per terrain, per season (lente, zomer, herfst, winter). */
+  /* Base terrain colours, per season (lente, zomer, herfst, winter).
+   *
+     Two deliberate moves here over the older table, both about *range*. The
+     whole palette used to sit between 40% and 65% lightness at under about 35%
+     saturation, and a screenshot of it came out flat however much was drawn on
+     it — nothing was dark and nothing was light. So the greens are warmer and
+     considerably more saturated, and the gap between grass and wood is now
+     wide enough to read as two kinds of ground rather than two shades.
+
+     And `vruchtbaar` has come *towards* grass instead of away from it. Fertile
+     ground is not a different landscape, it is grass that happens to be worth
+     ploughing, and painting it olive-brown turned every interleaved patch of
+     it into a visible chequerboard of two terrains — one of the loudest grids
+     left on the map after fase C. It is a warmer, yellower green now; the
+     furrows on it and the grondstoffen overlay are what a player hunting for
+     farmland should be reading, and both say it far more clearly than a brown
+     tile ever did. */
   var TERREIN = {
-    gras:       ['#6f8f4a', '#6b8b41', '#8a8a3f', '#c9cfc4'],
-    vruchtbaar: ['#8a7a3e', '#9a8437', '#a88a35', '#bfc0b0'],
-    bos:        ['#3f6033', '#3a5c2c', '#5c5f2a', '#7f8c7a'],
-    rots:       ['#7d7a72', '#7d7a72', '#7a766c', '#9d9d9a'],
-    berg:       ['#5f5a52', '#5f5a52', '#5c5750', '#8d8d8d'],
-    water:      ['#3f6f8f', '#42749a', '#3c6a89', '#4a6f85']
+    gras:       ['#74a03f', '#6d9a33', '#93973a', '#ccd2c6'],
+    vruchtbaar: ['#8aa03c', '#93a032', '#a89a33', '#c4c6b2'],
+    bos:        ['#33562a', '#2d5023', '#525c22', '#6f8072'],
+    rots:       ['#847f74', '#847f74', '#807a6e', '#a2a29e'],
+    berg:       ['#5c5750', '#5c5750', '#59544d', '#8d8d8d'],
+    water:      ['#3a6f93', '#3d76a2', '#366a8e', '#456f88']
   };
 
   var ADERKLEUR = {
@@ -296,6 +313,36 @@
     gras: 1, vruchtbaar: 0.85, bos: 0.8, rots: 0.45, berg: 0.4
   };
 
+  /* The seasonal grade, and the reason it lives in a lookup table.
+   *
+     A grade wants to pull a picture's contrast and saturation *apart*; a wash
+     over the finished frame can only pull them together, so js/render/sfeer.js
+     cannot do it however many gradients it lays on. The canvas primitive that
+     can — ctx.filter over a copy of the canvas onto itself — was built and
+     measured at +440 ms a frame at playing zoom, which is more than twice the
+     whole frame. See the note in sfeer.js.
+
+     So it happens here instead, at build time, on the colours themselves. The
+     ground is most of what is on screen, and a table can carry a curve exactly
+     as well as a filter can — for nothing. Summer is bright and punchy, autumn
+     rich and warm, winter pale, blue and flat. */
+  var SEIZOENSGRADATIE = [
+    { contrast: 1.06, verzadiging: 1.06 },   /* lente  */
+    { contrast: 1.10, verzadiging: 1.10 },   /* zomer  */
+    { contrast: 1.08, verzadiging: 1.14 },   /* herfst */
+    { contrast: 0.96, verzadiging: 0.82 }    /* winter */
+  ];
+
+  function gradeer(c, g) {
+    var lum = c[0] * 0.299 + c[1] * 0.587 + c[2] * 0.114;
+    var uit = [];
+    for (var i = 0; i < 3; i++) {
+      var v = lum + (c[i] - lum) * g.verzadiging;
+      uit[i] = 128 + (v - 128) * g.contrast;
+    }
+    return uit;
+  }
+
   function bouwGrondPalet() {
     grondPalet = {};
     for (var t in TERREIN) {
@@ -303,7 +350,7 @@
       var kracht = RUISKRACHT[t] != null ? RUISKRACHT[t] : 1;
       var perSeizoen = [];
       for (var sz = 0; sz < 4; sz++) {
-        var c = ontleed(TERREIN[t][sz] || TERREIN[t][0]);
+        var c = gradeer(ontleed(TERREIN[t][sz] || TERREIN[t][0]), SEIZOENSGRADATIE[sz]);
         var rijen = [];
         for (var r = 0; r < RUISN; r++) {
           var u = r / (RUISN - 1);
@@ -1147,9 +1194,52 @@
   /* The shadow an upright thing throws on the ground: an ellipse stretched and
      leaned along the one light direction the whole scene shares, so a wood, a
      boulder field and a street of houses all agree on where the sun is. */
-  var SCHADUWVERF = 'rgba(24,20,14,.2)';
-  var SCHADUWVERF_LICHT = 'rgba(24,20,14,.18)';
   var SCHADUWHOEK = Math.atan2(0.30, 0.62);
+
+  /* Ground shadows are drawn one at a time, and that is a measured choice.
+   *
+     Collecting a screen full of tree and boulder shadows into a single path and
+     filling it once looks like the obvious win — one fill instead of thousands,
+     and overlapping shadows would stop compounding into a stain. Both were
+     built. Two things came out of measuring it on presented frames:
+
+       - ctx.ellipse continues the current subpath, so without a moveTo in front
+         of every one of them the whole screen became one self-intersecting
+         polygon. Filling that cost five times the rest of the frame together.
+       - Even with that fixed, one path of a few thousand disjoint ovals was
+         *slower* than a few thousand small fills (310 ms against 215 ms zoomed
+         out). A small fill only ever touches its own bounding box; one enormous
+         path makes the rasteriser build and scan a global edge list.
+
+     So: separate fills, and overlapping shadows do compound a little. What was
+     kept from the experiment is the pass itself — every feature shadow goes
+     down before any feature body, so a shadow can never land on top of the
+     trunk of a tree that was drawn earlier. */
+
+  /* What colour a shadow is right now. It was a fixed near-black at 20%, which
+     on a screenshot barely existed — in Age of Empires the shadow under a
+     building is the darkest thing on screen, and that is exactly where its
+     relief comes from. Now it deepens, and it takes its hue from the light:
+     cool and short under a midday sun, warmer and softer at dawn and dusk. The
+     *direction* still never moves (see the header of js/render/sfeer.js): the
+     hillshade is baked lit from the top-left and a wandering shadow would
+     fight it. */
+  S.schaduwKleur = function (licht, alpha) {
+    if (!licht) return 'rgba(24,20,14,' + alpha.toFixed(3) + ')';
+    var warm = licht.avond * 0.8 + licht.ochtend * 0.5;
+    var r = Math.round(20 + warm * 26);
+    var g = Math.round(18 + warm * 8);
+    var b = Math.round(30 - warm * 10);
+    /* At night the wash over everything is already doing the darkening. */
+    var a = alpha * (1 - licht.nacht * 0.55);
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + a.toFixed(3) + ')';
+  };
+
+  /* How much longer a shadow is at a low sun. */
+  S.schaduwRek = function (licht) {
+    if (!licht) return 1;
+    return 1 + (licht.avond + licht.ochtend) * 0.85;
+  };
 
   function grondschaduw(ctx, x, y, straal, hoogte, alpha) {
     var richting = (Game.render.sfeer && Game.render.sfeer.SCHADUW) || { x: 0.62, y: 0.30 };
@@ -1157,11 +1247,37 @@
     var lengte = Math.sqrt(ox * ox + oy * oy) * 0.5 + straal;
     /* ellipse() takes its own rotation, so this needs no save/translate/rotate
        /restore — which matters, because a forest draws three of these per tile. */
-    ctx.fillStyle = alpha >= 0.19 ? SCHADUWVERF : SCHADUWVERF_LICHT;
+    ctx.fillStyle = S.schaduwKleur(huidigLicht, alpha);
     ctx.beginPath();
     ctx.ellipse(x + ox * 0.5, y + oy * 0.5, lengte, straal * 0.55, SCHADUWHOEK, 0, Math.PI * 2);
     ctx.fill();
   }
+
+  /* Only the ground shadow of item `i` on a tile, for the batched pass. */
+  S.deelSchaduw = function (ctx, tegel, sx, sy, p, i) {
+    if (p < 12) return;
+    var d = Game.render.diamant(sx, sy, p);
+    S.deelPositie(tegel, i, deelPos);
+    var cx = d.cx + (deelPos.dx - deelPos.dy) * d.hw;
+    var cy = d.cy + (deelPos.dx + deelPos.dy) * d.hh;
+    var rek = S.schaduwRek(Game.render.sfeer && Game.render.sfeer.licht ? huidigLicht : null);
+    if (tegel.t === 'bos') {
+      var deel = tegel.max > 0 ? Game.util.clamp(tegel.amt / tegel.max, 0, 1) : 0;
+      var maat = 0.76 + (((i * 53 + tegel.v * 271) % 67) / 67) * 0.56;
+      grondschaduw(ctx, cx, cy + p * 0.03, p * 0.11 * maat, p * (0.6 + deel * 0.24) * maat * 0.9 * rek, 0.2);
+    } else if (tegel.t === 'rots') {
+      var rm = 0.7 + (((i * 29 + tegel.v * 331) % 71) / 71) * 0.7;
+      grondschaduw(ctx, cx, cy + p * 0.05, p * 0.1 * rm, p * 0.14 * rm * rek, 0.18);
+    } else if (tegel.t === 'berg') {
+      var r1 = (tegel.v * 7.31) % 1;
+      grondschaduw(ctx, cx, cy + d.hh * 0.2, d.hw * 0.8, p * (0.55 + r1 * 1.25) * 0.5 * rek, 0.2);
+    }
+  };
+
+  /* The light as of this frame, handed in by the renderer so the shadow helpers
+     do not each recompute it. */
+  var huidigLicht = null;
+  S.zetLicht = function (l) { huidigLicht = l; };
 
   /* An upright billboard (sprite or richer fallback tree) at a point, bent by
      the wind: each tree is rotated a few degrees around its foot so the canopy
@@ -1186,8 +1302,6 @@
     var maat = 0.76 + (((i * 53 + t.v * 271) % 67) / 67) * 0.56;
     var wind = Math.sin(tijd * 0.9 + t.v * 6.28 + i * 1.3) * 0.05;   /* ~3° */
     var hoog = p * (0.6 + deel * 0.24) * maat;
-
-    grondschaduw(ctx, ox, oy + p * 0.03, p * 0.11 * maat, hoog * 0.9, 0.2);
 
     ctx.save();
     ctx.translate(ox, oy);
@@ -1256,8 +1370,6 @@
     var ox = d.cx, oy = d.cy;
     var maat = 0.7 + (((i * 29 + t.v * 331) % 71) / 71) * 0.7;
 
-    grondschaduw(ctx, ox, oy + p * 0.05, p * 0.1 * maat, p * 0.14 * maat, 0.18);
-
     var img = atlas && atlas.rots(t.v, i);
     if (img) {
       var rs = p * 0.38 * maat;
@@ -1299,8 +1411,6 @@
     var H = p * (0.55 + r1 * 1.25);
     var lean = (r2 - 0.5) * p * 0.34;
     var apex = { x: d.cx + lean, y: d.cy - H };
-
-    grondschaduw(ctx, d.cx, d.cy + d.hh * 0.2, d.hw * 0.8, H * 0.5, 0.2);
 
     /* A lower shoulder peak against the main one turns a lone cone into a
        ridge, especially where several mountain tiles meet. */
@@ -1482,11 +1592,16 @@
 
   /* Per-age palette for the tiered houses/halls, so a village visibly matures:
      daub → timber → stone → half-timber, thatch → tile. */
+  /* Wall and roof per housing tier. Wall and roof used to sit about thirty
+     lightness points apart; they are nearer forty-five now. A building has to
+     be lighter than the ground it stands on — that separation is most of what
+     pulls a town forward out of a green field, and it is why an Age of Empires
+     village reads at a glance from any distance. */
   var TIER_PALET = {
-    1: { muur: '#d8c39a', dak: '#7c4b2e' },
-    2: { muur: '#c9b487', dak: '#8a5a3a' },
-    3: { muur: '#c6c2b6', dak: '#6a6258' },
-    4: { muur: '#e6dcc0', dak: '#7a4030' }
+    1: { muur: '#e0cba2', dak: '#77401f' },
+    2: { muur: '#d5bf8e', dak: '#8a4f26' },
+    3: { muur: '#d2cec2', dak: '#5f574d' },
+    4: { muur: '#efe6ca', dak: '#743225' }
   };
   var TIER_SHAPES = { dorpsplein: 1, huisje: 1, herenhuis: 1, herberg: 1, marktplaats: 1 };
 
@@ -1495,12 +1610,12 @@
      house default. `stijl`: schuin (hip roof) | punt (steep spire) |
      plat (flat top) | geen (open top). */
   var ISO = {
-    _default:    { muurH: 0.55, stijl: 'schuin', dakH: 0.46, muur: '#c9b491', dak: '#7c4b2e' },
+    _default:    { muurH: 0.55, stijl: 'schuin', dakH: 0.46, muur: '#d8c5a1', dak: '#6f3d21' },
 
     dorpsplein:  { muurH: 0.42, stijl: 'schuin', dakH: 0.4, vlag: true },
     huisje:      { muurH: 0.52, stijl: 'schuin', dakH: 0.48 },
     herenhuis:   { muurH: 0.64, stijl: 'schuin', dakH: 0.48 },
-    boerderij:   { muurH: 0.4,  stijl: 'schuin', dakH: 0.34, muur: '#cdb98d', dak: '#8a5a34' },
+    boerderij:   { muurH: 0.4,  stijl: 'schuin', dakH: 0.34, muur: '#dcc99b', dak: '#7d4b25' },
     herberg:     { muurH: 0.52, stijl: 'schuin', dakH: 0.5, uithang: true },
 
     stadhuis:    { muurH: 0.72, stijl: 'schuin', dakH: 0.55, muur: '#d8cba6', dak: '#7a5236', vlag: true },
@@ -1509,7 +1624,7 @@
     gildehuis:   { muurH: 0.64, stijl: 'schuin', dakH: 0.5, muur: '#d3c39c', dak: '#6a5240' },
 
     marktplaats: { muurH: 0.3,  stijl: 'plat',   dakH: 0.12, muur: '#c7b083', dak: '#9c6a3a', luifel: true },
-    voorraadschuur:{ muurH: 0.42, stijl: 'schuin', dakH: 0.44, muur: '#b99a6a', dak: '#6e4a2c' },
+    voorraadschuur:{ muurH: 0.42, stijl: 'schuin', dakH: 0.44, muur: '#c8a877', dak: '#603c1e' },
     pakhuis:     { muurH: 0.5,  stijl: 'schuin', dakH: 0.46, muur: '#b99a6a', dak: '#5f4530' },
     waterput:    { muurH: 0.3,  stijl: 'schuin', dakH: 0.4,  smal: 0.5, muur: '#a9a094', dak: '#6a4a30' },
 
@@ -1536,7 +1651,7 @@
     houthakkershut:{ muurH: 0.44, stijl: 'schuin', dakH: 0.46, muur: '#b99a6a', dak: '#5f4530' },
     jachthut:    { muurH: 0.42, stijl: 'schuin', dakH: 0.46, muur: '#b99a6a', dak: '#5f4530' },
     vissershut:  { muurH: 0.42, stijl: 'schuin', dakH: 0.46, muur: '#b99a6a', dak: '#5f4530' },
-    bakkerij:    { muurH: 0.5,  stijl: 'schuin', dakH: 0.46, muur: '#cdb98d', dak: '#8a5a34' },
+    bakkerij:    { muurH: 0.5,  stijl: 'schuin', dakH: 0.46, muur: '#dcc99b', dak: '#7d4b25' },
     juwelier:    { muurH: 0.56, stijl: 'schuin', dakH: 0.5, muur: '#d3c39c', dak: '#6a5240' }
   };
 
@@ -1632,7 +1747,7 @@
        side. */
     var scx = foot.cx + foot.hw * 0.12, scy = foot.cy + foot.hh * 0.28, sr = foot.hw * 1.08;
     var sg = ctx.createRadialGradient(scx, scy, sr * 0.35, scx, scy, sr);
-    sg.addColorStop(0, 'rgba(0,0,0,.26)');
+    sg.addColorStop(0, 'rgba(0,0,0,.34)');
     sg.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = sg;
     ctx.beginPath();
@@ -1685,10 +1800,17 @@
      the near and the offset diamond) so it stays one clean shape. */
   function slagschaduw(ctx, foot, hoogte) {
     var richting = (Game.render.sfeer && Game.render.sfeer.SCHADUW) || { x: 0.62, y: 0.30 };
-    var ox = hoogte * richting.x, oy = hoogte * richting.y;
+    /* A low sun throws a long shadow. The direction stays put (see the header
+       of js/render/sfeer.js) but the length and the colour follow the hour,
+       which is most of what makes a morning look like a morning. */
+    var rek = S.schaduwRek(huidigLicht);
+    var ox = hoogte * richting.x * rek, oy = hoogte * richting.y * rek;
     if (ox < 1 && oy < 1) return;
 
-    ctx.fillStyle = 'rgba(24,20,14,.22)';
+    /* Deepened from .22. A building's shadow should be the darkest thing
+       around it — that contrast is where the relief comes from, and at .22 it
+       barely registered on a screenshot. */
+    ctx.fillStyle = S.schaduwKleur(huidigLicht, 0.4);
     ctx.beginPath();
     ctx.moveTo(foot.top.x, foot.top.y);
     ctx.lineTo(foot.right.x, foot.right.y);
