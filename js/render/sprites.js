@@ -1989,22 +1989,36 @@
      raid scorch so it matches the rest of the town. */
   function tekenGebouwSprite(ctx, img, def, sx, sy, p, grootte, opties) {
     var foot = Game.render.diamant(sx, sy, p * grootte);
+    var w = p * grootte * 1.5;
+    var ratio = (img.naturalHeight && img.naturalWidth) ? img.naturalHeight / img.naturalWidth : 1;
+    var h = w * ratio;
+    /* Roughly how tall the art stands above its footprint, for the cast shadow
+       and for hanging the badge — the sprite has no volume to ask. */
+    var hoogte = Math.max(0, h - foot.hh * 2);
+
+    /* Everything the procedural volume gets, a sprite-backed building gets too.
+       The whole point of the hook is that a building can be swapped over to
+       painted art one at a time; if crossing that line silently cost it its
+       cast shadow, its icon badge and its snow, a half-converted town would
+       look broken in a way that reads as a bug rather than as a style. */
+    slagschaduw(ctx, foot, hoogte * 0.75);
 
     var scx = foot.cx + foot.hw * 0.12, scy = foot.cy + foot.hh * 0.28, sr = foot.hw * 1.08;
     var sg = ctx.createRadialGradient(scx, scy, sr * 0.35, scx, scy, sr);
-    sg.addColorStop(0, 'rgba(0,0,0,.26)');
+    sg.addColorStop(0, 'rgba(0,0,0,.34)');
     sg.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = sg;
     ctx.beginPath();
     ctx.ellipse(scx, scy, sr, sr * 0.5, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    var w = p * grootte * 1.5;
-    var ratio = (img.naturalHeight && img.naturalWidth) ? img.naturalHeight / img.naturalWidth : 1;
-    var h = w * ratio;
     ctx.drawImage(img, foot.cx - w / 2, foot.cy + foot.hh - h, w, h);
 
     if (opties.geschroeid) schroei(ctx, foot, p * grootte * 0.6, h * 0.4, opties.geschroeid);
+
+    if (def.id !== 'stadsmuur') {
+      bordje(ctx, def.emoji, foot.cx, foot.cy + foot.hh - h * 0.92, p, opties);
+    }
   }
 
   /* Left + right visible walls; returns the raised top-face diamond. The dark
