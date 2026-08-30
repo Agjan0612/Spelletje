@@ -159,6 +159,11 @@
     var slag = werkt ? Math.max(0, Math.sin(opties.werktFase)) : 0;
     var praat = opties.praat != null;
 
+    /* A fifth bigger than before. These are the only things on the map with a
+       face, and at the old size a villager was a smudge you had to hunt for
+       between a house and a tree. */
+    p *= 1.2;
+
     var legLen = p * 0.15, torsoH = p * 0.17, torsoW = p * 0.15, headR = p * 0.072;
     var broek = verf(body, 0.5);
 
@@ -181,12 +186,45 @@
     var headY = shoulderY - headR * 0.85;
 
     /* --- contact shadow, tight to the feet --- */
-    ctx.fillStyle = 'rgba(0,0,0,.24)';
+    ctx.fillStyle = 'rgba(0,0,0,.3)';
     ctx.beginPath();
-    ctx.ellipse(x, y + p * 0.01, p * 0.085, p * 0.032, 0, 0, Math.PI * 2);
+    ctx.ellipse(x, y + p * 0.01, p * 0.09, p * 0.034, 0, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.lineCap = 'round';
+
+    /* --- the outline ---
+       Every unit in an RTS carries a dark rim, and it is not decoration: it is
+       what keeps a small figure legible against grass, against a road, against
+       a wall and against another figure, without having to find colours that
+       work on all four.
+
+       It has to *hug* the figure, though. The first attempt was one dark
+       capsule from head to feet, a little wider than the body — cheap, and
+       completely wrong: at a couple of pixels of margin it reads as a rim, but
+       the torso is only 0.15 of a tile wide, so "a little wider" was nearly
+       double, and every villager came out standing in a dark doorway. So it
+       follows the actual parts instead: the limbs are strokes, so the rim is
+       the same strokes a shade thicker underneath; the torso and head are
+       fills, so the rim is the same shapes a hair larger. `rimDikte` is that
+       margin, and it is deliberately tiny. */
+    var rim = 'rgba(24,18,12,.72)';
+    var rimDikte = Math.max(1, p * 0.014);
+
+    ctx.strokeStyle = rim;
+    ctx.lineWidth = Math.max(1.2, p * 0.05) + rimDikte * 2;
+    ctx.beginPath();
+    ctx.moveTo(x, hipY); ctx.lineTo(x - swing * legAmp, y);
+    ctx.moveTo(x, hipY); ctx.lineTo(x + swing * legAmp, y);
+    ctx.stroke();
+
+    ctx.fillStyle = rim;
+    rond(ctx, x - torsoW / 2 - rimDikte, shoulderY - rimDikte,
+         torsoW + rimDikte * 2, torsoH + p * 0.02 + rimDikte * 2, p * 0.05);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x + stoop, headY, headR + rimDikte, 0, Math.PI * 2);
+    ctx.fill();
 
     /* --- back leg + back arm (a touch darker for depth) --- */
     ctx.strokeStyle = verf(broek, 0.82);
