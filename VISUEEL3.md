@@ -33,8 +33,36 @@ Wat je op die screenshots ziet is vijf keer hetzelfde probleem:
    directe winst op een screenshot van het hele plan.
 
 - **Branch:** `claude/game-graphics-overhaul-9gly1a`
-- **Status:** 📋 plan — nog niets van uitgevoerd
+- **Status:** ✅ uitgevoerd — alle acht fasen gebouwd, elk als eigen commit.
+  Eén nieuw bestand (`tools/bak-iso.html`); geen nieuwe bestanden in `js/`, dus
+  de laadvolgorde in `index.html` is ongemoeid. `tools/simuleer.js` geeft over
+  vier zaden regel voor regel dezelfde uitkomst als vóór dit werk: alles hierin
+  is tekenwerk en de simulatie is onaangeraakt.
 - **Volgt op:** `VISUEEL.md` (uitgevoerd), `VISUEEL2.md` (uitgevoerd)
+
+**Waar het plan is afgeweken van wat er gebouwd is** — vier keer, elke keer omdat
+de meting iets anders zei dan de verwachting. Ze staan alle vier ook in de code,
+bij de betrokken functie:
+
+1. **B.3, de zoomondergrens.** Het plan wilde de kaartrand buiten beeld houden.
+   Dat kan niet: een ruit die een rechthoek volledig dekt, vraagt op een normale
+   kaart zoom 1,74 — je zou nooit meer kunnen uitzoomen. Het is nu de zoom
+   waarop de hele kaart net past: dat onthoudt geen enkel uitzicht en snijdt
+   alleen het zinloze deel van het bereik weg.
+2. **A.2, de waarschuwingen.** Het plan zei "ten hoogste de ergste drie". Een
+   plafond op volgorde van gebouw-id zou betekenen dat een probleem aan de rand
+   van de kaart nooit een teken krijgt. Het probleem was niet het *aantal* maar
+   de *luidheid*: ze zijn nu klein en halfdoorzichtig, en dan zijn er twaalf
+   prima.
+3. **E.1, gebundelde schaduwen.** Alle grondschaduwen in één pad, één keer
+   gevuld, klonk als winst. Gemeten was het trager (310 ms tegen 215 ms) dan
+   duizenden losse vullingen: een kleine vulling raakt alleen zijn eigen kader,
+   één enorm pad laat de rasteriseerder een globale randlijst bouwen. Wat bleef
+   is de doorloop zelf — schaduwen eerst, lichamen daarna.
+4. **E.3, de kleurgradatie.** Een echte contrastcurve over het frame kan alleen
+   met `ctx.filter` op een kopie van het canvas, en dat kostte +440 ms op een
+   frame van 200 ms. De gradatie zit nu per seizoen in het grondpalet gebakken,
+   waar hij niets kost.
 
 **Legenda moeite:** 🟢 klein (< ~100 regels) · 🟡 middel · 🔴 groot
 **Legenda risico:** ✅ alleen tekenwerk · ⚠️ raakt speltoestand, save of prestaties
@@ -486,6 +514,34 @@ ligt om te binden.
 
 **F** en **G** kunnen er op elk moment tussendoor. **H** is een besluit, geen
 taak: het gaat over of dit spel getekende kunst gaat krijgen of niet.
+
+---
+
+## Wat het gekost heeft
+
+Gemeten op gepresenteerde frames (`requestAnimationFrame`) in headless Chromium
+met softwarerendering, grootste kaart (88×64), 63 gebouwen, simulatie stil.
+Mediaan van 150 frames. Dat is een pessimistische ondergrens: bijna alles
+hieronder is fill rate, en dat is precies het werk dat een GPU-canvas gratis
+doet.
+
+| | basis | A–C | + korrel | + terreinpatroon |
+|---|---|---|---|---|
+| uitgezoomd, lente | 174 | 188 | 216 | 216 |
+| speelzoom, lente | 140 | 168 | 193 | 274 |
+| ingezoomd, lente | 93 | 120 | 144 | 179 |
+| speelzoom, winter | 168 | 199 | 221 | 225 |
+
+De korrel is 23–28 ms, overal gelijk, en is de goedkoopste textuur in het
+document. Het terreinpatroon schaalt met het aantal tegels, en daarom staat zijn
+drempel op 52 px per tegel — boven de 44 waarop een nieuw spel opent — en gaat
+hij in de winter helemaal uit. Fase E, F en G kosten samen vrijwel niets.
+
+Eén regressie onderweg, en die is het noteren waard omdat hij precies het
+uitgangspunt schond dat hierboven staat: de sneeuwdrift van fase C liep vanaf
+p = 14, dus twee golvende polygonen per tegel over een hele besneeuwde kaart.
+Dat was +68% van het frame. Elk detail hoort een zoomdrempel te hebben, en dit
+detail had er geen.
 
 ---
 

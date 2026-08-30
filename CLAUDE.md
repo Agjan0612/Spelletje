@@ -171,6 +171,50 @@ Four verbs live on `s.raid.keuze` and are resolved in `beslecht`: **uitval** (as
 `raids.js` also owns the **field army**: `verdedigingSplit(s)` separates the garrison (soldiers, keeps — it can march) from positional cover (towers, walls, gates that only count on the raiders' corridor). `s.leger` stores victories and whether a sortie is ordered; a sortie that wins destroys the band outright (`uitslag: 'vernietigd'`), which buys extra peace and shaves a little off later raids.
 - `js/render/` — canvas drawing (`camera`, `sprites`, `renderer`, `atlas`). **The view is isometric (2:1 diamond tiles).** The whole projection lives in `camera.js` (`wereldNaarScherm` / `schermNaarWereld` project world *pixels* through an iso transform; `Game.render.diamant`/`padDiamant` are the shared tile-diamond helpers). `Game.state` stays a plain square grid — nothing about iso is stored, so saves stay pure JSON. Because almost everything positions itself through `cam.wereldNaarScherm` (roads, walkers, raiders, particles, the placement grid), it tilts into the iso view for free; only the shape-drawing spots (terrain tiles, buildings, ghost/selection/resource highlights, minimap viewport) needed diamond-aware geometry. Buildings are drawn as **procedural iso volumes** (walls + roof, per-building table `ISO` in `sprites.js`), so the top-down Kenney building sprites in `atlas.js` are bypassed in the iso view; trees and rocks still use the atlas as **upright billboards** (with a hand-drawn fallback), so the game keeps working from `file://` with or without the `assets/` folder. Nothing in `atlas.js` touches `Game.state`. Drawing runs in **two passes**: the flat ground (`sprites.tekenGrond` — diamonds, coast, fields) first, then a **single back-to-front pass** over everything that stands up — raised terrain features (`sprites.tekenKenmerk`: trees, rocks, mountains, deer), buildings and walkers — collected in `renderer.js` and sorted by iso depth (footprint-centre `x+y`, then `y`) so overlaps read correctly. Any new standing element belongs in that sorted layer, not drawn in its own later pass, or it will float on top of everything. That is where `props.js` (yard clutter around buildings, `soort: 0.5`) and `wildlife.js` (grazing sheep, jumping fish, `soort: 0.6`) hook in; both derive their contents from the buildings/map and keep them in their own module, never in state. `floaters.js` (the rising `+🪵` yields) draws after the particles, and mirrors the production formulas from `economy.js` so the numbers on screen are the real ones. Terrain stores a per-tile height only as a hillshade tint (`bereidTerreinVoor`); the ground itself is drawn flat, which is what keeps mouse-picking (`schermNaarWereld`) exact.
 
+**The ground is noise, not a grid.** `bereidTerreinVoor` bakes a fourth derived
+array next to the hillshade, `diepte` and `randen`: `ruis`, three octaves of
+value noise at wavelengths of about 13, 5 and 2 tiles. The ground's colour comes
+from that, never from `tegel.v` — a per-tile random is noise with a wavelength of
+one tile, and the eye reads that as a grid. `tegel.v` still decides what genuinely
+differs per tile (which tree sprite, how many boulders). The colour itself is a
+lookup: `grondPalet[terrein][seizoen][ruis][hillshade]`, built once, so the
+hottest loop in the renderer does no string work at all. The seasonal grade
+(`SEIZOENSGRADATIE`) is baked into that same table — a full-frame `ctx.filter`
+pass was built and measured at more than twice the cost of a whole frame.
+
+**Decoration is enumerated, not drawn per tile.** A tile says how many things
+stand on it (`sprites.aantalDelen`) and where each one is (`sprites.deelPositie`,
+in tile fractions, up to half a tile off centre); `renderer.js` pushes one entry
+per *item* into its depth-sorted layer. Sorting by tile would put a tree that
+wandered towards the camera behind the house it visibly stands in front of.
+Ground shadows go down in a pass of their own, before any body.
+
+**Two texture layers, both gated.** `sprites.tekenKorrel` is one tiling noise
+bitmap composited over the whole ground in a single `fillRect` — anchored to the
+world so it does not swim when panning, and pre-multiplied to black-and-white
+speckles with an alpha rather than mid-grey under `soft-light`, because a plain
+source-over blend is tens of milliseconds cheaper per frame. `terreinPatroon`
+lays a per-terrain grain (blades, furrows, chipped rock) straight into the
+diamond path — never through `clip()` per tile — above `S.PATROON_ZOOM` (52 px
+per tile) and never in winter, where the snow covers it. That threshold is the
+one knob if it ever needs to move: the cost is per-pixel texture sampling, which
+scales with how many tiles are on screen.
+
+**Every building stands in a yard.** `sprites.tekenErf` paints a patch of
+trodden earth a third wider than the footprint, with a worn, wavy edge. It is
+drawn in the renderer's pre-pass with the shadows, *not* in `tekenGebouw`,
+because it reaches past its own footprint and would otherwise paint over the
+building behind it. It also hides the tile boundary under the building and gives
+`props.js` an honest surface.
+
+**The map has no edge.** `sfeer.tekenHemel` paints the world beyond the map in
+exactly the colour the deepest water tile gets — asked of
+`sprites.diepZeeKleur`, which runs the tiles' own `waterKleur()`, because two
+tables would drift and one shade of difference is all it takes to see the seam.
+The sky is a band at the top only. `camera.minZoom()` refuses to zoom out past
+the point where the whole map fits: beyond that you have seen everything anyway
+and are only filling the screen with empty water.
+
 **One sun, and it is not in `Game.state`.** `js/render/sfeer.js` owns the light: `sfeer.licht(s)` turns `s.tijd` into the phase of the day (`nacht` / `avond` / `ochtend`), and `tekenGradatie` / `tekenVensters` / `tekenNevel` / `tekenVignet` are the last four things `renderer.teken` draws, in that order — the night wash, the warm windows shining through it, the distance haze that pushes the top of an iso screen back, and the vignette that closes the frame. The sun's *colour* moves through the day; its *direction* never does. `sfeer.SCHADUW` is that one direction, and every cast shadow in the game (buildings, trees, rocks, mountains) reads it, because the hillshade baked into the terrain is lit from the top-left and a wandering shadow would fight it.
 
 **The ground has no hard edges.** `bereidTerreinVoor` builds three derived arrays next to the hillshade, all keyed on `kaart.seed` and all outside `Game.state`: the hillshade itself, `diepte` (flood-fill distance from the coast, which is what makes shallow water turquoise and open water dark), and `randen` (a four-bit mask per tile of which edges border a different terrain, plus that neighbour's type). `overgangen` bleeds the neighbour's colour a little way in along those edges — sand where the neighbour is water, so a coastline becomes a beach — and returns immediately on the common case of a tile with no border at all. Two bands zoomed in, one zoomed out.
@@ -211,7 +255,7 @@ Rendering, decorative walkers, HUD refresh, and autosave run on real time outsid
 
 ### Adding content
 
-A new building is one object appended to the `B` array in `js/config/buildings.js` (fields documented in the header comment there; production numbers are **per worker per second**). Reload and it appears in the build menu; `devcheck.js` will complain in the console if it references an unknown resource/job/node. No other file needs touching for a standard building — in the iso view it automatically gets the default procedural volume. To give it a distinct silhouette (wall height, roof style `schuin`/`punt`/`plat`/`geen`, roof *material* `dakstijl` `pan`/`riet`/`lei`, a `schoorsteen`, and flourishes like `kantelen`, `wieken`, `kruis`, `vlag`), add an entry keyed by its id to the `ISO` table in `js/render/sprites.js`; that table is the only render-side hook a building has. The build menu and the selection panel show a cached iso *miniature* of the volume (`sprites.miniatuurBron`), so a new building looks right there with no extra work. Yard clutter is a second, optional hook: the `BIJ` table in `js/render/props.js` maps a building id to the props that appear around it.
+A new building is one object appended to the `B` array in `js/config/buildings.js` (fields documented in the header comment there; production numbers are **per worker per second**). Reload and it appears in the build menu; `devcheck.js` will complain in the console if it references an unknown resource/job/node. No other file needs touching for a standard building — in the iso view it automatically gets the default procedural volume. To give it a distinct silhouette (wall height, roof style `schuin`/`punt`/`plat`/`geen`, roof *material* `dakstijl` `pan`/`riet`/`lei`, a `schoorsteen`, and flourishes like `kantelen`, `wieken`, `kruis`, `vlag`), add an entry keyed by its id to the `ISO` table in `js/render/sprites.js`; that table is the only render-side hook a building has. A third route exists for a building that deserves real drawn art: register it in `atlas.isoGebouwMap` with a PNG in `assets/iso/`, and `tekenGebouw` uses it instead of the volume, falling back the moment the file is missing. `tools/bak-iso.html` bakes the procedural volume out as a transparent PNG at any resolution, as the canvas to paint over. The build menu and the selection panel show a cached iso *miniature* of the volume (`sprites.miniatuurBron`), so a new building looks right there with no extra work. Yard clutter is a second, optional hook: the `BIJ` table in `js/render/props.js` maps a building id to the props that appear around it.
 
 **Upgrades** are two edits: `verbetering: { naar, tijdperk, kosten }` on the base building, and the target building itself with `verborgen: true` (kept out of the build menu) and the **same `grootte`** — the footprint must not change, since the move keeps the same tiles. `devcheck.js` checks both.
 
