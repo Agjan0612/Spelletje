@@ -108,6 +108,7 @@
         '<li><b>Shift + slepen</b>: een hele rij neerzetten (muren, straatjes)</li>' +
         '<li><b>Ctrl + Z</b>: het laatst geplaatste gebouw terugdraaien</li>' +
         '<li><b>L</b>: door de kaartlagen · <b>C</b>: door de tabbladen rechts</li>' +
+        '<li><b>Alt</b> (of <b>N</b>): namen op de gebouwen, ook ingezoomd</li>' +
         '<li><b>✋ Verplaatsen</b> in het paneel: een gebouw oppakken en ergens ' +
         'anders neerzetten voor een vijfde van de bouwkosten</li>' +
         '</ul>' +

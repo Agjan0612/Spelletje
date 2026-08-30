@@ -29,6 +29,15 @@
   /* A brief full-screen colour flash for the big moments (raid hit, age-up). */
   var flits = 0, flitsKleur = '255,255,255';
 
+  /* The state of the light this frame (js/render/sfeer.js). Worked out once at
+     the top of R.teken instead of per building: half the drawing wants to know
+     how dark it is, and sfeer.licht is pure maths on s.tijd. */
+  var licht = null;
+
+  /* Scratch for sprites.deelPositie, so enumerating a few thousand trees a
+     frame allocates nothing. Read and used immediately, never held. */
+  var deelSchets = { dx: 0, dy: 0 };
+
   /* Ambient world life, all real-time and never stored in Game.state:
        - wolken: a few soft shadow blobs drifting over the ground (B5)
        - vogels: the odd flock crossing the sky (B2)
@@ -521,6 +530,7 @@
   R.teken = function (s, cam, ui) {
     if (!ctx) return;
     var p = cam.px();
+    licht = Game.render.sfeer ? Game.render.sfeer.licht(s) : null;
 
     /* Screen shake: offset the whole transform by a decaying jitter. */
     if (schud > 0.05) {
@@ -541,6 +551,10 @@
 
     var zicht = cam.zichtbaar(s.kaart);
     var tijd = s.tijd;
+
+    /* Anchor the terrain textures to the world for this frame (see
+       sprites.stelPatronenIn) before anything asks for one. */
+    sprites.stelPatronenIn(ctx, cam, s.seizoen);
 
     /* --- flat ground: the tile diamonds and everything in the tile plane.
        Raised features (trees, rocks, mountains) are drawn later, depth-sorted
@@ -563,6 +577,13 @@
 
     /* --- roads, drawn under the buildings --- */
     if (Game.render.paths && p > 12) Game.render.paths.teken(ctx, cam, s, p);
+
+    /* --- one grain over the whole ground, roads included: the ground stops
+       being an even fill for the cost of a single blended fillRect. It goes
+       here, above the roads and below the map overlay and everything that
+       stands up — the overlay is information and the buildings have material
+       of their own. --- */
+    sprites.tekenKorrel(ctx, cam);
 
     /* --- map overlay: tints the ground to answer one question at a time.
        Above the roads, below everything that stands up. --- */
@@ -593,11 +614,20 @@
        soort: 0 = feature, 1 = building, 2 = walker (ties break to that order). */
     var laag = [];
 
+    /* Trees and boulders are enumerated one by one rather than per tile: they
+       now stand up to half a tile off their tile's centre (sprites.deelPositie),
+       so an item has to be sorted where it actually is. Sorting them by their
+       tile would put a tree that wandered towards the camera behind the house
+       it visibly stands in front of. */
     for (var fy = zicht.y0; fy < zicht.y1; fy++) {
       for (var fx = zicht.x0; fx < zicht.x1; fx++) {
         var ft = map.tegel(s.kaart, fx, fy);
-        if (ft && sprites.heeftKenmerk(ft)) {
-          laag.push({ d: fx + fy + 1, yy: fy, soort: 0, tegel: ft, x: fx, y: fy });
+        if (!ft || !sprites.heeftKenmerk(ft)) continue;
+        var nDelen = sprites.aantalDelen(ft);
+        for (var di = 0; di < nDelen; di++) {
+          var off = sprites.deelPositie(ft, di, deelSchets);
+          laag.push({ d: fx + fy + 1 + off.dx + off.dy, yy: fy + off.dy,
+                      soort: 0, tegel: ft, x: fx, y: fy, deel: di });
         }
       }
     }
@@ -630,11 +660,34 @@
       return a.d !== b.d ? a.d - b.d : (a.yy !== b.yy ? a.yy - b.yy : a.soort - b.soort);
     });
 
+    /* Every ground shadow of the terrain features, before any of their bodies.
+       They all lie in the same plane, so unlike the things casting them they
+       need no sorting among themselves — and going down first means a shadow
+       can never land on top of the trunk of a tree drawn earlier in the pass.
+       (One path filled once was tried here and measured slower; see the note in
+       js/render/sprites.js.) */
+    if (p >= 12) {
+      sprites.zetLicht(licht);
+      for (var si = 0; si < laag.length; si++) {
+        var se = laag[si];
+        if (se.soort === 0) {
+          var ssp = cam.wereldNaarScherm(se.x * TEGEL, se.y * TEGEL);
+          sprites.deelSchaduw(ctx, se.tegel, ssp.x, ssp.y, p, se.deel);
+        } else if (se.soort === 1 && se.g.gebouwd) {
+          /* The yard a building stands in. Here rather than in tekenGebouw
+             because it reaches past its own footprint: drawn from inside the
+             depth-sorted pass it would paint over the building behind it. */
+          var esp = cam.wereldNaarScherm(se.g.x * TEGEL, se.g.y * TEGEL);
+          sprites.tekenErf(ctx, se.def, esp.x, esp.y, p, se.def.grootte, se.g.id, s.seizoen);
+        }
+      }
+    }
+
     for (var li = 0; li < laag.length; li++) {
       var e = laag[li];
       if (e.soort === 0) {
         var fsp = cam.wereldNaarScherm(e.x * TEGEL, e.y * TEGEL);
-        sprites.tekenKenmerk(ctx, e.tegel, fsp.x, fsp.y, p, s.seizoen, tijd);
+        sprites.tekenDeel(ctx, e.tegel, fsp.x, fsp.y, p, s.seizoen, tijd, e.deel);
       } else if (e.soort === 0.5) {
         Game.render.props.teken(ctx, cam, p, e.prop);
       } else if (e.soort === 0.6) {
@@ -1011,6 +1064,41 @@
            ui.muisTegel.y >= g.y && ui.muisTegel.y < g.y + d.grootte;
   }
 
+  /* A building that is stuck. This used to be a full-strength ⚠️ emoji at a
+     third of a tile, and with ten stuck buildings the town became a field of
+     yellow triangles with houses somewhere underneath. The information is not
+     wrong, only far too loud: the *decision* is made from ui/stad.problemen,
+     which lists them sorted by urgency with a click that takes you there, so
+     out here a marker only has to say "look at me sometime".
+
+     So: a small amber pennant, half transparent, breathing slowly (real time,
+     like the marching ants — it keeps breathing while paused). Pointing at it
+     or selecting it makes it full strength, because then it *is* the subject. */
+  function waarschuwingsMerk(ctx, cx, cy, p, sterk) {
+    var puls = Game.render.beweging.rustig ? 0 : Math.sin(Date.now() * 0.004) * 0.5 + 0.5;
+    var r = p * (sterk ? 0.16 : 0.105) * (1 + puls * 0.08);
+    ctx.save();
+    ctx.globalAlpha = sterk ? 0.95 : 0.4 + puls * 0.14;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r);
+    ctx.lineTo(cx + r * 0.92, cy + r * 0.72);
+    ctx.lineTo(cx - r * 0.92, cy + r * 0.72);
+    ctx.closePath();
+    ctx.fillStyle = '#f0b429';
+    ctx.fill();
+    ctx.lineWidth = Math.max(1, r * 0.16);
+    ctx.strokeStyle = 'rgba(48,32,6,.75)';
+    ctx.stroke();
+    /* The bar of the exclamation mark, only once the triangle is big enough
+       for it to be a mark rather than a smudge. */
+    if (r >= 5) {
+      ctx.fillStyle = 'rgba(48,32,6,.85)';
+      ctx.fillRect(cx - r * 0.09, cy - r * 0.34, r * 0.18, r * 0.62);
+      ctx.fillRect(cx - r * 0.09, cy + r * 0.4, r * 0.18, r * 0.16);
+    }
+    ctx.restore();
+  }
+
   /* One building, from a depth-sorted entry: body (or construction site),
      raid warning, and selection outline. */
   function tekenGebouwEntry(ctx, cam, s, ui, g, d, p, tijd) {
@@ -1035,17 +1123,17 @@
 
     if (g.gebouwd) {
       /* Whether shutters should be closed: the same darkness at which the warm
-         window glow (sfeer.tekenVensters) comes on. */
-      var nacht = Game.render.sfeer && Game.render.sfeer.licht(s).nacht > 0.42;
+         window glow (sfeer.tekenVensters) comes on. `nachtF` is the same light
+         as a number, so the icon badge can dim with it instead of shining
+         through the night wash. */
+      var nachtF = licht ? licht.nacht : 0;
       sprites.tekenGebouw(ctx, d, sp2.x, sp2.y, p, d.grootte,
         { tijd: tijd, tijdperk: s.tijdperk, geschroeid: g.geschroeid,
-          seizoen: s.seizoen, zaad: g.id, nacht: nacht });
-      if (g.waarschuwing && p > 16) {
+          seizoen: s.seizoen, zaad: g.id, nacht: nachtF > 0.42, nachtF: nachtF,
+          toonBordje: gekozen || gewezen || !!ui.namen });
+      if (g.waarschuwing && p > 19) {
         var fc = Game.render.diamant(sp2.x, sp2.y, p * d.grootte);
-        ctx.font = Math.round(p * 0.34) + 'px serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('⚠️', fc.cx, fc.cy - p * (0.6 + d.grootte * 0.5));
+        waarschuwingsMerk(ctx, fc.cx, fc.cy - p * (0.6 + d.grootte * 0.5), p, gewezen || gekozen);
       }
       /* Fase 5.2: a figure standing watch on the towers/walls/gates that sit on
          the raiders' route — sleepy in peacetime, fully manned once a raid is

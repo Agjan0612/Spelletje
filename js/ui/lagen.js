@@ -5,7 +5,7 @@
 
   var U = {};
   var spel = null;
-  var balk = null, legenda = null;
+  var balk = null, legenda = null, naamKnop = null;
 
   U.init = function (s) {
     spel = s;
@@ -21,6 +21,19 @@
       knop.addEventListener('click', function () { U.kies(laag.id); });
       balk.appendChild(knop);
     });
+
+    /* Not a map layer but it belongs on the same bar: the building labels.
+       The icon badges only show themselves when zoomed out now, so there has
+       to be somewhere visible that says you can get them back. */
+    naamKnop = Game.util.el('button', 'laagknop naamknop');
+    naamKnop.title = 'Namen op de gebouwen — of houd Alt ingedrukt (N)';
+    naamKnop.innerHTML = '<span class="ico">🏷️</span><span class="lbl">Namen</span>';
+    naamKnop.addEventListener('click', function () {
+      spel.toonNamen = !spel.toonNamen;
+      U.ververs();
+    });
+    balk.appendChild(naamKnop);
+
     U.ververs();
   };
 
@@ -54,6 +67,7 @@
     for (var i = 0; i < knoppen.length; i++) {
       knoppen[i].classList.toggle('actief', knoppen[i].dataset.laag === actief);
     }
+    if (naamKnop) naamKnop.classList.toggle('actief', !!spel.toonNamen);
     if (!legenda) return;
     var laag = Game.render.lagen.laag(actief);
     legenda.classList.toggle('hidden', !laag);

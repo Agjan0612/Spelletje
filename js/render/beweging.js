@@ -30,6 +30,13 @@
   };
   Game.render.rng = B.rng;
 
+  /* Whether the player asked for less movement. The canvas is always animated
+     (water, walkers, wind), so this does not stop the world; it switches off
+     the *added* attention-seeking motion — the pulsing markers and the like —
+     the same way css/style.css does for the panels. Read once: a media query
+     listener for one boolean is not worth the wiring. */
+  B.rustig = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
   /* How fast a figure may turn and change speed. Deliberately gentle: the point
      is that motion has weight, not that it is snappy. */
   B.DRAAI = 3.4;     /* rad/s — max turn rate */

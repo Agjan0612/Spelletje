@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Iso-sprites bakken — Dorp tot Stad</title>
+<!--
+  Bakt de procedurele gebouwvolumes uit js/render/sprites.js uit tot losse
+  PNG's, op een veelvoud van de grootste zoom die de camera toelaat.
+
+  Waarvoor dit is
+  ---------------
+  js/render/atlas.js heeft een haak (`A.isoGebouwMap`) waarmee één gebouw kan
+  worden overgezet op echte, getekende iso-kunst in assets/iso/, met terugval op
+  het procedurele volume zodra het bestand ontbreekt of nog laadt. Die haak is
+  leeg, en dat is met opzet: geschilderde kunst is een besluit, geen taak.
+
+  Wat dit gereedschap doet is dat besluit *begaanbaar* maken. Het levert per
+  gebouw een PNG die precies het volume is dat het spel nu tekent, op ruime
+  resolutie en met transparante achtergrond — het canvas waar een tekenaar
+  overheen werkt, in plaats van een leeg vel en giswerk over de projectie.
+  Bakken en meteen terugladen verandert het beeld dus niet; het is het
+  beginpunt, niet de verbetering.
+
+  Gebruik
+  -------
+  Open dit bestand rechtstreeks in een browser (file:// werkt, net als het spel
+  zelf). Kies een schaal en een tijdperk, klik "Bakken", en sla de PNG's op in
+  assets/iso/. Zet daarna per gebouw een regel in A.isoGebouwMap:
+
+      A.isoGebouwMap = { stadhuis: 'stadhuis' };
+
+  Begin met de vier gebouwen die groot en uniek zijn en altijd in beeld staan:
+  dorpsplein, kathedraal, kasteel, stadhuis. De rest van het dorp blijft
+  procedureel; dat mengt beter dan je denkt zolang het materiaal op elkaar is
+  afgestemd, en als het niet mengt is de haak per gebouw, dus je kunt terug.
+-->
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; background: #241a12; color: #e8dcc4; margin: 0; padding: 24px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p { max-width: 62em; color: #c8b892; }
+  .balk { margin: 16px 0; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  label { display: flex; gap: 6px; align-items: center; }
+  button { font: inherit; padding: 6px 14px; background: #d7a94b; border: 0; border-radius: 4px; cursor: pointer; }
+  #uit { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+  figure { margin: 0; background: #2f2318; border: 1px solid #4a3826; border-radius: 6px; padding: 6px; text-align: center; }
+  figure img { display: block; image-rendering: auto; background:
+      repeating-conic-gradient(#3a2d20 0 25%, #2f2318 0 50%) 0 0 / 16px 16px; }
+  figcaption { font-size: 11px; color: #c8b892; margin-top: 4px; }
+  a { color: #f0c775; }
+</style>
+</head>
+<body>
+
+<h1>Iso-sprites bakken</h1>
+<p>
+  Rendert elk gebouw uit <code>js/config/buildings.js</code> als losse PNG met
+  transparante achtergrond, in dezelfde projectie die het spel gebruikt. Sla ze
+  op in <code>assets/iso/</code> en registreer ze in <code>A.isoGebouwMap</code>
+  in <code>js/render/atlas.js</code>. Zie de opmerking bovenin dit bestand.
+</p>
+
+<div class="balk">
+  <label>Pixels per tegel
+    <input id="p" type="number" value="264" min="44" max="600" step="4">
+  </label>
+  <label>Tijdperk
+    <select id="tijdperk"><option>1</option><option>2</option><option>3</option><option selected>4</option></select>
+  </label>
+  <label>Seizoen
+    <select id="seizoen">
+      <option value="0" selected>lente</option><option value="1">zomer</option>
+      <option value="2">herfst</option><option value="3">winter</option>
+    </select>
+  </label>
+  <button id="bak">Bakken</button>
+  <span id="stand"></span>
+</div>
+
+<div id="uit"></div>
+
+<!-- Alleen wat het tekenen nodig heeft: geen simulatie, geen UI, en met opzet
+     géén js/render/atlas.js. Twee redenen: sprites.tekenGebouw geeft een al
+     geregistreerde iso-sprite voorrang op het volume, dus mét de atlas zou dit
+     gereedschap een sprite uit een sprite bakken zodra de haak eenmaal gevuld
+     is; en de atlas laadt zijn Kenney-bestanden relatief aan de pagina, wat
+     vanuit tools/ niet klopt. tekenGebouw valt netjes terug als de atlas er
+     niet is. -->
+<script src="../js/namespace.js"></script>
+<script src="../js/config/resources.js"></script>
+<script src="../js/config/jobs.js"></script>
+<script src="../js/config/buildings.js"></script>
+<script src="../js/render/camera.js"></script>
+<script src="../js/render/beweging.js"></script>
+<script src="../js/render/sfeer.js"></script>
+<script src="../js/render/sprites.js"></script>
+<script>
+(function () {
+  var uit = document.getElementById('uit');
+  var stand = document.getElementById('stand');
+
+  document.getElementById('bak').addEventListener('click', function () {
+    var p = Math.max(44, +document.getElementById('p').value || 264);
+    var tijdperk = +document.getElementById('tijdperk').value;
+    var seizoen = +document.getElementById('seizoen').value;
+
+    uit.innerHTML = '';
+    var lijst = Game.config.buildingList.filter(function (d) { return !d.weg; });
+    var n = 0;
+
+    lijst.forEach(function (def) {
+      var grootte = def.grootte || 1;
+      /* Room for the footprint plus whatever stands on it: a spire is the
+         tallest thing here, so allow two tiles of height per tile of width. */
+      var breed = Math.ceil(p * grootte + p * 0.6);
+      var hoog = Math.ceil(p * grootte * 1.6 + p * 1.4);
+
+      var doek = document.createElement('canvas');
+      doek.width = breed;
+      doek.height = hoog;
+      var ctx = doek.getContext('2d');
+
+      /* The top corner of the footprint, placed so the whole volume fits. */
+      var sx = breed / 2;
+      var sy = hoog - p * grootte * 0.5 - p * 0.3;
+
+      try {
+        Game.render.sprites.tekenGebouw(ctx, def, sx, sy, p, grootte, {
+          tijd: 0, tijdperk: tijdperk, seizoen: seizoen, zaad: 7, nacht: false,
+          nachtF: 0, toonBordje: false
+        });
+      } catch (e) {
+        console.warn('kon ' + def.id + ' niet bakken:', e);
+        return;
+      }
+
+      var fig = document.createElement('figure');
+      var img = document.createElement('img');
+      var url = doek.toDataURL('image/png');
+      img.src = url;
+      img.width = Math.min(190, breed);
+      var link = document.createElement('a');
+      link.href = url;
+      link.download = def.id + '.png';
+      link.textContent = def.id + '.png';
+      fig.appendChild(img);
+      var cap = document.createElement('figcaption');
+      cap.appendChild(link);
+      fig.appendChild(cap);
+      uit.appendChild(fig);
+      n++;
+    });
+
+    stand.textContent = n + ' van ' + lijst.length + ' gebakken op ' + p + ' px/tegel.';
+  });
+})();
+</script>
+</body>
+</html>
