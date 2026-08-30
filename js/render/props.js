@@ -44,7 +44,40 @@
     voorraadschuur:['kist', 'vaten'],
     pakhuis:       ['kist', 'vaten', 'zakken'],
     jachthut:      ['stammen', 'vaten'],
-    vissershut:    ['vaten', 'kist']
+    vissershut:    ['vaten', 'kist'],
+
+    /* Everything below had no yard clutter at all, so a chapel or a mill stood
+       in a bare patch while the houses around it had gardens and woodpiles.
+       Now that every building stands on a worn yard (sprites.tekenErf) the
+       emptiness showed all the more. No new prop kinds — these are all drawn
+       from the same handful above, chosen for what the building does. */
+    kapel:         ['bank', 'bloemen'],
+    kerk:          ['bank', 'bloemen', 'hek'],
+    kathedraal:    ['bank', 'bloemen', 'hek'],
+    stadhuis:      ['bank', 'kist', 'bloemen'],
+    gildehuis:     ['kist', 'vaten', 'bank'],
+    handelshuis:   ['kist', 'vaten', 'zakken', 'kraam'],
+    universiteit:  ['bank', 'kist', 'bloemen'],
+    juwelier:      ['kist', 'bank'],
+    wapensmid:     ['vaten', 'steenstapel', 'kist'],
+    molen:         ['zakken', 'kruiwagen', 'kist'],
+    brouwerij:     ['vaten', 'vaten', 'zakken'],
+    weverij:       ['waslijn', 'kist', 'zakken'],
+    schaapskooi:   ['hek', 'hooiberg', 'kruiwagen'],
+    hopveld:       ['hek', 'kruiwagen'],
+    wachttoren:    ['vaten', 'stammen'],
+    oefenveld:     ['hek', 'vaten', 'bank'],
+    haven:         ['vaten', 'kist', 'stammen'],
+    waterput:      ['bank', 'bloemen'],
+    kasteel:       ['vaten', 'kist', 'hek'],
+    graanschuur:   ['zakken', 'kruiwagen', 'kist'],
+    schatkamer:    ['kist', 'vaten'],
+    school:        ['bank', 'bloemen', 'hek'],
+    fontein:       ['bank', 'bloemen'],
+    bergfried:     ['vaten', 'kist']
+    /* straat, brug, stadsmuur and poort stay bare on purpose: a road and a
+       wall have no yard (they are not in sprites.GEEN_ERF by accident) and
+       barrels along a battlement would read as debris. */
   };
   var STANDAARD = ['bloemen', 'struik'];
 

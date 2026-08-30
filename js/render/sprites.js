@@ -1662,8 +1662,15 @@
     if (!zaad && zaad !== 0) return cfg;
     var r1 = ((zaad * 2654435761) % 1000) / 1000;
     var r2 = ((zaad * 40503) % 997) / 997;
+    var r3 = ((zaad * 27644437) % 991) / 991;
     cfg.muur = verf(cfg.muur, 0.94 + r1 * 0.12);
     cfg.dak = verf(cfg.dak, 0.88 + r2 * 0.24);
+    /* And the *height*, a little. Colour variation alone still left a street
+       with one dead-flat roofline running along it; nine percent either way is
+       enough that the eye reads separate houses without anything looking
+       misbuilt. */
+    cfg.muurH *= 0.91 + r3 * 0.18;
+    cfg.dakH *= 0.93 + r1 * 0.15;
     return cfg;
   }
 
@@ -1717,6 +1724,78 @@
     cfg.vakwerk = tier === 4 && !!TIER_SHAPES[def.id];
     return cfg;
   }
+
+  /* ------------------------------------------------------------------ erf --
+
+     A patch of beaten earth around a building's footprint, a third wider than
+     the building and with a wavy edge.
+
+     This is the single most Age-of-Empires thing in the whole plan and it is
+     twenty lines. Every building there stands in a worn place; here they stood
+     in unbroken meadow, each on its own clean diamond, and a town read as
+     separate houses dropped into a field rather than as a settlement. The yard
+     also quietly does two other jobs: it hides the tile boundary underneath the
+     building, and it gives js/render/props.js an honest surface for its clutter
+     instead of scattering barrels on grass.
+
+     Drawn in the renderer's pre-pass with the shadows rather than inside
+     tekenGebouw, because it reaches beyond its own footprint — from inside the
+     depth-sorted pass it would paint over the building standing behind it. */
+  /* Trodden earth is *lighter and drier* than the grass around it, not darker.
+     The first version of this was a dark brown at half opacity and measured
+     almost nothing against the saturated greens of fase E — the yard was there,
+     it just had nothing to say. A pale tan is what reads as a worn place. */
+  var ERFKLEUR = ['rgba(176,150,102,', 'rgba(182,156,104,', 'rgba(170,144,96,', 'rgba(206,206,202,'];
+
+  var GEEN_ERF = { stadsmuur: 1, poort: 1, brug: 1, straat: 1, oefenveld: 1 };
+
+  S.tekenErf = function (ctx, def, sx, sy, p, grootte, zaad, seizoen) {
+    if (p < 15 || GEEN_ERF[def.id] || def.weg) return;
+    var foot = Game.render.diamant(sx, sy, p * grootte);
+    /* A small building needs proportionally more yard than a big one: the roof
+       already overhangs its walls by 14%, so a flat 1.32 left a hut's yard
+       almost entirely hidden under its own eaves. */
+    var uit = 1.24 + 0.5 / grootte;
+    var hw = foot.hw * uit, hh = foot.hh * uit;
+
+    ctx.beginPath();
+    var N = 22;
+    for (var i = 0; i <= N; i++) {
+      var u = i / N;
+      var a = u * Math.PI * 2;
+      var cx = Math.cos(a), cy = Math.sin(a);
+      /* A circle direction mapped onto the tile diamond |x/hw| + |y/hh| = 1,
+         then pushed in and out along its length so the edge is worn, not
+         geometric. */
+      var norm = Math.abs(cx) + Math.abs(cy);
+      var r = 1 + golf(zaad, u) * 0.13;
+      var x = foot.cx + (cx / norm) * hw * r;
+      var y = foot.cy + (cy / norm) * hh * r;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = (ERFKLEUR[seizoen] || ERFKLEUR[0]) + '0.62)';
+    ctx.fill();
+
+    /* A trodden-harder core, so the yard has a middle instead of being one
+       even stain. */
+    if (p >= 30) {
+      ctx.beginPath();
+      for (var k = 0; k <= N; k++) {
+        var u2 = k / N;
+        var a2 = u2 * Math.PI * 2;
+        var dx = Math.cos(a2), dy = Math.sin(a2);
+        var n2 = Math.abs(dx) + Math.abs(dy);
+        var r2 = (1 + golf(zaad + 5.5, u2) * 0.16) * 0.72;
+        var x2 = foot.cx + (dx / n2) * hw * r2;
+        var y2 = foot.cy + (dy / n2) * hh * r2;
+        if (k === 0) ctx.moveTo(x2, y2); else ctx.lineTo(x2, y2);
+      }
+      ctx.closePath();
+      ctx.fillStyle = (ERFKLEUR[seizoen] || ERFKLEUR[0]) + '0.4)';
+      ctx.fill();
+    }
+  };
 
   /* Draws a building. (sx, sy) is the projected *top corner* of its footprint,
      which spans `grootte` tiles; p is pixels-per-tile. */

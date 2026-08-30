@@ -670,9 +670,16 @@
       sprites.zetLicht(licht);
       for (var si = 0; si < laag.length; si++) {
         var se = laag[si];
-        if (se.soort !== 0) continue;
-        var ssp = cam.wereldNaarScherm(se.x * TEGEL, se.y * TEGEL);
-        sprites.deelSchaduw(ctx, se.tegel, ssp.x, ssp.y, p, se.deel);
+        if (se.soort === 0) {
+          var ssp = cam.wereldNaarScherm(se.x * TEGEL, se.y * TEGEL);
+          sprites.deelSchaduw(ctx, se.tegel, ssp.x, ssp.y, p, se.deel);
+        } else if (se.soort === 1 && se.g.gebouwd) {
+          /* The yard a building stands in. Here rather than in tekenGebouw
+             because it reaches past its own footprint: drawn from inside the
+             depth-sorted pass it would paint over the building behind it. */
+          var esp = cam.wereldNaarScherm(se.g.x * TEGEL, se.g.y * TEGEL);
+          sprites.tekenErf(ctx, se.def, esp.x, esp.y, p, se.def.grootte, se.g.id, s.seizoen);
+        }
       }
     }
 
