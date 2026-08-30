@@ -1818,20 +1818,27 @@
     /* Cast shadow on the ground, in the one light direction the whole game
        shares (Game.render.sfeer.SCHADUW — the same top-left sun the terrain
        hillshade is baked from). This is what sets a building *on* the ground
-       instead of on top of it. */
-    slagschaduw(ctx, foot, H + dakH * 0.55);
+       instead of on top of it.
 
-    /* Soft ambient-occlusion shadow (a radial gradient, so its edge feathers
-       into the ground instead of a hard ellipse), offset to the light-away
-       side. */
-    var scx = foot.cx + foot.hw * 0.12, scy = foot.cy + foot.hh * 0.28, sr = foot.hw * 1.08;
-    var sg = ctx.createRadialGradient(scx, scy, sr * 0.35, scx, scy, sr);
-    sg.addColorStop(0, 'rgba(0,0,0,.34)');
-    sg.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = sg;
-    ctx.beginPath();
-    ctx.ellipse(scx, scy, sr, sr * 0.5, 0, 0, Math.PI * 2);
-    ctx.fill();
+       `zonderSchaduw` leaves both ground shadows off. Only tools/bak-iso.html
+       passes it: a baked sprite is drawn back through tekenGebouwSprite, which
+       lays down its own shadow, so a shadow baked into the image would be a
+       second one — and one that no longer follows the hour. */
+    if (!opties.zonderSchaduw) {
+      slagschaduw(ctx, foot, H + dakH * 0.55);
+
+      /* Soft ambient-occlusion shadow (a radial gradient, so its edge feathers
+         into the ground instead of a hard ellipse), offset to the light-away
+         side. */
+      var scx = foot.cx + foot.hw * 0.12, scy = foot.cy + foot.hh * 0.28, sr = foot.hw * 1.08;
+      var sg = ctx.createRadialGradient(scx, scy, sr * 0.35, scx, scy, sr);
+      sg.addColorStop(0, 'rgba(0,0,0,.34)');
+      sg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = sg;
+      ctx.beginPath();
+      ctx.ellipse(scx, scy, sr, sr * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     var top = isoMuren(ctx, foot, H, cfg.muur, p, opties.zaad || 0);
 
@@ -1996,21 +2003,36 @@
        and for hanging the badge — the sprite has no volume to ask. */
     var hoogte = Math.max(0, h - foot.hh * 2);
 
-    /* Everything the procedural volume gets, a sprite-backed building gets too.
-       The whole point of the hook is that a building can be swapped over to
-       painted art one at a time; if crossing that line silently cost it its
-       cast shadow, its icon badge and its snow, a half-converted town would
-       look broken in a way that reads as a bug rather than as a style. */
-    slagschaduw(ctx, foot, hoogte * 0.75);
+    /* What a sprite-backed building keeps, and what it gives up.
 
-    var scx = foot.cx + foot.hw * 0.12, scy = foot.cy + foot.hh * 0.28, sr = foot.hw * 1.08;
-    var sg = ctx.createRadialGradient(scx, scy, sr * 0.35, scx, scy, sr);
-    sg.addColorStop(0, 'rgba(0,0,0,.34)');
-    sg.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = sg;
-    ctx.beginPath();
-    ctx.ellipse(scx, scy, sr, sr * 0.5, 0, 0, Math.PI * 2);
-    ctx.fill();
+       Kept, so a half-converted town does not read as broken: the cast shadow
+       (which still follows the hour), the soft contact shadow, the scorch after
+       a raid, the icon badge, and — from the renderer's pre-pass — its yard.
+
+       Given up, because these are properties of the *volume* and a flat image
+       has none: the per-instance colour and height wobble from
+       verscheidenheid(), so five sprite houses in a street are five identical
+       pictures; the changing look of a house that upgrades through its tiers;
+       snow on the roof in winter; shutters closing at night; and the flourishes
+       in the ISO table (turning sails, a flag, a cross, battlements).
+
+       That is the shape of the trade, and it is why the good first candidates
+       are the buildings that are unique, never upgrade and do not move: the
+       cathedral and the castle, then the town hall and the university — whose
+       flags can simply be drawn over the sprite. Anything with `wieken` should
+       stay procedural. */
+    if (!opties.zonderSchaduw) {
+      slagschaduw(ctx, foot, hoogte * 0.75);
+
+      var scx = foot.cx + foot.hw * 0.12, scy = foot.cy + foot.hh * 0.28, sr = foot.hw * 1.08;
+      var sg = ctx.createRadialGradient(scx, scy, sr * 0.35, scx, scy, sr);
+      sg.addColorStop(0, 'rgba(0,0,0,.34)');
+      sg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = sg;
+      ctx.beginPath();
+      ctx.ellipse(scx, scy, sr, sr * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     ctx.drawImage(img, foot.cx - w / 2, foot.cy + foot.hh - h, w, h);
 

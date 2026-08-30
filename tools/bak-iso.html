@@ -73,6 +73,7 @@
     </select>
   </label>
   <button id="bak">Bakken</button>
+  <button id="controle">Rondgang controleren</button>
   <span id="stand"></span>
 </div>
 
@@ -109,29 +110,48 @@
 
     lijst.forEach(function (def) {
       var grootte = def.grootte || 1;
-      /* Room for the footprint plus whatever stands on it: a spire is the
-         tallest thing here, so allow two tiles of height per tile of width. */
-      var breed = Math.ceil(p * grootte + p * 0.6);
-      var hoog = Math.ceil(p * grootte * 1.6 + p * 1.4);
+
+      /* The geometry is not free to choose: tekenGebouwSprite draws the image
+         at width `p * grootte * 1.5`, centred on the footprint, with the
+         image's *bottom edge* on the footprint's front corner. So a sprite is
+         only correct if its footprint diamond is exactly two thirds of the
+         image width, centred, with its front corner on the bottom edge.
+
+         Getting this wrong is not subtle and it is not visible in the PNG: the
+         first version of this tool used a canvas 0.6 tiles wider than the
+         footprint with the corner 0.3 tiles above the bottom, and a baked
+         cathedral came back into the game 35% too wide and 47% too tall. The
+         round-trip test in the console below is here so that can never happen
+         again quietly. */
+      var breed = Math.round(p * grootte * 1.5);
+      var hoogVrij = Math.ceil(p * 2.8);          /* room for the tallest spire */
+      var hoog = Math.ceil(p * grootte * 0.5 + hoogVrij);
 
       var doek = document.createElement('canvas');
       doek.width = breed;
       doek.height = hoog;
       var ctx = doek.getContext('2d');
 
-      /* The top corner of the footprint, placed so the whole volume fits. */
       var sx = breed / 2;
-      var sy = hoog - p * grootte * 0.5 - p * 0.3;
+      var sy = hoog - p * grootte * 0.5;          /* front corner on the bottom edge */
 
       try {
         Game.render.sprites.tekenGebouw(ctx, def, sx, sy, p, grootte, {
           tijd: 0, tijdperk: tijdperk, seizoen: seizoen, zaad: 7, nacht: false,
-          nachtF: 0, toonBordje: false
+          nachtF: 0, toonBordje: false,
+          /* No ground shadow in the image: the game lays down its own, and one
+             that still follows the hour. */
+          zonderSchaduw: true
         });
       } catch (e) {
         console.warn('kon ' + def.id + ' niet bakken:', e);
         return;
       }
+
+      /* Trim empty rows off the *top* only. The bottom and the sides carry the
+         anchoring, so they must stay; the height is free, because the drawn
+         height follows the image's aspect ratio from a bottom anchor. */
+      doek = trimBoven(doek);
 
       var fig = document.createElement('figure');
       var img = document.createElement('img');
@@ -152,6 +172,104 @@
 
     stand.textContent = n + ' van ' + lijst.length + ' gebakken op ' + p + ' px/tegel.';
   });
+
+  /* --------------------------------------------------------------- rondgang
+
+     The self-check, in the spirit of js/devcheck.js: bake a building, draw the
+     bake back through the game's own sprite path, and compare where the ink
+     lands against the procedural volume. If those two boxes do not agree, this
+     tool is producing templates that will not line up — which is invisible in
+     the PNG itself and only shows up once art has already been painted on it.
+     It has been wrong once. */
+  document.getElementById('controle').addEventListener('click', function () {
+    var S = Game.render.sprites;
+    var p = 88, fouten = [], gedaan = 0;
+    var proeven = ['huisje', 'stadhuis', 'kathedraal', 'kasteel'];
+
+    proeven.forEach(function (id) {
+      var def = Game.config.gebouw(id);
+      if (!def) return;
+      var grootte = def.grootte || 1;
+      /* Both sides without ground shadows: this is a test of *geometry*, and
+         the volume and the sprite path each estimate a building's height for
+         their shadow in their own way, which would drown the thing being
+         measured in noise that is not a fault. */
+      var opties = { tijd: 0, tijdperk: 4, seizoen: 0, zaad: 7, zonderSchaduw: true };
+
+      var A = leegDoek(760, 760);
+      S.tekenGebouw(A.getContext('2d'), def, 380, 460, p, grootte, opties);
+
+      var breed = Math.round(p * grootte * 1.5);
+      var hoog = Math.ceil(p * grootte * 0.5 + p * 2.8);
+      var bak = leegDoek(breed, hoog);
+      S.tekenGebouw(bak.getContext('2d'), def, breed / 2, hoog - p * grootte * 0.5,
+                    p, grootte, { tijd: 0, tijdperk: 4, seizoen: 0, zaad: 7, zonderSchaduw: true });
+      bak = trimBoven(bak);
+
+      var img = new Image();
+      img.onload = function () {
+        var echt = Game.render.atlas && Game.render.atlas.isoGebouw;
+        Game.render.atlas = Game.render.atlas || {};
+        Game.render.atlas.isoGebouw = function (q) { return q === id ? img : null; };
+        var B = leegDoek(760, 760);
+        S.tekenGebouw(B.getContext('2d'), def, 380, 460, p, grootte, opties);
+        if (echt) Game.render.atlas.isoGebouw = echt; else delete Game.render.atlas.isoGebouw;
+
+        var a = kader(A), b = kader(B);
+        var af = Math.max(Math.abs(a.x0 - b.x0), Math.abs(a.y0 - b.y0),
+                          Math.abs(a.x1 - b.x1), Math.abs(a.y1 - b.y1));
+        if (!(af <= 3)) fouten.push(id + ': ' + af + ' px verschoven');
+        if (++gedaan === proeven.length) {
+          stand.textContent = fouten.length
+            ? '❌ rondgang mislukt — ' + fouten.join('; ')
+            : '✅ rondgang klopt: gebakken en teruggeladen komt op dezelfde plek.';
+          stand.style.color = fouten.length ? '#f0907a' : '#9ad07a';
+        }
+      };
+      img.src = bak.toDataURL();
+    });
+  });
+
+  function leegDoek(b, h) {
+    var c = document.createElement('canvas');
+    c.width = b; c.height = h;
+    return c;
+  }
+
+  /* Bounding box of everything that is not fully transparent. */
+  function kader(doek) {
+    var d = doek.getContext('2d').getImageData(0, 0, doek.width, doek.height).data;
+    var x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1;
+    for (var y = 0; y < doek.height; y++) {
+      for (var x = 0; x < doek.width; x++) {
+        if (d[(y * doek.width + x) * 4 + 3] > 24) {
+          if (x < x0) x0 = x; if (x > x1) x1 = x;
+          if (y < y0) y0 = y; if (y > y1) y1 = y;
+        }
+      }
+    }
+    return { x0: x0, y0: y0, x1: x1, y1: y1 };
+  }
+
+  /* Cut fully transparent rows off the top of a canvas. */
+  function trimBoven(doek) {
+    var c = doek.getContext('2d');
+    var d;
+    try { d = c.getImageData(0, 0, doek.width, doek.height).data; }
+    catch (e) { return doek; }        /* tainted canvas: leave it be */
+    var eerste = 0;
+    zoek: for (var y = 0; y < doek.height; y++) {
+      for (var x = 0; x < doek.width; x++) {
+        if (d[(y * doek.width + x) * 4 + 3] > 2) { eerste = y; break zoek; }
+      }
+    }
+    if (eerste < 2) return doek;
+    var uit = document.createElement('canvas');
+    uit.width = doek.width;
+    uit.height = doek.height - eerste;
+    uit.getContext('2d').drawImage(doek, 0, -eerste);
+    return uit;
+  }
 })();
 </script>
 </body>
