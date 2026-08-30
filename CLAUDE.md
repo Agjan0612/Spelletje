@@ -40,6 +40,22 @@ There is no npm, no build, no test runner in the repo.
   A headless run must also answer choices for the systems that wait for the
   player: `s.gebeurtenis.actief` needs `Game.core.gebeurtenissen.kies(s, 0)`,
   otherwise no further events fire.
+- **Measuring the render cost — count presented frames, not calls.** Timing
+  `renderer.teken()` in a loop measures almost nothing: canvas work is recorded
+  and only rasterised at paint, so a full-screen blend can clock at 0.002 ms and
+  a real regression can hide entirely. Drive `requestAnimationFrame` instead and
+  take the median of ~150 deltas, with **`s.snelheid = 0`** so the simulation is
+  not part of what you are timing, and with `tickEffecten` called alongside
+  `teken` so the weather particles `spawnWeer` emits are actually pruned (without
+  it, snow piles up forever and winter measures the harness). Worst case is the
+  biggest map (88×64) at minimum zoom. Headless Chromium has no GPU, so the
+  numbers are a **pessimistic floor** — most of this layer is fill rate, which is
+  the work a GPU canvas does for free — but the before/after comparison at the
+  same zoom is sound. Use a git worktree at the old commit for the "before", the
+  same way `tools/simuleer.js` is used for balance.
+- **`tools/bak-iso.html`** bakes each building's procedural volume out as a
+  transparent PNG at any resolution, for the `assets/iso/` route (see *Adding
+  content*). No build step, no dependencies; open it straight from `file://`.
 - **Config self-check:** `js/devcheck.js` runs at startup and logs `✅ Speldata gecontroleerd` or a loud list of errors to the console. Check the console after any change to `js/config/`.
 
 ## Architecture
@@ -230,6 +246,12 @@ Buildings get a cast shadow, a dark contour over the wall corners and eaves, and
 
 - **Nothing on screen that is always nul.** `s.gezien` (plain `{ id: true }`, kept in step by `state.voegToe` and `state.merkOp` inside `herbereken`) says which resources this town has actually met; the HUD shows only those, so a first-age village watches five counters instead of fourteen. The shield hides itself until raiders can come.
 - **One card, three tabs.** The right-hand column is `js/ui/kolom.js`: Tijdperk / Doelen / Stad, one visible at a time, each tab carrying a dot when something behind it wants attention (red for a real problem, gold for a merchant, a deliverable contract or a neighbour's request). Three stacked cards never fitted, so the bottom one was always half off-screen. The elder's one-line advice sits *above* the tabs and is therefore never hidden.
+- **Nothing on a roof that the silhouette already says.** The icon badge is a
+  wayfinding aid for when a building is too small to read, not decoration: it
+  shows between 16 and 32 pixels per tile and is gone above that
+  (`sprites.bordjeDekking`). Hovering, selecting, holding **Alt** or pressing
+  **N** brings every label back at any zoom — the RTS convention — and the
+  "Namen" button on the layer bar is there so the key is findable.
 - **Tooltips are drawn, not `title`-ed.** `js/ui/tip.js` is the one tooltip in the game; `tip.hang(el, fn)` asks `fn()` for fresh HTML on every hover, so the happiness breakdown is about the town as it is now. `buildmenu.js` and `hud.js` both draw through it.
 - **The build bar is sorted by what a building does**, not by the age it came from: Wonen, Voedsel, Grondstoffen, Opslag, Voorzieningen, Ambacht, Handel, Verdediging, Straten. `BM.SOORTEN` in `buildmenu.js` holds two orders that are deliberately different — the array is the tab order, `prio` is the order the tests are tried (a castle stores goods, but defence is asked first). Locked buildings stay in their drawer, greyed, so you can see what is coming.
 
