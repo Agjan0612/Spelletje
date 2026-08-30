@@ -94,7 +94,8 @@
   /* Aim the zoom at a target level, keeping the point under (sx, sy) fixed. The
      actual zoom eases toward it in demp(). */
   Camera.prototype.zoomOp = function (sx, sy, richting) {
-    this.doelZoom = Game.util.clamp((this.doelZoom || this.zoom) * (richting > 0 ? 1.18 : 1 / 1.18), 0.4, 2.6);
+    this.doelZoom = Game.util.clamp((this.doelZoom || this.zoom) * (richting > 0 ? 1.18 : 1 / 1.18),
+                                    this.minZoom(), 2.6);
     this.zoomSx = sx;
     this.zoomSy = sy;
   };
@@ -123,11 +124,38 @@
     }
   };
 
+  /* How far out you may zoom: exactly far enough that the whole map fits on
+     screen, and not a step further.
+   *
+     The map is a diamond in iso space, (b+h)*TEGEL*0.5 wide and half that tall.
+     Once it fits inside the viewport you have already seen everything there is
+     to see; zooming out past that only shrinks the town and fills the screen
+     with empty water, which is what made the map read as a raft on a backdrop.
+     So this never withholds a view — it withholds the *pointless* part of the
+     range. It scales with the map, so a small map stops sooner than a big one,
+     and it is clamped so a very large map or a very small window can never
+     make the floor sillier than the old fixed one. */
+  Camera.prototype.minZoom = function () {
+    if (!this.kaartB || !this.breedte) return 0.4;
+    var iso = (this.kaartB + this.kaartH) * TEGEL;
+    var past = Math.min(2 * this.breedte, 4 * this.hoogte) / iso;
+    return Game.util.clamp(past / 1.06, 0.28, 1.6);
+  };
+
   /* Keeps the view roughly over the map instead of drifting into the void. */
   Camera.prototype.begrens = function (kaart) {
+    this.kaartB = kaart.b;
+    this.kaartH = kaart.h;
     var marge = 6 * TEGEL;
     this.x = Game.util.clamp(this.x, -marge, kaart.b * TEGEL + marge);
     this.y = Game.util.clamp(this.y, -marge, kaart.h * TEGEL + marge);
+
+    /* Also the place the zoom floor is enforced: begrens runs every frame, so
+       a resize or a freshly loaded map corrects itself without anyone having
+       to remember to ask. */
+    var min = this.minZoom();
+    if (this.doelZoom < min) this.doelZoom = min;
+    if (this.zoom < min) this.zoom = min;
   };
 
   /* Tile range that is currently visible. In iso the screen rectangle maps to a

@@ -61,45 +61,120 @@
 
   /* --------------------------------------------------------------- hemel --- */
 
-  /* The background beyond the map edge. Instead of one flat deep-sea colour, a
-     vertical gradient from the sky at the top (where the iso horizon lies) down
-     to the sea, with the sun or the moon as a disc that drifts across with the
-     day. Drawn first of all, so the terrain paints over it. */
+  /* Everything beyond the map edge.
+   *
+   * This used to be one vertical gradient from sky-blue at the top to sea-blue
+   * at the bottom, across the whole screen — so "outside the map" was sky where
+   * water belonged, and the map sat on it as a diamond raft on a backdrop. The
+   * map generator pushes its heights down at the border (js/core/map.js), so a
+   * map always ends in sea; the honest thing to paint out there is *more sea*,
+   * in exactly the colour the deepest water tile gets. That colour comes from
+   * sprites.diepZeeKleur, which runs the tiles' own waterKleur(): two tables
+   * would drift, and a shade of difference is all it takes to see the edge.
+   *
+   * Above it a sky, but only in the top band, because in an isometric view the
+   * top of the screen is the far distance and that is the only place a horizon
+   * can honestly be. It fades down into the sea rather than meeting it on a
+   * line. Drawn first of all, so the terrain paints over it. */
   var ZEE = ['#27506b', '#295473', '#254a64', '#2b4a5e'];
+
+  Sf.HORIZON = 0.3;   /* fraction of the screen height the sky occupies */
 
   Sf.tekenHemel = function (ctx, cam, s) {
     var L = Sf.licht(s);
     var b = cam.breedte, h = cam.hoogte;
-    var lucht = luchtKleur(L);
-    var zee = ZEE[s.seizoen] || ZEE[0];
+    var sprites = Game.render.sprites;
+    var zee = (sprites && sprites.diepZeeKleur) ? sprites.diepZeeKleur(s.seizoen)
+                                                : (ZEE[s.seizoen] || ZEE[0]);
 
-    var g = ctx.createLinearGradient(0, 0, 0, h);
-    g.addColorStop(0, lucht);
-    g.addColorStop(0.5, meng(lucht, zee, 0.6));
-    g.addColorStop(1, zee);
-    ctx.fillStyle = g;
+    ctx.fillStyle = zee;
     ctx.fillRect(-4, -4, b + 8, h + 8);
 
-    /* Sun or moon, riding the top third of the sky. f 0..1: 0 midday, 0.5
-       midnight — put the disc high at midday, low near dawn/dusk. */
-    var maan = L.nacht > 0.5;
-    var x = ((L.f + 0.25) % 1) * b;
-    var hoog = 0.5 - 0.5 * Math.cos(L.f * Math.PI * 2);   /* 0 at midday, 1 midnight */
-    var y = h * (0.08 + hoog * 0.22);
-    var r = Math.min(b, h) * 0.045;
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    var disc = ctx.createRadialGradient(x, y, 0, x, y, r * 2.4);
-    var kern = maan ? '224,230,246' : (L.avond > 0.3 || L.ochtend > 0.3 ? '255,206,150' : '255,244,214');
-    disc.addColorStop(0, 'rgba(' + kern + ',' + (maan ? 0.5 : 0.85) + ')');
-    disc.addColorStop(0.25, 'rgba(' + kern + ',' + (maan ? 0.3 : 0.5) + ')');
-    disc.addColorStop(1, 'rgba(' + kern + ',0)');
-    ctx.fillStyle = disc;
-    ctx.beginPath();
-    ctx.arc(x, y, r * 2.4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+    verreZee(ctx, b, h, s);
+
+    /* The sky band, ending in exactly the sea colour so the two are continuous
+       where they meet. */
+    var horizon = h * Sf.HORIZON;
+    var lucht = luchtKleur(L);
+    var g = ctx.createLinearGradient(0, -h * 0.06, 0, horizon);
+    g.addColorStop(0, lucht);
+    g.addColorStop(0.6, meng(lucht, zee, 0.42));
+    g.addColorStop(1, zee);
+    ctx.fillStyle = g;
+    ctx.fillRect(-4, -4, b + 8, horizon + 4);
+
+    /* Haze sitting on the horizon itself, which is what stops the sky and the
+       sea from reading as two flat fields stacked on each other. */
+    var damp = ctx.createLinearGradient(0, horizon - h * 0.16, 0, horizon + h * 0.1);
+    var dampK = L.nacht > 0.5 ? '120,140,190' : '214,230,242';
+    damp.addColorStop(0, 'rgba(' + dampK + ',0)');
+    damp.addColorStop(0.62, 'rgba(' + dampK + ',' + (0.20 * L.dag + 0.05).toFixed(3) + ')');
+    damp.addColorStop(1, 'rgba(' + dampK + ',0)');
+    ctx.fillStyle = damp;
+    ctx.fillRect(-4, horizon - h * 0.16, b + 8, h * 0.26);
+
+    /* Dawn and dusk: a warm glow low on the horizon, on the side the light
+       comes from. Not a disc — the sun used to hang in the sky as a white blob
+       in screen space, drifting with the clock while every shadow in the game
+       fell the other way (Sf.SCHADUW is fixed, deliberately). A glow says the
+       same thing without contradicting the ground. */
+    var warm = L.avond * 0.9 + L.ochtend * 0.6;
+    if (warm > 0.02) {
+      var zonX = b * (0.5 - Sf.SCHADUW.x * 0.42);   /* light comes from the left */
+      var gl = ctx.createRadialGradient(zonX, horizon, 0, zonX, horizon, b * 0.42);
+      var gk = L.avond >= L.ochtend ? '255,168,84' : '255,196,158';
+      gl.addColorStop(0, 'rgba(' + gk + ',' + (warm * 0.5).toFixed(3) + ')');
+      gl.addColorStop(0.5, 'rgba(' + gk + ',' + (warm * 0.16).toFixed(3) + ')');
+      gl.addColorStop(1, 'rgba(' + gk + ',0)');
+      ctx.fillStyle = gl;
+      ctx.fillRect(-4, -4, b + 8, horizon + h * 0.14);
+    }
+
+    /* The moon does stay a disc: a moon in the sky is a thing you look at, and
+       it gives the night an anchor the way a floating sun never did. */
+    if (L.nacht > 0.45) {
+      var mA = (L.nacht - 0.45) / 0.55;
+      var mx = b * (0.18 + ((L.f + 0.5) % 1) * 0.64);
+      var my = horizon * (0.62 - Math.sin(L.f * Math.PI * 2) * 0.28);
+      var mr = Math.min(b, h) * 0.018;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      var disc = ctx.createRadialGradient(mx, my, 0, mx, my, mr * 4);
+      disc.addColorStop(0, 'rgba(230,236,250,' + (0.85 * mA).toFixed(3) + ')');
+      disc.addColorStop(0.2, 'rgba(214,224,246,' + (0.5 * mA).toFixed(3) + ')');
+      disc.addColorStop(1, 'rgba(200,214,240,0)');
+      ctx.fillStyle = disc;
+      ctx.beginPath();
+      ctx.arc(mx, my, mr * 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
   };
+
+  /* Glints on the open water beyond the map. Twenty-odd short strokes at
+     positions hashed from their index (never from a random source, or they
+     would crawl about between frames) drifting slowly sideways with the clock.
+     Drawn under everything, so on any normal zoom most of them are covered by
+     land — it only has to hold up in the rim around the island. */
+  function verreZee(ctx, b, h, s) {
+    var t = s.tijd || 0;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(206,232,244,.075)';
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (var i = 0; i < 26; i++) {
+      var hx = ((i * 2654435761) % 1000) / 1000;
+      var hy = ((i * 40503) % 997) / 997;
+      var breed = 26 + hy * 54;
+      var x = ((hx * b + t * (6 + hy * 8)) % (b + 160)) - 80;
+      var y = h * (0.3 + hy * 0.72) + Math.sin(t * 0.6 + i) * 4;
+      ctx.lineWidth = 1 + hy * 1.6;
+      ctx.moveTo(x - breed / 2, y);
+      ctx.lineTo(x + breed / 2, y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
 
   function luchtKleur(L) {
     var nacht = [26, 34, 68], dag = [138, 176, 210];

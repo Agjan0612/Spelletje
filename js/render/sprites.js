@@ -241,7 +241,7 @@
     ctx.strokeStyle = kleur; ctx.lineWidth = 1; ctx.stroke();
 
     if (tegel.t === 'water' && kaart) {
-      if (p >= 12) water(ctx, d, tegel, p, tijd, kaart, x, y, seizoen); else kust(ctx, d, kaart, x, y);
+      if (p >= 12) water(ctx, d, tegel, p, tijd, kaart, x, y, seizoen); else kust(ctx, d, kaart, x, y, tijd, p);
       if (seizoen === 3) ijs(ctx, d, tegel, p, kaart, x, y);
       return;
     }
@@ -284,6 +284,15 @@
             Math.round(a[1] + (b[1] - a[1]) * t),
             Math.round(a[2] + (b[2] - a[2]) * t)];
   }
+
+  /* The colour of water at its deepest — what the sea beyond the map edge has
+     to be painted in (js/render/sfeer.js). It runs through the very same
+     waterKleur() the tiles do rather than being a second table: the moment the
+     two differ by a shade, the map stops being an island and becomes a raft on
+     a backdrop, which is exactly what the old flat ZEE fill looked like. */
+  S.diepZeeKleur = function (seizoen) {
+    return waterKleur(TERREIN.water[seizoen] || TERREIN.water[0], 1);
+  };
 
   /* Sand along a coast, per season — winter sand is pale and frozen. */
   var ZAND = ['#d5c290', '#dbc994', '#cfb87f', '#d9d5c8'];
@@ -461,22 +470,62 @@
 
   /* Lighter shallow rim on the water-tile edges that face land, breathing in
      and out like a slow surf. */
-  function kust(ctx, d, kaart, tx, ty, tijd) {
-    var puls = 0.5 + 0.5 * Math.sin((tijd || 0) * 1.3 + (tx + ty) * 0.6);
-    ctx.strokeStyle = 'rgba(168,214,219,' + (0.4 + puls * 0.28).toFixed(3) + ')';
-    ctx.lineWidth = Math.max(1, d.hw * (0.11 + puls * 0.06));
-    ctx.beginPath();
-    for (var i = 0; i < BUUREDGE.length; i++) {
-      var b = Game.core.map.tegel(kaart, tx + BUUREDGE[i].dx, ty + BUUREDGE[i].dy);
-      if (!b || b.t === 'water') continue;
-      var a = d[BUUREDGE[i].a], c = d[BUUREDGE[i].b];
-      ctx.moveTo(a.x, a.y); ctx.lineTo(c.x, c.y);
+  /* Surf. Where a water tile touches land, a band of foam runs in from the
+     shared edge — and its inner boundary scallops along its length and breathes
+     with the swell, because a coastline drawn as a straight stroke along a
+     diamond edge is the clearest possible statement that the world is made of
+     tiles. Zoomed far out it falls back to that stroke: at eight pixels a tile
+     the scallop is sub-pixel and only costs fills. */
+  function kust(ctx, d, kaart, tx, ty, tijd, p) {
+    var t = tijd || 0;
+    var puls = 0.5 + 0.5 * Math.sin(t * 1.3 + (tx + ty) * 0.6);
+
+    if (!(p >= 16)) {
+      ctx.strokeStyle = 'rgba(196,230,236,' + (0.4 + puls * 0.28).toFixed(3) + ')';
+      ctx.lineWidth = Math.max(1, d.hw * (0.11 + puls * 0.06));
+      ctx.beginPath();
+      for (var i = 0; i < BUUREDGE.length; i++) {
+        var b0 = Game.core.map.tegel(kaart, tx + BUUREDGE[i].dx, ty + BUUREDGE[i].dy);
+        if (!b0 || b0.t === 'water') continue;
+        var a0 = d[BUUREDGE[i].a], c0 = d[BUUREDGE[i].b];
+        ctx.moveTo(a0.x, a0.y); ctx.lineTo(c0.x, c0.y);
+      }
+      ctx.stroke();
+      return;
     }
-    ctx.stroke();
+
+    for (var j = 0; j < BUUREDGE.length; j++) {
+      var buur = Game.core.map.tegel(kaart, tx + BUUREDGE[j].dx, ty + BUUREDGE[j].dy);
+      if (!buur || buur.t === 'water') continue;
+      var a = d[BUUREDGE[j].a], b = d[BUUREDGE[j].b];
+      var swell = 0.5 + 0.5 * Math.sin(t * 1.5 + (tx * 1.7 + ty * 2.3) + j);
+
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      for (var k = 5; k >= 0; k--) {
+        var u = k / 5;
+        var diep = 0.13 + swell * 0.09 +
+                   0.06 * Math.sin(t * 2.1 + u * 7.5 + tx * 3.1 + ty * 5.3);
+        var px = a.x + (b.x - a.x) * u, py = a.y + (b.y - a.y) * u;
+        ctx.lineTo(px + (d.cx - px) * diep, py + (d.cy - py) * diep);
+      }
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(224,244,248,' + (0.22 + swell * 0.18).toFixed(3) + ')';
+      ctx.fill();
+
+      /* And a crisp line right on the waterline itself. */
+      ctx.strokeStyle = 'rgba(244,253,255,' + (0.3 + swell * 0.24).toFixed(3) + ')';
+      ctx.lineWidth = Math.max(1, d.hw * 0.05);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    }
   }
 
   function water(ctx, d, t, p, tijd, kaart, tx, ty, seizoen) {
-    if (kaart) kust(ctx, d, kaart, tx, ty, tijd);
+    if (kaart) kust(ctx, d, kaart, tx, ty, tijd, p);
 
     /* Reflection of the shore: on water tiles that touch land, smear the
        neighbour's colour (its trees, its buildings) a little way into the tile,
