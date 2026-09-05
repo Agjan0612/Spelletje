@@ -4,17 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-"Dorp tot Stad" — a medieval city-builder game that runs entirely in the browser with **no build step, no dependencies, no server**. Vanilla HTML/CSS/JS on a 2D canvas. See `README.md` for gameplay.
+"Dorp tot Stad" — a medieval city-builder game that runs in the browser. See `README.md` for gameplay.
+
+**The render layer is PixiJS (WebGL) with a Vite build.** The game used to run with no build step from `file://`; that trade was made deliberately for a higher visual ceiling (see `PIXI-MIGRATIE.md`). The **simulation is untouched** by this: `js/config`, `js/core` and `js/ui` are still classic IIFE modules on `window.Game`, loaded in dependency order via `src/legacy.js`. Only the render layer changed — `src/render/pixi-renderer.js` owns `Game.render.renderer`, and what remains in `js/render/` are shared utilities (camera, sprites, lagen, minimap, sfeer, atlas, the render-only `rng`). Run it with `npm run dev` (or `npm run build` / `npm run preview`); it is no longer openable straight from `file://`.
 
 ## Running & testing
 
-There is no npm, no build, no test runner in the repo.
+The render layer needs a Vite build (see `PIXI-MIGRATIE.md`); the balance harness still runs in bare Node.
 
-- **Play locally:** open `index.html` directly (`file://`). This is the primary target — it must keep working.
-- **Pages-like check:** the game is also served over HTTP from a **subdirectory** (GitHub Pages at `/Spelletje/`). All asset paths are relative so this works unchanged, but when touching paths, verify both routes.
+- **Play locally:** `npm install` once, then `npm run dev` and open the printed URL (`npm run build` / `npm run preview` for the production bundle). Opening `index.html` straight from `file://` no longer works — it loads one module entry that Vite must bundle.
+- **Pages-like check:** GitHub Pages serves the built `dist/` from a **subdirectory** (`/Spelletje/`) via `.github/workflows/pages.yml`. The relative `base` (`./`) keeps this working; when touching paths, verify both `npm run dev` and `npm run preview`.
 - **Balance measurement — use `tools/simuleer.js`.** `node tools/simuleer.js` plays the
-  whole game in Node with no browser, no npm and no dependencies. It reads the script
-  order out of `index.html`, loads only `js/config/`, `js/core/`, `js/ui/log.js`,
+  whole game in Node with no browser and no dependencies (bare Node, CommonJS). It reads the script
+  order out of `src/legacy.js` (plus `js/main.js`), loads only `js/config/`, `js/core/`, `js/ui/log.js`,
   `js/ui/quests.js` (both do real simulation work), `js/devcheck.js` and `js/main.js`,
   stubs the drawing layer, pins `Math.random` per seed and lets a fixed bot build a town.
   Flags: `--zaden=8 --tijd=9000 --kaart= --moeilijkheid= --scenario= --parallel= --json`.

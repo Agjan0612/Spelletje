@@ -44,20 +44,22 @@ import '../js/core/dorpelingen.js';
 import '../js/core/historie.js';
 import '../js/core/faam.js';
 import '../js/core/save.js';
+/* Alleen de gedeelde render-utilities die de Pixi-renderer en de UI nog nodig
+   hebben. De oude canvas-renderer en zijn eigen tekenmodules (renderer, paths,
+   raiders, props, wildlife, villagers, floaters, weer, particles) zijn vervangen
+   door src/render/pixi-renderer.js en verwijderd.
+   - camera:   Game.render.Camera (iso-projectie, hergebruikt)
+   - beweging: Game.render.rng (render-only mulberry32)
+   - atlas:    buildmenu-icoonpaden
+   - sfeer:    Game.render.sfeer.licht (dagfase voor de belichting)
+   - sprites:  miniatuurBron (bouwmenu/paneel) + terreinKleur (minimap)
+   - lagen:    per-tegel overlay-waarden
+   - minimap:  eigen minimap-canvas */
 import '../js/render/camera.js';
 import '../js/render/beweging.js';
 import '../js/render/atlas.js';
-import '../js/render/particles.js';
-import '../js/render/weer.js';
-import '../js/render/paths.js';
-import '../js/render/raiders.js';
-import '../js/render/props.js';
-import '../js/render/wildlife.js';
-import '../js/render/floaters.js';
 import '../js/render/sfeer.js';
 import '../js/render/sprites.js';
-import '../js/render/villagers.js';
-import '../js/render/renderer.js';
 import '../js/render/lagen.js';
 import '../js/render/minimap.js';
 import '../js/ui/log.js';
