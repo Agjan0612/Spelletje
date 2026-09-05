@@ -62,7 +62,11 @@
   var canvasEl = null;
   var wachtMaat = null;           /* pasMaatAan die vóór app-init binnenkwam */
 
-  var wereld, terreinLaag, rasterLaag, gebouwLaag, spookLaag;
+  var wereld, terreinLaag, waterLaag, rasterLaag, gebouwLaag, spookLaag;
+  var hemelLaag, lichtLaag;
+  var dispSprite = null, waterFilter = null, vignetDoek = null;
+  var klokVorig = 0, klok = 0;             /* interne render-klok in seconden */
+  var hemelSig = '';                        /* alleen lucht opnieuw tekenen bij verandering */
 
   var kaartSeed = null;
   var gebouwSig = '';
@@ -80,17 +84,29 @@
       autoDensity: true,
       resolution: Math.min(window.devicePixelRatio || 1, 2)
     }).then(function () {
+      hemelLaag = new PIXI.Graphics();            /* lucht + zon/maan, achter alles */
+      app.stage.addChild(hemelLaag);
+
       wereld = new PIXI.Container();
+      waterLaag = new PIXI.Graphics();            /* water apart, voor de shimmer-filter */
       terreinLaag = new PIXI.Graphics();
       rasterLaag = new PIXI.Graphics();          /* plaatsingsraster, onder de gebouwen */
       gebouwLaag = new PIXI.Container();
       gebouwLaag.sortableChildren = true;        /* diepte-sortering op zIndex */
       spookLaag = new PIXI.Container();           /* bouw-spook + selectie, bovenop */
+      wereld.addChild(waterLaag);
       wereld.addChild(terreinLaag);
       wereld.addChild(rasterLaag);
       wereld.addChild(gebouwLaag);
       wereld.addChild(spookLaag);
       app.stage.addChild(wereld);
+
+      lichtLaag = new PIXI.Graphics();            /* dag/nacht-was, bovenop */
+      app.stage.addChild(lichtLaag);
+      maakVignet();
+      if (vignetDoek) app.stage.addChild(vignetDoek);
+
+      stelWaterFilterIn();
 
       /* Wij tekenen zelf, gestuurd door de vaste game-lus in main.js, in plaats
          van op Pixi's eigen ticker — zo weerspiegelt het beeld altijd de state
@@ -99,6 +115,7 @@
 
       klaar = true;
       wereldDirty = true;
+      klokVorig = performance.now();
       if (wachtMaat) { R.pasMaatAan(); wachtMaat = null; }
     });
   };
@@ -141,6 +158,7 @@
     var hw = TEGEL / 2, hh = TEGEL / 4;
     var g = terreinLaag;
     g.clear();
+    waterLaag.clear();
     for (var ty = 0; ty < h; ty++) {
       for (var tx = 0; tx < b; tx++) {
         var t = T[ty * b + tx];
@@ -148,6 +166,7 @@
         var rij = TERREIN[t.t] || TERREIN.gras;
         var kleur = hexNum(rij[seizoen] || rij[0]);
         var isWater = t.t === 'water';
+        var doel = isWater ? waterLaag : g;
         if (!isWater) {
           /* Hillshade als in de oude sprites.js: hoogteverschil met de buren
              linksboven, alsof het licht van linksboven komt. Plus de per-tegel
@@ -165,10 +184,11 @@
         }
         var wx = tx * TEGEL, wy = ty * TEGEL;
         var sx = isoX(wx, wy), sy = isoY(wx, wy);
-        g.poly([sx, sy, sx + hw, sy + hh, sx, sy + hh * 2, sx - hw, sy + hh]).fill(kleur);
+        doel.poly([sx, sy, sx + hw, sy + hh, sx, sy + hh * 2, sx - hw, sy + hh]).fill(kleur);
 
         /* Straten en bruggen zijn tegelvlaggen, geen gebouwen — teken ze als
-           een smaller ruitje boven op de grond. */
+           een smaller ruitje boven op de grond (altijd op de landlaag, ook een
+           brug boven water). */
         if (t.weg) {
           var q = 0.82, qw = hw * q, qh = hh * q;
           g.poly([sx, sy + hh - qh, sx + qw, sy + hh, sx, sy + hh + qh, sx - qw, sy + hh])
@@ -359,6 +379,115 @@
     }
   }
 
+  /* ---------------------------------------------- licht, lucht, water (fase 5) */
+
+  var ZEE = [0x27506b, 0x295473, 0x254a64, 0x2b4a5e];
+
+  /* Meng twee rgb-getallen; t=0 → a, t=1 → b. */
+  function mengNum(a, b, t) {
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    var ar = a >> 16 & 255, ag = a >> 8 & 255, ab = a & 255;
+    var br = b >> 16 & 255, bg = b >> 8 & 255, bb = b & 255;
+    return ((ar + (br - ar) * t) | 0) << 16 | ((ag + (bg - ag) * t) | 0) << 8 | ((ab + (bb - ab) * t) | 0);
+  }
+
+  /* De dagfase, bij voorkeur uit de canonieke sfeer.js (blijft meelopen), met
+     een gelijkwaardige terugval als die er niet is. */
+  function lichtStand(s) {
+    if (Game.render.sfeer && Game.render.sfeer.licht) return Game.render.sfeer.licht(s);
+    var dag = (Game.core.state && Game.core.state.DAG) || 10;
+    var f = (((s.tijd % dag) + dag) % dag) / dag;
+    var nacht = 0.5 - 0.5 * Math.cos(f * Math.PI * 2);
+    var piek = function (m, br) { var d = Math.abs(f - m); if (d > 0.5) d = 1 - d; return Math.max(0, 1 - d / br); };
+    return { f: f, nacht: nacht, dag: 1 - nacht, avond: piek(0.26, 0.17), ochtend: piek(0.76, 0.15) };
+  }
+
+  /* Lucht + zon/maan achter de wereld. Alleen opnieuw tekenen als de tijd-emmer,
+     het seizoen of de schermmaat verandert (een verloop per frame is zonde). */
+  function tekenHemel(s, cam) {
+    var L = lichtStand(s);
+    var sig = cam.breedte + 'x' + cam.hoogte + '|' + s.seizoen + '|' + (L.nacht * 40 | 0) + '|' + (L.f * 60 | 0);
+    if (sig === hemelSig) return;
+    hemelSig = sig;
+    var lucht = mengNum(0xa8cae2, 0x141d33, L.nacht);       /* helderblauw → nachtblauw */
+    lucht = mengNum(lucht, 0xf0a860, Math.max(L.avond, L.ochtend) * 0.5);  /* warme rand */
+    var zee = ZEE[s.seizoen] || ZEE[0];
+    hemelLaag.clear();
+    var N = 16, band = Math.ceil((cam.hoogte + 8) / N);
+    for (var i = 0; i < N; i++) {
+      var f = i / (N - 1);
+      hemelLaag.rect(-4, -4 + i * band, cam.breedte + 8, band + 1).fill(mengNum(lucht, zee, Math.min(1, f * 1.3)));
+    }
+    /* Zon of maan, hoog rond de middag, laag bij dageraad/schemer. */
+    var maan = L.nacht > 0.5;
+    var dx = ((L.f + 0.25) % 1) * cam.breedte;
+    var hoog = 0.5 - 0.5 * Math.cos(L.f * Math.PI * 2);
+    var dy = cam.hoogte * (0.08 + hoog * 0.22);
+    var r = Math.min(cam.breedte, cam.hoogte) * 0.045;
+    hemelLaag.circle(dx, dy, r).fill({ color: maan ? 0xdfe6f0 : 0xffe08a, alpha: maan ? 0.85 : 0.95 });
+    hemelLaag.circle(dx, dy, r * 1.8).fill({ color: maan ? 0xdfe6f0 : 0xffe08a, alpha: 0.12 });
+  }
+
+  /* De dag/nacht-was over de wereld plus een zachte vignet. De wereld zelf wordt
+     getint (goedkoop, raakt elk kind), de was legt de warme schemer eroverheen. */
+  function tekenLicht(s, cam) {
+    var L = lichtStand(s);
+    /* Basis: overdag wit, 's nachts een donkere blauwe tint over alles. */
+    wereld.tint = mengNum(0xffffff, 0x3a4a72, L.nacht * 0.72);
+
+    lichtLaag.clear();
+    var warm = Math.max(L.avond, L.ochtend);
+    if (warm > 0.01) {
+      lichtLaag.rect(0, 0, cam.breedte, cam.hoogte).fill({ color: L.avond > L.ochtend ? 0xff9040 : 0xffb060, alpha: warm * 0.16 });
+    }
+    if (L.nacht > 0.02) {
+      lichtLaag.rect(0, 0, cam.breedte, cam.hoogte).fill({ color: 0x0a1230, alpha: L.nacht * 0.22 });
+    }
+    /* Vignet die de rand van het frame afsluit — sterker 's nachts. */
+    if (vignetDoek) {
+      vignetDoek.width = cam.breedte; vignetDoek.height = cam.hoogte;
+      vignetDoek.alpha = 0.28 + L.nacht * 0.22;
+    }
+  }
+
+  /* Radiale vignet als Sprite: doorschijnend hart, donkere randen. Eén keer
+     gemaakt, daarna alleen op schermmaat geschaald en op alpha gezet. */
+  function maakVignet() {
+    try {
+      var n = 256, c = document.createElement('canvas'); c.width = c.height = n;
+      var x = c.getContext('2d');
+      var grad = x.createRadialGradient(n / 2, n / 2, n * 0.28, n / 2, n / 2, n * 0.62);
+      grad.addColorStop(0, 'rgba(0,0,0,0)');
+      grad.addColorStop(1, 'rgba(0,0,0,1)');
+      x.fillStyle = grad; x.fillRect(0, 0, n, n);
+      vignetDoek = new PIXI.Sprite(PIXI.Texture.from(c));
+    } catch (e) { vignetDoek = null; }
+  }
+
+  /* Displacement-shimmer op de waterlaag. Procedurele ruistextuur, geen assets.
+     Alles in een try/catch: mislukt het, dan blijft het water simpelweg stil. */
+  function stelWaterFilterIn() {
+    try {
+      var c = document.createElement('canvas'); c.width = c.height = 128;
+      var x = c.getContext('2d'); var img = x.createImageData(128, 128);
+      for (var i = 0; i < 128 * 128; i++) {
+        var px = i % 128, py = (i / 128) | 0;
+        img.data[i * 4] = 128 + 70 * Math.sin(px / 8) * Math.cos(py / 12);
+        img.data[i * 4 + 1] = 128 + 70 * Math.sin((px + py) / 10);
+        img.data[i * 4 + 2] = 128;
+        img.data[i * 4 + 3] = 255;
+      }
+      x.putImageData(img, 0, 0);
+      var tex = PIXI.Texture.from(c);
+      if (tex.source && tex.source.style) { tex.source.style.addressMode = 'repeat'; if (tex.source.style.update) tex.source.style.update(); }
+      dispSprite = new PIXI.Sprite(tex);
+      dispSprite.renderable = false;
+      wereld.addChild(dispSprite);
+      waterFilter = new PIXI.DisplacementFilter({ sprite: dispSprite, scale: 9 });
+      waterLaag.filters = [waterFilter];
+    } catch (e) { dispSprite = null; waterFilter = null; }
+  }
+
   /* --------------------------------------------------------------- tekenen - */
 
   R.teken = function (s, cam, ui) {
@@ -386,6 +515,15 @@
        dus elke frame opnieuw (goedkoop; alleen gevuld tijdens plaatsen/selectie). */
     tekenRaster(s, cam, ui);
     tekenSpook(s, cam, ui);
+
+    /* Interne render-klok (teken krijgt geen dt) voor de water-animatie. */
+    var nu = performance.now();
+    var dt = Math.min(0.05, (nu - klokVorig) / 1000);
+    klokVorig = nu; klok += dt;
+
+    tekenHemel(s, cam);
+    tekenLicht(s, cam);
+    if (dispSprite) { dispSprite.x = (klok * 7) % 128; dispSprite.y = (klok * 4) % 128; }
 
     app.render();
   };
