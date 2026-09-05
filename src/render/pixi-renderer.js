@@ -236,56 +236,213 @@
     return 0.94 + (n % 1000) / 1000 * 0.12;   /* 0.94..1.06 */
   }
 
-  /* Eén iso-volume (muren + piramidedak + emoji-badge) voor een gebouw-def op
-     tegel (gx,gy). Wordt gedeeld door de echte gebouwlaag en het bouw-spook.
-     opties: { id, ratio (0..1 bij aanbouw), uit, spook, badge }. */
+  /* ISO-tabel: per gebouw-id de vorm. Gekopieerd uit de oude sprites.js zodat de
+     silhouetten kloppen — muurhoogte, daktype (schuin/punt/plat/geen), dakhoogte,
+     muur-/dakkleur, en toeters (vlag, kruis, kantelen, torens, wieken, luifel,
+     schoorsteen, smal = smallere footprint voor torens/molens/putten). */
+  var ISO_D = { muurH: 0.55, stijl: 'schuin', dakH: 0.46, muur: '#c9b491', dak: '#7c4b2e' };
+  var ISO = {
+    dorpsplein: { muurH: 0.42, stijl: 'schuin', dakH: 0.4, muur: '#d8cba6', dak: '#7a5236', vlag: true },
+    huisje: { muurH: 0.52, stijl: 'schuin', dakH: 0.48 },
+    herenhuis: { muurH: 0.64, stijl: 'schuin', dakH: 0.48 },
+    vakwerkhuis: { muurH: 0.6, stijl: 'schuin', dakH: 0.5 },
+    boerderij: { muurH: 0.4, stijl: 'schuin', dakH: 0.34, muur: '#cdb98d', dak: '#8a5a34' },
+    herberg: { muurH: 0.52, stijl: 'schuin', dakH: 0.5, uithang: true },
+    stadhuis: { muurH: 0.72, stijl: 'schuin', dakH: 0.55, muur: '#d8cba6', dak: '#7a5236', vlag: true },
+    handelshuis: { muurH: 0.66, stijl: 'schuin', dakH: 0.5, muur: '#d3c39c', dak: '#7a5236', vlag: true },
+    universiteit: { muurH: 0.72, stijl: 'schuin', dakH: 0.52, muur: '#d8cba6', dak: '#5f5852', vlag: true },
+    gildehuis: { muurH: 0.64, stijl: 'schuin', dakH: 0.5, muur: '#d3c39c', dak: '#6a5240' },
+    marktplaats: { muurH: 0.3, stijl: 'plat', dakH: 0.12, muur: '#c7b083', dak: '#9c6a3a', luifel: true },
+    voorraadschuur: { muurH: 0.42, stijl: 'schuin', dakH: 0.44, muur: '#b99a6a', dak: '#6e4a2c' },
+    graanschuur: { muurH: 0.44, stijl: 'schuin', dakH: 0.46, muur: '#b99a6a', dak: '#6e4a2c' },
+    pakhuis: { muurH: 0.5, stijl: 'schuin', dakH: 0.46, muur: '#b99a6a', dak: '#5f4530' },
+    waterput: { muurH: 0.3, stijl: 'schuin', dakH: 0.4, smal: 0.5, muur: '#a9a094', dak: '#6a4a30' },
+    kapel: { muurH: 0.62, stijl: 'punt', dakH: 0.95, muur: '#e2dac4', dak: '#6a6258', kruis: true },
+    kerk: { muurH: 0.74, stijl: 'punt', dakH: 1.2, muur: '#e2dac4', dak: '#616058', kruis: true },
+    kathedraal: { muurH: 0.9, stijl: 'punt', dakH: 1.5, muur: '#e6dfca', dak: '#5a5a54', kruis: true },
+    wachttoren: { muurH: 1.15, stijl: 'punt', dakH: 0.7, smal: 0.5, muur: '#a49a8c', dak: '#7a3b2c' },
+    kazerne: { muurH: 0.6, stijl: 'schuin', dakH: 0.44, muur: '#b0a692', dak: '#5f4a3a' },
+    smederij: { muurH: 0.5, stijl: 'schuin', dakH: 0.44, muur: '#b8a483', dak: '#5a4636' },
+    wapensmid: { muurH: 0.56, stijl: 'schuin', dakH: 0.46, muur: '#b0a08a', dak: '#5a4636' },
+    kasteel: { muurH: 1.05, stijl: 'plat', dakH: 0.1, muur: '#b8b0a2', dak: '#5a3a30', kantelen: true, torens: true },
+    stadsmuur: { muurH: 0.55, stijl: 'geen', dakH: 0, muur: '#9aa0a6', kantelen: true },
+    poort: { muurH: 0.8, stijl: 'plat', dakH: 0.12, muur: '#8f8578', dak: '#6a3b2c', kantelen: true },
+    haven: { muurH: 0.34, stijl: 'schuin', dakH: 0.38, muur: '#b0a184', dak: '#3f5a6a', vlag: true, luifel: true },
+    oefenveld: { muurH: 0.24, stijl: 'geen', dakH: 0, muur: '#a7a488', vlag: true },
+    molen: { muurH: 0.72, stijl: 'schuin', dakH: 0.44, smal: 0.62, muur: '#d5c7a4', dak: '#7c4b2e', wieken: true },
+    steengroeve: { muurH: 0.34, stijl: 'schuin', dakH: 0.4, muur: '#b0a894', dak: '#6a5a44' },
+    kopermijn: { muurH: 0.34, stijl: 'schuin', dakH: 0.4, muur: '#b0a894', dak: '#6a5a44' },
+    ijzermijn: { muurH: 0.34, stijl: 'schuin', dakH: 0.4, muur: '#b0a894', dak: '#6a5a44' },
+    edelsteenmijn: { muurH: 0.34, stijl: 'schuin', dakH: 0.4, muur: '#b0a894', dak: '#6a5a44' },
+    houthakkershut: { muurH: 0.44, stijl: 'schuin', dakH: 0.46, muur: '#b99a6a', dak: '#5f4530' },
+    jachthut: { muurH: 0.42, stijl: 'schuin', dakH: 0.46, muur: '#b99a6a', dak: '#5f4530' },
+    vissershut: { muurH: 0.42, stijl: 'schuin', dakH: 0.46, muur: '#b99a6a', dak: '#5f4530' },
+    bakkerij: { muurH: 0.5, stijl: 'schuin', dakH: 0.46, muur: '#cdb98d', dak: '#8a5a34', schoorsteen: true },
+    brouwerij: { muurH: 0.54, stijl: 'schuin', dakH: 0.46, muur: '#cdb98d', dak: '#7a5236', schoorsteen: true },
+    weverij: { muurH: 0.52, stijl: 'schuin', dakH: 0.46, muur: '#d3c39c', dak: '#6a5240' },
+    schaapskooi: { muurH: 0.4, stijl: 'schuin', dakH: 0.4, muur: '#cdb98d', dak: '#8a5a34' },
+    juwelier: { muurH: 0.56, stijl: 'schuin', dakH: 0.5, muur: '#d3c39c', dak: '#6a5240' }
+  };
+  var SCHOORSTEEN = { huisje: 1, vakwerkhuis: 1, herenhuis: 1, boerderij: 1, herberg: 1, bakkerij: 1, brouwerij: 1, smederij: 1, wapensmid: 1 };
+
+  function isoCfg(d) {
+    var b = ISO[d.id] || ISO_D;
+    return {
+      muurH: b.muurH != null ? b.muurH : ISO_D.muurH,
+      stijl: b.stijl || ISO_D.stijl,
+      dakH: b.dakH != null ? b.dakH : ISO_D.dakH,
+      muur: hexNum(b.muur || ISO_D.muur),
+      dak: hexNum(b.dak || ISO_D.dak),
+      smal: b.smal || 0,
+      vlag: b.vlag, kruis: b.kruis, kantelen: b.kantelen, torens: b.torens,
+      wieken: b.wieken, luifel: b.luifel, uithang: b.uithang,
+      schoorsteen: b.schoorsteen || SCHOORSTEEN[d.id]
+    };
+  }
+
+  function diamantH(cx, cy, hw, hh) {
+    return { top: { x: cx, y: cy - hh }, right: { x: cx + hw, y: cy }, bottom: { x: cx, y: cy + hh }, left: { x: cx - hw, y: cy }, cx: cx, cy: cy, hw: hw, hh: hh };
+  }
+
+  /* Eén iso-volume (muren + dak naar type + toeters + slagschaduw + contour +
+     emoji-badge) voor een gebouw-def op tegel (gx,gy). Gedeeld door de
+     gebouwlaag en het bouw-spook. opties: { id, ratio, uit, spook, badge, seizoen }. */
   function maakVolume(d, gx, gy, opties) {
     opties = opties || {};
     var G = d.grootte || 1;
-    /* Vier grondhoeken van de footprint in iso-ruimte. */
-    var top = { x: isoX(gx * TEGEL, gy * TEGEL), y: isoY(gx * TEGEL, gy * TEGEL) };
-    var rechts = { x: isoX((gx + G) * TEGEL, gy * TEGEL), y: isoY((gx + G) * TEGEL, gy * TEGEL) };
-    var onder = { x: isoX((gx + G) * TEGEL, (gy + G) * TEGEL), y: isoY((gx + G) * TEGEL, (gy + G) * TEGEL) };
-    var links = { x: isoX(gx * TEGEL, (gy + G) * TEGEL), y: isoY(gx * TEGEL, (gy + G) * TEGEL) };
+    var cfg = isoCfg(d);
+    var zf = zaadFactor(opties.id || (gx * 131 + gy));
+
+    /* Footprint-ruit in iso-ruimte. */
+    var t0 = isoTegel(gx, gy), r0 = isoTegel(gx + G, gy), b0 = isoTegel(gx + G, gy + G), l0 = isoTegel(gx, gy + G);
+    var cx = (t0.x + b0.x) / 2, cy = (t0.y + b0.y) / 2;
+    var hw = (r0.x - l0.x) / 2, hh = (b0.y - t0.y) / 2;
+    var smalF = 1 - cfg.smal * 0.5;
+    var foot = diamantH(cx, cy, hw * smalF, hh * smalF);
 
     var ratio = opties.ratio == null ? 1 : Game.util.clamp(opties.ratio, 0.12, 1);
-    var hoogte = (16 + (G - 1) * 11 + (d.verdediging ? 16 : 0)) * (0.5 + 0.5 * ratio);
+    var H = TEGEL * cfg.muurH * (0.8 + 0.2 * G) * (0.5 + 0.5 * ratio);
+    var dakH = TEGEL * cfg.dakH * (0.85 + 0.08 * G);
 
-    var zf = zaadFactor(opties.id || (gx * 131 + gy));
-    var muur = schaal(0xcbb79a, zf);
-    var dak = schaal(dakVoor(d), zf);
+    var muur = schaal(cfg.muur, zf);
+    var dak = schaal(cfg.dak, zf * 0.96 + 0.04);
     if (ratio < 1) { muur = 0xb7a98a; dak = 0xa89873; }   /* steiger-tint */
 
     var c = new PIXI.Graphics();
-    function op(p) { return { x: p.x, y: p.y - hoogte }; }
-    var tB = op(top), rB = op(rechts), oB = op(onder), lB = op(links);
+    var ric = schaduwRichting();
 
-    /* Muurvlakken: links donker, rechts iets lichter (licht van linksboven). */
-    c.poly([links.x, links.y, onder.x, onder.y, oB.x, oB.y, lB.x, lB.y]).fill(schaal(muur, 0.72));
-    c.poly([onder.x, onder.y, rechts.x, rechts.y, rB.x, rB.y, oB.x, oB.y]).fill(schaal(muur, 0.9));
+    /* 1. Slagschaduw: de footprint langs de lichtrichting uitgeveegd. */
+    var sh = (H + dakH * 0.55), ox = sh * ric.x, oy = sh * ric.y;
+    c.poly([foot.top.x, foot.top.y, foot.right.x, foot.right.y,
+      foot.right.x + ox, foot.right.y + oy, foot.bottom.x + ox, foot.bottom.y + oy,
+      foot.left.x + ox, foot.left.y + oy, foot.left.x, foot.left.y]).fill({ color: 0x18140e, alpha: 0.22 });
+    /* zachte AO onder het gebouw */
+    c.ellipse(cx + hw * 0.12, cy + hh * 0.3, hw * 1.02, hh * 1.0).fill({ color: 0x000000, alpha: 0.14 });
 
-    /* Piramidedak: apex boven het midden, vier driehoekvlakken. */
-    var piek = 10 + G * 6;
-    var mx = (tB.x + oB.x) / 2, my = (tB.y + oB.y) / 2;
-    var apex = { x: mx, y: my - piek };
-    c.poly([lB.x, lB.y, oB.x, oB.y, apex.x, apex.y]).fill(schaal(dak, 1.0)); /* voor-links */
-    c.poly([oB.x, oB.y, rB.x, rB.y, apex.x, apex.y]).fill(schaal(dak, 0.9)); /* voor-rechts */
-    c.poly([tB.x, tB.y, lB.x, lB.y, apex.x, apex.y]).fill(schaal(dak, 0.78));/* achter-links */
-    c.poly([rB.x, rB.y, tB.x, tB.y, apex.x, apex.y]).fill(schaal(dak, 0.7)); /* achter-rechts */
+    /* 2. Muren: muurtop-ruit op hoogte H, twee voorvlakken. */
+    var top = diamantH(cx, cy - H, hw * smalF, hh * smalF);
+    c.poly([foot.left.x, foot.left.y, foot.bottom.x, foot.bottom.y, top.bottom.x, top.bottom.y, top.left.x, top.left.y]).fill(schaal(muur, 0.72));
+    c.poly([foot.bottom.x, foot.bottom.y, foot.right.x, foot.right.y, top.right.x, top.right.y, top.bottom.x, top.bottom.y]).fill(schaal(muur, 0.9));
 
-    /* Emoji-badge boven de nok — ver weg het enige dat een dak identificeert. */
-    if (d.emoji && opties.badge !== false) {
-      var badge = new PIXI.Text({ text: d.emoji, style: { fontSize: 16 } });
+    /* 3. Dak naar type. Overstek: de dakvoet is iets breder dan de muurtop. */
+    if (cfg.stijl === 'schuin' || cfg.stijl === 'punt') {
+      var over = diamantH(cx, cy - H, hw * smalF * 1.16, hh * smalF * 1.16);
+      var apex = { x: cx, y: cy - H - dakH };
+      c.poly([over.left.x, over.left.y, over.bottom.x, over.bottom.y, apex.x, apex.y]).fill(schaal(dak, 1.0));
+      c.poly([over.bottom.x, over.bottom.y, over.right.x, over.right.y, apex.x, apex.y]).fill(schaal(dak, 0.88));
+      c.poly([over.top.x, over.top.y, over.left.x, over.left.y, apex.x, apex.y]).fill(schaal(dak, 0.76));
+      c.poly([over.right.x, over.right.y, over.top.x, over.top.y, apex.x, apex.y]).fill(schaal(dak, 0.68));
+      if ((opties.seizoen | 0) === 3) {   /* sneeuwkap */
+        var sd = 0.46, sa = { x: apex.x, y: apex.y };
+        var sl = lerpP(sa, over.left, sd), sr = lerpP(sa, over.right, sd), sb = lerpP(sa, over.bottom, sd);
+        c.poly([sa.x, sa.y, sl.x, sl.y, sb.x, sb.y]).fill({ color: 0xeef5fb, alpha: 0.85 });
+        c.poly([sa.x, sa.y, sb.x, sb.y, sr.x, sr.y]).fill({ color: 0xf6fbff, alpha: 0.9 });
+      }
+    } else if (cfg.stijl === 'plat') {
+      c.poly([top.top.x, top.top.y, top.right.x, top.right.y, top.bottom.x, top.bottom.y, top.left.x, top.left.y]).fill(schaal(muur, 0.98));
+    } else { /* geen dak (muur) */
+      c.poly([top.top.x, top.top.y, top.right.x, top.right.y, top.bottom.x, top.bottom.y, top.left.x, top.left.y]).fill(schaal(muur, 0.9));
+    }
+
+    /* 4. Contour over het silhouet. */
+    c.moveTo(foot.left.x, foot.left.y).lineTo(foot.bottom.x, foot.bottom.y).lineTo(foot.right.x, foot.right.y)
+      .moveTo(foot.left.x, foot.left.y).lineTo(top.left.x, top.left.y)
+      .moveTo(foot.bottom.x, foot.bottom.y).lineTo(top.bottom.x, top.bottom.y)
+      .moveTo(foot.right.x, foot.right.y).lineTo(top.right.x, top.right.y)
+      .stroke({ width: Math.max(0.6, hw * 0.03), color: 0x1c140c, alpha: 0.42 });
+
+    /* 5. Toeters. */
+    var apexY = cy - H - dakH;
+    if (cfg.kantelen) kantelen(c, top);
+    if (cfg.torens) torens(c, foot, H, muur);
+    if (cfg.luifel) luifel(c, foot, H);
+    if (cfg.kruis) kruisTop(c, cx, apexY);
+    if (cfg.vlag) vlagTop(c, cx, (cfg.stijl === 'plat' || cfg.stijl === 'geen') ? cy - H : apexY);
+    if (cfg.wieken) wieken(c, cx, cy - H * 0.7, TEGEL, opties.tijd || 0);
+    if (cfg.schoorsteen && cfg.stijl !== 'geen') schoorsteen(c, top, dakH);
+
+    /* 6. Emoji-badge boven de nok. */
+    if (d.emoji && opties.badge !== false && !cfg.wieken) {
+      var badge = new PIXI.Text({ text: d.emoji, style: { fontSize: 15 } });
       badge.anchor.set(0.5, 1);
-      badge.position.set(apex.x, apex.y - 2);
+      var by = (cfg.stijl === 'plat' || cfg.stijl === 'geen') ? cy - H - 3 : apexY + dakH * 0.4;
+      badge.position.set(cx, by);
       c.addChild(badge);
     }
 
     if (opties.spook) c.alpha = 0.6;
     else if (opties.uit) c.alpha = 0.55;
-    /* Diepte: footprint-midden (x+y), zodat gebouwen elkaar juist overlappen. */
     c.zIndex = (gx + G / 2) + (gy + G / 2);
     return c;
+  }
+
+  function lerpP(a, b, t) { return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }; }
+
+  /* Kantelen: tandjes langs de twee voor-randen van de muurtop. */
+  function kantelen(c, top) {
+    var randen = [[top.left, top.bottom], [top.bottom, top.right]];
+    for (var e = 0; e < 2; e++) {
+      var a = randen[e][0], b = randen[e][1];
+      for (var i = 0; i < 3; i++) {
+        var p = lerpP(a, b, 0.18 + i * 0.32);
+        c.rect(p.x - 1.5, p.y - 4.5, 3, 4.5).fill(0x9aa0a6);
+      }
+    }
+  }
+  function torens(c, foot, H, muur) {
+    var hoeken = [foot.left, foot.top, foot.right];
+    for (var i = 0; i < hoeken.length; i++) {
+      var h = hoeken[i], th = H * 1.25, tw = foot.hw * 0.28;
+      c.rect(h.x - tw, h.y - th, tw * 2, th).fill(schaal(muur, 0.86));
+      c.poly([h.x - tw, h.y - th, h.x + tw, h.y - th, h.x, h.y - th - tw * 1.6]).fill(0x6a4a3a);
+    }
+  }
+  function luifel(c, foot, H) {
+    c.poly([foot.left.x, foot.left.y - H * 0.5, foot.bottom.x, foot.bottom.y - H * 0.5,
+      foot.bottom.x, foot.bottom.y - H * 0.5 + 4, foot.left.x, foot.left.y - H * 0.5 + 4]).fill({ color: 0xc0503a, alpha: 0.9 });
+  }
+  function kruisTop(c, cx, apexY) {
+    c.rect(cx - 0.9, apexY - 9, 1.8, 9).fill(0xf0e6c8);
+    c.rect(cx - 3.2, apexY - 6.5, 6.4, 1.8).fill(0xf0e6c8);
+  }
+  function vlagTop(c, cx, y) {
+    c.rect(cx - 0.7, y - 13, 1.4, 13).fill(0x6a5030);
+    c.poly([cx + 0.7, y - 13, cx + 9, y - 10.5, cx + 0.7, y - 8]).fill(0xc0392b);
+  }
+  function wieken(c, cx, cy, p, tijd) {
+    var hub = { x: cx, y: cy };
+    var hoek = tijd * 0.6;
+    c.circle(hub.x, hub.y, 2).fill(0x4a3320);
+    for (var i = 0; i < 4; i++) {
+      var a = hoek + i * Math.PI / 2;
+      var ex = hub.x + Math.cos(a) * p * 0.34, ey = hub.y + Math.sin(a) * p * 0.34;
+      c.moveTo(hub.x, hub.y).lineTo(ex, ey).stroke({ width: 2, color: 0x6a5236, alpha: 0.95 });
+    }
+  }
+  function schoorsteen(c, top, dakH) {
+    var x = top.cx + top.hw * 0.3, y = top.cy - dakH * 0.3;
+    c.rect(x - 2, y - 7, 4, 7).fill(0x7a5040);
+    c.rect(x - 2.6, y - 8, 5.2, 1.6).fill(0x5f3d30);
   }
 
   function bouwGebouwen(s) {
