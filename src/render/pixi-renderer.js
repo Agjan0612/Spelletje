@@ -64,8 +64,9 @@
 
   var wereld, terreinLaag, waterLaag, rasterLaag, gebouwLaag, spookLaag;
   var overlayLaag, particleLaag, floaterLaag, gloedLaag;
-  var waterAnimLaag, wolkenLaag, vogelLaag;
+  var waterAnimLaag, wolkenLaag, vogelLaag, weerLaag;
   var schoorstenen = [];              /* iso-rookpunten van gebouwen met een haard */
+  var weer = { fase: 'droog', t: 12, intens: 0, natheid: 0 };   /* render-only weerstaat */
   var hemelLaag, lichtLaag;
   var dispSprite = null, waterFilter = null, vignetDoek = null;
   var klokVorig = 0, klok = 0;             /* interne render-klok in seconden */
@@ -119,6 +120,8 @@
 
       vogelLaag = new PIXI.Graphics();             /* vogels, scherm-ruimte */
       app.stage.addChild(vogelLaag);
+      weerLaag = new PIXI.Graphics();              /* regen + mist, scherm-ruimte */
+      app.stage.addChild(weerLaag);
 
       lichtLaag = new PIXI.Graphics();            /* dag/nacht-was, bovenop */
       app.stage.addChild(lichtLaag);
@@ -1314,6 +1317,7 @@
     tekenWolken(s);
     tekenGloed(s);
     tekenVogels(cam);
+    tekenWeer(s, cam);
     tekenHemel(s, cam);
     tekenLicht(s, cam);
     if (dispSprite) { dispSprite.x = (klok * 7) % 128; dispSprite.y = (klok * 4) % 128; }
@@ -1393,6 +1397,44 @@
     }
   }
 
+  /* Weer als render-only state machine: droge perioden afgewisseld met een
+     regenbui; intens en natheid easen ernaartoe. Nooit in Game.state. */
+  function tickWeer(dt) {
+    weer.t -= dt;
+    if (weer.t <= 0) {
+      if (weer.fase === 'droog') { weer.fase = 'regen'; weer.t = 6 + rnd() * 10; }
+      else { weer.fase = 'droog'; weer.t = 30 + rnd() * 50; }
+    }
+    var doel = weer.fase === 'regen' ? 1 : 0;
+    weer.intens += (doel - weer.intens) * Math.min(1, dt * 0.6);
+    weer.natheid += (doel - weer.natheid) * Math.min(1, dt * 0.25);
+  }
+
+  /* Regenslierten + een grauwe waas tijdens de bui, en een lage ochtendmist als
+     het droog is. Scherm-ruimte, dus los van de camera. */
+  function tekenWeer(s, cam) {
+    if (!weerLaag) return;
+    weerLaag.clear();
+    var W = cam.breedte, Hh = cam.hoogte;
+    if (weer.intens > 0.02) {
+      weerLaag.rect(0, 0, W, Hh).fill({ color: 0x6f7f8c, alpha: weer.intens * 0.12 });
+      var n = Math.round(weer.intens * 170);
+      for (var i = 0; i < n; i++) {
+        var x = (rnd() * (W + 60)) - 30, y = rnd() * Hh;
+        var len = 9 + rnd() * 9;
+        weerLaag.moveTo(x, y).lineTo(x - len * 0.35, y + len).stroke({ width: 1, color: 0xcfe0ea, alpha: 0.35 });
+      }
+    }
+    /* Ochtendmist: alleen droog, laag in beeld, sterker bij dageraad. */
+    var mist = lichtStand(s).ochtend * (1 - weer.intens);
+    if (mist > 0.05) {
+      for (var b = 0; b < 3; b++) {
+        var my = Hh * (0.62 + b * 0.13);
+        weerLaag.rect(0, my, W, Hh * 0.16).fill({ color: 0xe8eef2, alpha: mist * (0.16 - b * 0.03) });
+      }
+    }
+  }
+
   /* Zelfde tekst als de oude renderer, voor de toast bij een klik op een node. */
   R.tegelInfo = function (s, tx, ty) {
     var map = Game.core.map;
@@ -1412,7 +1454,8 @@
   R.verversWandelaars = function (s) { verversLeven(s); };
   R.tickWandelaars = function (s, dt) { tickLeven(s, dt); };
   R.wandelaars = function () { return wandelaars; };
-  R.tickEffecten = function (s, dt) { if (!klaar) return; tickRook(dt); tickDeeltjes(dt); tickFloaters(s, dt); };
+  R.tickEffecten = function (s, dt) { if (!klaar) return; tickWeer(dt); tickRook(dt); tickDeeltjes(dt); tickFloaters(s, dt); };
+  R.__weer = weer;   /* debug-handle om het weer te forceren (tests/console) */
 
   /* --------------------------------------------- nog te porten (no-ops) ---- */
   R.tijdperkSweep = function () {};
