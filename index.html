@@ -128,85 +128,9 @@
   </div>
 </div>
 
-<!-- Scripts: klassieke script-tags in afhankelijkheidsvolgorde,
-     zodat het spel ook werkt door index.html gewoon te openen (file://). -->
-<script src="js/namespace.js"></script>
-
-<script src="js/config/instellingen.js"></script>
-<script src="js/config/resources.js"></script>
-<script src="js/config/jobs.js"></script>
-<script src="js/config/buildings.js"></script>
-<script src="js/config/ages.js"></script>
-<script src="js/config/quests.js"></script>
-<script src="js/config/handel.js"></script>
-<script src="js/config/opdrachten.js"></script>
-<script src="js/config/gebeurtenissen.js"></script>
-<script src="js/config/onderzoek.js"></script>
-<script src="js/config/rovers.js"></script>
-<script src="js/config/standen.js"></script>
-<script src="js/config/buursteden.js"></script>
-<script src="js/config/scenarios.js"></script>
-<script src="js/config/faam.js"></script>
-
-<script src="js/core/rng.js"></script>
-<script src="js/core/map.js"></script>
-<script src="js/core/state.js"></script>
-<script src="js/core/construction.js"></script>
-<script src="js/core/economy.js"></script>
-<script src="js/core/population.js"></script>
-<script src="js/core/seasons.js"></script>
-<script src="js/core/raids.js"></script>
-<script src="js/core/ages.js"></script>
-<script src="js/core/feesten.js"></script>
-<script src="js/core/handel.js"></script>
-<script src="js/core/opdrachten.js"></script>
-<script src="js/core/gebeurtenissen.js"></script>
-<script src="js/core/onderzoek.js"></script>
-<script src="js/core/buurt.js"></script>
-<script src="js/core/logistiek.js"></script>
-<script src="js/core/plek.js"></script>
-<script src="js/core/demografie.js"></script>
-<script src="js/core/standen.js"></script>
-<script src="js/core/buren.js"></script>
-<script src="js/core/kroniek.js"></script>
-<script src="js/core/arbeid.js"></script>
-<script src="js/core/dorpelingen.js"></script>
-<script src="js/core/historie.js"></script>
-<script src="js/core/faam.js"></script>
-<script src="js/core/save.js"></script>
-
-<script src="js/render/camera.js"></script>
-<script src="js/render/beweging.js"></script>
-<script src="js/render/atlas.js"></script>
-<script src="js/render/particles.js"></script>
-<script src="js/render/weer.js"></script>
-<script src="js/render/paths.js"></script>
-<script src="js/render/raiders.js"></script>
-<script src="js/render/props.js"></script>
-<script src="js/render/wildlife.js"></script>
-<script src="js/render/floaters.js"></script>
-<script src="js/render/sfeer.js"></script>
-<script src="js/render/sprites.js"></script>
-<script src="js/render/villagers.js"></script>
-<script src="js/render/renderer.js"></script>
-<script src="js/render/lagen.js"></script>
-<script src="js/render/minimap.js"></script>
-
-<script src="js/ui/log.js"></script>
-<script src="js/ui/audio.js"></script>
-<script src="js/ui/tip.js"></script>
-<script src="js/ui/hud.js"></script>
-<script src="js/ui/buildmenu.js"></script>
-<script src="js/ui/panel.js"></script>
-<script src="js/ui/quests.js"></script>
-<script src="js/ui/grafiek.js"></script>
-<script src="js/ui/overlay.js"></script>
-<script src="js/ui/stad.js"></script>
-<script src="js/ui/onderzoek.js"></script>
-<script src="js/ui/lagen.js"></script>
-<script src="js/ui/kolom.js"></script>
-
-<script src="js/devcheck.js"></script>
-<script src="js/main.js"></script>
+<!-- Eén module-entry. Vite bundelt PixiJS en de bestaande IIFE-modules
+     (die volgorde staat in src/legacy.js) plus de nieuwe Pixi-renderlaag.
+     De laadvolgorde is dezelfde afhankelijkheidsvolgorde als voorheen. -->
+<script type="module" src="/src/main.js"></script>
 </body>
 </html>
