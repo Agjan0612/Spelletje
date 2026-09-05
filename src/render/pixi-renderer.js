@@ -337,6 +337,135 @@
     }
   }
 
+  /* ---------------------------------- terreinkenmerken (bomen/rotsen/bergen) */
+
+  function schaduwRichting() { return (Game.render.sfeer && Game.render.sfeer.SCHADUW) || { x: 0.62, y: 0.30 }; }
+
+  /* De grondschaduw van een staand ding: een donkere ellips, weggeleund langs de
+     ene lichtrichting die de hele scène deelt. */
+  function grondschaduw(g, cx, cy, straal, hoogte, alpha) {
+    var ric = schaduwRichting();
+    g.ellipse(cx + hoogte * ric.x * 0.5, cy + hoogte * ric.y * 0.5, straal + hoogte * 0.28, straal * 0.55)
+      .fill({ color: 0x181410, alpha: alpha });
+  }
+
+  /* Iso-ruit van tegel (x,y) in wereld-ruimte: middelpunt + halve maten. */
+  function tegelDiamant(x, y) {
+    var sx = isoX(x * TEGEL, y * TEGEL), sy = isoY(x * TEGEL, y * TEGEL);
+    return { cx: sx, cy: sy + TEGEL / 4, hw: TEGEL / 2, hh: TEGEL / 4, topx: sx, topy: sy };
+  }
+
+  var BLADKLEUR = [0x3a6b2f, 0x356428, 0x8a5f1e, 0x51624e];
+
+  function boomVorm(g, ox, oy, deel, seizoen, seed) {
+    var blad = BLADKLEUR[seizoen] || BLADKLEUR[0];
+    var r = TEGEL * (0.15 + deel * 0.08);
+    /* stam */
+    g.rect(ox - TEGEL * 0.028, oy - TEGEL * 0.16, TEGEL * 0.056, TEGEL * 0.18).fill(0x4a3320);
+    var lagen = [
+      { y: oy - TEGEL * 0.16, rr: r, k: schaal(blad, 0.78) },
+      { y: oy - TEGEL * 0.30, rr: r * 0.82, k: blad },
+      { y: oy - TEGEL * 0.42, rr: r * 0.6, k: schaal(blad, 1.12) }
+    ];
+    for (var i = 0; i < lagen.length; i++) {
+      var L = lagen[i];
+      var dx = ((((seed * 40 + i * 17) % 6) / 6) - 0.5) * TEGEL * 0.05;
+      g.ellipse(ox + dx, L.y, L.rr, L.rr * 0.92).fill(L.k);
+    }
+    if (seizoen === 3) g.ellipse(ox, oy - TEGEL * 0.42, r * 0.6, r * 0.28).fill({ color: 0xf8fcff, alpha: 0.72 });
+  }
+
+  function maakBoom(t, x, y, seizoen) {
+    var c = new PIXI.Graphics();
+    var d = tegelDiamant(x, y);
+    var deel = t.max > 0 ? Game.util.clamp(t.amt / t.max, 0, 1) : 0.7;
+    var aantal = Math.max(1, Math.round(1 + deel * 2));
+    for (var i = 0; i < aantal; i++) {
+      var ox = d.cx + TEGEL * (((i * 37 + t.v * 100) % 46) / 100 - 0.23);
+      var oy = d.cy + TEGEL * (((i * 61 + t.v * 70) % 20) / 100 - 0.06);
+      grondschaduw(c, ox, oy + TEGEL * 0.03, TEGEL * 0.11, TEGEL * (0.34 + deel * 0.16), 0.2);
+      boomVorm(c, ox, oy, deel, seizoen, t.v + i);
+    }
+    return c;
+  }
+
+  function maakRots(t, x, y) {
+    var c = new PIXI.Graphics();
+    var d = tegelDiamant(x, y);
+    var aantal = 1 + Math.floor(((t.v * 5.7) % 1) * 3);
+    for (var i = 0; i < aantal; i++) {
+      var ox = d.cx + TEGEL * (((i * 41 + t.v * 90) % 50) / 100 - 0.25);
+      var oy = d.cy + TEGEL * (((i * 67 + t.v * 60) % 26) / 100 - 0.1);
+      grondschaduw(c, ox, oy + TEGEL * 0.05, TEGEL * 0.1, TEGEL * 0.14, 0.18);
+      var r = TEGEL * (0.1 + ((i * 13 + t.v * 30) % 8) / 100);
+      c.poly([ox - r, oy + r * 0.5, ox - r * 0.4, oy - r, ox + r * 0.6, oy - r * 0.8, ox + r, oy + r * 0.5]).fill(0x7f7b72);
+      c.poly([ox - r * 0.4, oy - r, ox + r * 0.6, oy - r * 0.8, ox + r * 0.15, oy + r * 0.1]).fill(0xb3afa4);
+    }
+    return c;
+  }
+
+  function maakBerg(t, x, y) {
+    var c = new PIXI.Graphics();
+    var d = tegelDiamant(x, y);
+    var top = { x: d.topx, y: d.topy }, bottom = { x: d.cx, y: d.cy + d.hh };
+    var left = { x: d.cx - d.hw, y: d.cy }, right = { x: d.cx + d.hw, y: d.cy };
+    var r1 = (t.v * 7.31) % 1, r2 = (t.v * 13.77) % 1;
+    var H = TEGEL * (0.55 + r1 * 1.25);
+    var apex = { x: d.cx + (r2 - 0.5) * TEGEL * 0.34, y: d.cy - H };
+    grondschaduw(c, d.cx, d.cy + d.hh * 0.2, d.hw * 0.8, H * 0.5, 0.2);
+    function tri(a, b, e, k) { c.poly([a.x, a.y, b.x, b.y, e.x, e.y]).fill(k); }
+    if (r2 > 0.3) {
+      var kant = r1 > 0.5 ? 1 : -1;
+      var sub = { x: d.cx + kant * d.hw * 0.5, y: d.cy - H * (0.4 + r2 * 0.3) };
+      tri(left, bottom, sub, 0x4e4941); tri(bottom, right, sub, 0x63594c);
+    }
+    tri(left, bottom, apex, 0x5e574d); tri(bottom, right, apex, 0x7d7365);
+    tri(top, left, apex, 0x484238); tri(top, right, apex, 0x665e52);
+    /* Sneeuwkap op de hogere toppen (of elke top in de winter). */
+    if (r1 > 0.45) {
+      var kapY = apex.y + H * 0.28;
+      var sl = { x: apex.x + (left.x - apex.x) * 0.28, y: kapY };
+      var sr = { x: apex.x + (right.x - apex.x) * 0.28, y: kapY };
+      var sb = { x: apex.x + (bottom.x - apex.x) * 0.28, y: apex.y + H * 0.34 };
+      tri(apex, sl, sb, 0xeef4fa); tri(apex, sb, sr, 0xf6fbff);
+    }
+    return c;
+  }
+
+  function maakHert(t, x, y) {
+    var c = new PIXI.Graphics();
+    var d = tegelDiamant(x, y);
+    var ox = d.cx, oy = d.cy + TEGEL * 0.04;
+    grondschaduw(c, ox, oy + TEGEL * 0.02, TEGEL * 0.1, TEGEL * 0.06, 0.16);
+    c.ellipse(ox, oy - TEGEL * 0.12, TEGEL * 0.11, TEGEL * 0.07).fill(0x8a6a44);   /* romp */
+    c.rect(ox + TEGEL * 0.06, oy - TEGEL * 0.2, TEGEL * 0.025, TEGEL * 0.1).fill(0x8a6a44); /* nek */
+    c.circle(ox + TEGEL * 0.09, oy - TEGEL * 0.22, TEGEL * 0.035).fill(0x9a7a52);   /* kop */
+    c.rect(ox + TEGEL * 0.1, oy - TEGEL * 0.28, TEGEL * 0.012, TEGEL * 0.06).fill(0x5a4630); /* gewei */
+    return c;
+  }
+
+  function wisKenmerken() {
+    if (!gebouwLaag) return;
+    var k = gebouwLaag.children.slice();
+    for (var i = 0; i < k.length; i++) if (k[i]._soort === 'kenmerk') { gebouwLaag.removeChild(k[i]); k[i].destroy({ children: true }); }
+  }
+
+  function bouwKenmerken(s) {
+    wisKenmerken();
+    var kaart = s.kaart, T = kaart.tegels, b = kaart.b, h = kaart.h, seizoen = s.seizoen || 0;
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < b; x++) {
+        var t = T[y * b + x]; if (!t) continue;
+        var c = null;
+        if (t.t === 'bos') c = maakBoom(t, x, y, seizoen);
+        else if (t.t === 'rots') c = maakRots(t, x, y);
+        else if (t.t === 'berg') c = maakBerg(t, x, y);
+        else if (t.t === 'gras' && t.n === 'wild' && t.amt > 0) c = maakHert(t, x, y);
+        if (c) { c._soort = 'kenmerk'; c.zIndex = x + y + 1; gebouwLaag.addChild(c); }
+      }
+    }
+  }
+
   /* --------------------------------------------- bouw-spook + raster (fase 4) */
 
   function isoTegel(tx, ty) { return { x: isoX(tx * TEGEL, ty * TEGEL), y: isoY(tx * TEGEL, ty * TEGEL) }; }
@@ -804,6 +933,7 @@
     if (kaartSeed !== s.kaart.seed) wereldDirty = true;
     if (wereldDirty) {
       bouwTerrein(s);
+      bouwKenmerken(s);              /* bomen, rotsen, bergen, herten */
       wisLeven();                    /* nieuwe wereld → begin met leeg leven */
       wereldDirty = false;
       kaartSeed = s.kaart.seed;
