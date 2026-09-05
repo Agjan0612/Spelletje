@@ -62,7 +62,7 @@
   var canvasEl = null;
   var wachtMaat = null;           /* pasMaatAan die vóór app-init binnenkwam */
 
-  var wereld, terreinLaag, gebouwLaag;
+  var wereld, terreinLaag, rasterLaag, gebouwLaag, spookLaag;
 
   var kaartSeed = null;
   var gebouwSig = '';
@@ -82,10 +82,14 @@
     }).then(function () {
       wereld = new PIXI.Container();
       terreinLaag = new PIXI.Graphics();
+      rasterLaag = new PIXI.Graphics();          /* plaatsingsraster, onder de gebouwen */
       gebouwLaag = new PIXI.Container();
-      gebouwLaag.sortableChildren = true;      /* diepte-sortering op zIndex */
+      gebouwLaag.sortableChildren = true;        /* diepte-sortering op zIndex */
+      spookLaag = new PIXI.Container();           /* bouw-spook + selectie, bovenop */
       wereld.addChild(terreinLaag);
+      wereld.addChild(rasterLaag);
       wereld.addChild(gebouwLaag);
+      wereld.addChild(spookLaag);
       app.stage.addChild(wereld);
 
       /* Wij tekenen zelf, gestuurd door de vaste game-lus in main.js, in plaats
@@ -205,26 +209,27 @@
     return 0.94 + (n % 1000) / 1000 * 0.12;   /* 0.94..1.06 */
   }
 
-  function bouwGebouwVolume(g, d) {
+  /* Eén iso-volume (muren + piramidedak + emoji-badge) voor een gebouw-def op
+     tegel (gx,gy). Wordt gedeeld door de echte gebouwlaag en het bouw-spook.
+     opties: { id, ratio (0..1 bij aanbouw), uit, spook, badge }. */
+  function maakVolume(d, gx, gy, opties) {
+    opties = opties || {};
     var G = d.grootte || 1;
-    var gx = g.x, gy = g.y;
     /* Vier grondhoeken van de footprint in iso-ruimte. */
     var top = { x: isoX(gx * TEGEL, gy * TEGEL), y: isoY(gx * TEGEL, gy * TEGEL) };
     var rechts = { x: isoX((gx + G) * TEGEL, gy * TEGEL), y: isoY((gx + G) * TEGEL, gy * TEGEL) };
     var onder = { x: isoX((gx + G) * TEGEL, (gy + G) * TEGEL), y: isoY((gx + G) * TEGEL, (gy + G) * TEGEL) };
     var links = { x: isoX(gx * TEGEL, (gy + G) * TEGEL), y: isoY(gx * TEGEL, (gy + G) * TEGEL) };
 
-    var ratio = 1;
-    if (!g.gebouwd && d.bouwtijd) ratio = Game.util.clamp((g.voortgang || 0) / d.bouwtijd, 0.12, 1);
+    var ratio = opties.ratio == null ? 1 : Game.util.clamp(opties.ratio, 0.12, 1);
     var hoogte = (16 + (G - 1) * 11 + (d.verdediging ? 16 : 0)) * (0.5 + 0.5 * ratio);
 
-    var zf = zaadFactor(g.id);
+    var zf = zaadFactor(opties.id || (gx * 131 + gy));
     var muur = schaal(0xcbb79a, zf);
     var dak = schaal(dakVoor(d), zf);
-    if (!g.gebouwd) { muur = 0xb7a98a; dak = 0xa89873; }   /* steiger-tint */
+    if (ratio < 1) { muur = 0xb7a98a; dak = 0xa89873; }   /* steiger-tint */
 
     var c = new PIXI.Graphics();
-
     function op(p) { return { x: p.x, y: p.y - hoogte }; }
     var tB = op(top), rB = op(rechts), oB = op(onder), lB = op(links);
 
@@ -242,14 +247,15 @@
     c.poly([rB.x, rB.y, tB.x, tB.y, apex.x, apex.y]).fill(schaal(dak, 0.7)); /* achter-rechts */
 
     /* Emoji-badge boven de nok — ver weg het enige dat een dak identificeert. */
-    if (d.emoji) {
+    if (d.emoji && opties.badge !== false) {
       var badge = new PIXI.Text({ text: d.emoji, style: { fontSize: 16 } });
       badge.anchor.set(0.5, 1);
       badge.position.set(apex.x, apex.y - 2);
       c.addChild(badge);
     }
 
-    if (g.uit) c.alpha = 0.55;
+    if (opties.spook) c.alpha = 0.6;
+    else if (opties.uit) c.alpha = 0.55;
     /* Diepte: footprint-midden (x+y), zodat gebouwen elkaar juist overlappen. */
     c.zIndex = (gx + G / 2) + (gy + G / 2);
     return c;
@@ -262,7 +268,94 @@
       var g = s.gebouwen[i];
       var d = Game.config.gebouw(g.type);
       if (!d) continue;
-      gebouwLaag.addChild(bouwGebouwVolume(g, d));
+      var ratio = 1;
+      if (!g.gebouwd && d.bouwtijd) ratio = (g.voortgang || 0) / d.bouwtijd;
+      gebouwLaag.addChild(maakVolume(d, g.x, g.y, { id: g.id, ratio: ratio, uit: g.uit }));
+    }
+  }
+
+  /* --------------------------------------------- bouw-spook + raster (fase 4) */
+
+  function isoTegel(tx, ty) { return { x: isoX(tx * TEGEL, ty * TEGEL), y: isoY(tx * TEGEL, ty * TEGEL) }; }
+
+  /* Footprint-ruit van een gebouw van grootte G op tegel (tx,ty), als vlakke
+     poly-puntenlijst in iso-ruimte. */
+  function voetPoly(tx, ty, G) {
+    var a = isoTegel(tx, ty), b = isoTegel(tx + G, ty), c = isoTegel(tx + G, ty + G), d = isoTegel(tx, ty + G);
+    return [a.x, a.y, b.x, b.y, c.x, c.y, d.x, d.y];
+  }
+
+  /* Het lichte witte plaatsingsraster over de zichtbare tegels. */
+  function tekenRaster(s, cam, ui) {
+    rasterLaag.clear();
+    if (!ui || !ui.plaatsType || cam.px() <= 14) return;
+    var z = cam.zichtbaar(s.kaart), a, b;
+    for (var gx = z.x0; gx <= z.x1; gx++) { a = isoTegel(gx, z.y0); b = isoTegel(gx, z.y1); rasterLaag.moveTo(a.x, a.y).lineTo(b.x, b.y); }
+    for (var gy = z.y0; gy <= z.y1; gy++) { a = isoTegel(z.x0, gy); b = isoTegel(z.x1, gy); rasterLaag.moveTo(a.x, a.y).lineTo(b.x, b.y); }
+    rasterLaag.stroke({ width: 1 / cam.zoom, color: 0xffffff, alpha: 0.10 });
+  }
+
+  /* Een rij die met shift wordt uitgesleept: een footprint per tegel, groen of
+     rood al naar gelang die tegel het gebouw aankan. */
+  function tekenLijnSpook(s, cam, ui) {
+    var l = ui.lijn;
+    var sx = Math.sign(l.x1 - l.x0), sy = Math.sign(l.y1 - l.y0);
+    var n = Math.max(Math.abs(l.x1 - l.x0), Math.abs(l.y1 - l.y0)) + 1;
+    var g = new PIXI.Graphics();
+    for (var i = 0; i < n; i++) {
+      var x = l.x0 + sx * i, y = l.y0 + sy * i;
+      var ch = Game.core.construction.controleer(s, ui.plaatsType, x, y);
+      var ok = ch && ch.ok;
+      g.poly(voetPoly(x, y, 1)).fill({ color: ok ? 0x8fdc6a : 0xe0604a, alpha: ok ? 0.22 : 0.24 })
+        .stroke({ width: 1.5 / cam.zoom, color: ok ? 0x8fdc6a : 0xe0604a, alpha: 1 });
+    }
+    spookLaag.addChild(g);
+  }
+
+  function tekenSpook(s, cam, ui) {
+    var oud = spookLaag.removeChildren();
+    for (var k = 0; k < oud.length; k++) oud[k].destroy({ children: true });
+    if (!ui) return;
+
+    /* Gouden omlijning om het geselecteerde gebouw. */
+    if (ui.geselecteerd != null) {
+      var gsel = Game.core.state.gebouw(s, ui.geselecteerd);
+      if (gsel) {
+        var dd = Game.core.state.def(gsel);
+        var sg = new PIXI.Graphics();
+        sg.poly(voetPoly(gsel.x, gsel.y, dd.grootte || 1))
+          .stroke({ width: 2.5 / cam.zoom, color: 0xffd873, alpha: 0.95 });
+        spookLaag.addChild(sg);
+      }
+    }
+
+    if (!ui.plaatsType || !ui.muisTegel) return;
+    if (ui.lijn) { tekenLijnSpook(s, cam, ui); return; }
+
+    var d = Game.config.gebouw(ui.plaatsType);
+    if (!d) return;
+    var tx = ui.muisTegel.x, ty = ui.muisTegel.y;
+    var bezig = ui.verplaatst != null ? Game.core.state.gebouw(s, ui.verplaatst) : null;
+    var check = bezig
+      ? Game.core.construction.controleerVerplaatsing(s, bezig, tx, ty)
+      : Game.core.construction.controleer(s, ui.plaatsType, tx, ty);
+    var ok = check && check.ok;
+
+    var patch = new PIXI.Graphics();
+    patch.poly(voetPoly(tx, ty, d.grootte || 1))
+      .fill({ color: ok ? 0x8fdc6a : 0xe0604a, alpha: ok ? 0.2 : 0.24 })
+      .stroke({ width: 2 / cam.zoom, color: ok ? 0x8fdc6a : 0xe0604a, alpha: 1 });
+    spookLaag.addChild(patch);
+
+    spookLaag.addChild(maakVolume(d, tx, ty, { spook: true, badge: false, ratio: 1 }));
+
+    /* Straal-hint voor gebouwen die dicht bij een node moeten staan. */
+    if (d.plaats && d.plaats.nabij) {
+      var straal = d.plaats.nabij.straal;
+      var rg = new PIXI.Graphics();
+      rg.poly(voetPoly(tx - straal, ty - straal, (d.grootte || 1) + straal * 2))
+        .stroke({ width: 1.5 / cam.zoom, color: ok ? 0x8fdc6a : 0xe0604a, alpha: 0.5 });
+      spookLaag.addChild(rg);
     }
   }
 
@@ -288,6 +381,11 @@
     wereld.scale.set(z);
     var cx = isoX(cam.x, cam.y), cy = isoY(cam.x, cam.y);
     wereld.position.set(-cx * z + cam.breedte / 2, -cy * z + cam.hoogte / 2);
+
+    /* Bouw-spook, plaatsingsraster en selectie — veranderen met muis/camera,
+       dus elke frame opnieuw (goedkoop; alleen gevuld tijdens plaatsen/selectie). */
+    tekenRaster(s, cam, ui);
+    tekenSpook(s, cam, ui);
 
     app.render();
   };

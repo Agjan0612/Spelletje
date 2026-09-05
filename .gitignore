@@ -3,3 +3,4 @@ scratch/
 dist/
 *.png
 !assets/**/*.png
+_*.mjs
