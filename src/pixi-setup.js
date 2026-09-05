@@ -4,4 +4,10 @@
  * de renderlaag window.PIXI op vóór het gezet is. */
 import * as PIXI from 'pixi.js';
 window.PIXI = PIXI;
+
+/* pixi-filters (o.a. de bloom) apart als global, zodat de IIFE-renderlaag —
+   die window.PIXI gebruikt en geen ESM-import doet — erbij kan. */
+import { AdvancedBloomFilter } from 'pixi-filters';
+window.PIXIFilters = { AdvancedBloomFilter: AdvancedBloomFilter };
+
 export default PIXI;

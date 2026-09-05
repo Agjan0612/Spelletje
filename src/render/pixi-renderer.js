@@ -101,6 +101,12 @@
       overlayLaag = new PIXI.Graphics();          /* kaartlaag-tint, boven grond, onder gebouwen */
       gloedLaag = new PIXI.Graphics();             /* warme avondgloed (additief) */
       gloedLaag.blendMode = 'add';
+      /* Echte bloom op de gloed (pixi-filters), met terugval op de kale gloed. */
+      try {
+        if (window.PIXIFilters && window.PIXIFilters.AdvancedBloomFilter) {
+          gloedLaag.filters = [new window.PIXIFilters.AdvancedBloomFilter({ threshold: 0.05, bloomScale: 1.4, brightness: 1.05, blur: 7, quality: 4 })];
+        }
+      } catch (e) { /* geen bloom → gewoon de additieve gloed */ }
       particleLaag = new PIXI.Graphics();          /* stof/rook, boven de gebouwen */
       floaterLaag = new PIXI.Container();          /* opbrengst-cijfertjes */
       waterAnimLaag = new PIXI.Graphics();         /* rimpels + schittering op het water */
