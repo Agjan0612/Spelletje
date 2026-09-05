@@ -403,6 +403,9 @@
     c.poly([foot.left.x, foot.left.y, foot.bottom.x, foot.bottom.y, top.bottom.x, top.bottom.y, top.left.x, top.left.y]).fill(schaal(muur, 0.72));
     c.poly([foot.bottom.x, foot.bottom.y, foot.right.x, foot.right.y, top.right.x, top.right.y, top.bottom.x, top.bottom.y]).fill(schaal(muur, 0.9));
 
+    /* Gevel: deuren en ramen op de muurvlakken (niet op een open muur). */
+    if (cfg.stijl !== 'geen' && !cfg.wieken && G <= 4 && ratio >= 0.6) gevel(c, foot, top, G, !!opties.nacht);
+
     /* 3. Dak naar type. Overstek: de dakvoet is iets breder dan de muurtop. */
     if (cfg.stijl === 'schuin' || cfg.stijl === 'punt') {
       var over = diamantH(cx, cy - H, hw * smalF * 1.16, hh * smalF * 1.16);
@@ -502,6 +505,42 @@
     var x = top.cx + top.hw * 0.3, y = top.cy - dakH * 0.3;
     c.rect(x - 2, y - 7, 4, 7).fill(0x7a5040);
     c.rect(x - 2.6, y - 8, 5.2, 1.6).fill(0x5f3d30);
+  }
+
+  /* Deuren en ramen op de twee zichtbare muurvlakken. Elk vlak is een
+     parallellogram: u loopt langs de grond, v omhoog langs de muur; een raam is
+     een rechthoekje in die (s,t)-ruimte. 's Nachts gloeien de ramen warm. */
+  function vlakPunt(bl, u, v, s, t) { return { x: bl.x + u.x * s + v.x * t, y: bl.y + u.y * s + v.y * t }; }
+  function raam(c, bl, u, v, s0, t0, w, hgt, nacht) {
+    var p1 = vlakPunt(bl, u, v, s0, t0), p2 = vlakPunt(bl, u, v, s0 + w, t0),
+      p3 = vlakPunt(bl, u, v, s0 + w, t0 + hgt), p4 = vlakPunt(bl, u, v, s0, t0 + hgt);
+    c.poly([p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, p4.x, p4.y]).fill(nacht ? 0xffcf72 : 0x41545c);
+    c.poly([p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, p4.x, p4.y]).stroke({ width: 0.8, color: 0x2a1f14, alpha: 0.55 });
+  }
+  function gevel(c, foot, top, G, nacht) {
+    var faces = [
+      { bl: foot.bottom, br: foot.right, tl: top.bottom, voor: true },   /* rechtervlak (voorkant) */
+      { bl: foot.left, br: foot.bottom, tl: top.left, voor: false }      /* linkervlak */
+    ];
+    var aantal = Game.util.clamp(G, 1, 3);
+    for (var f = 0; f < faces.length; f++) {
+      var F = faces[f];
+      var u = { x: F.br.x - F.bl.x, y: F.br.y - F.bl.y };
+      var v = { x: F.tl.x - F.bl.x, y: F.tl.y - F.bl.y };
+      /* ramen verdeeld over de breedte, halverwege de muur */
+      for (var i = 0; i < aantal; i++) {
+        var s = (i + 0.5) / aantal - 0.075;
+        if (F.voor && aantal === 1) s = 0.66;   /* laat plek voor de deur */
+        raam(c, F.bl, u, v, s, 0.34, 0.15, 0.3, nacht);
+      }
+      if (F.voor) {
+        /* deur onderaan het voorvlak */
+        var p1 = vlakPunt(F.bl, u, v, 0.16, 0), p2 = vlakPunt(F.bl, u, v, 0.16 + 0.15, 0),
+          p3 = vlakPunt(F.bl, u, v, 0.16 + 0.15, 0.42), p4 = vlakPunt(F.bl, u, v, 0.16, 0.42);
+        c.poly([p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, p4.x, p4.y]).fill(0x5a3d26);
+        c.poly([p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, p4.x, p4.y]).stroke({ width: 0.8, color: 0x2a1c10, alpha: 0.5 });
+      }
+    }
   }
 
   function bouwGebouwen(s) {
