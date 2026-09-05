@@ -64,6 +64,7 @@
 
   var wereld, terreinLaag, waterLaag, rasterLaag, gebouwLaag, spookLaag;
   var overlayLaag, particleLaag, floaterLaag, gloedLaag;
+  var waterAnimLaag, wolkenLaag, vogelLaag;
   var schoorstenen = [];              /* iso-rookpunten van gebouwen met een haard */
   var hemelLaag, lichtLaag;
   var dispSprite = null, waterFilter = null, vignetDoek = null;
@@ -101,16 +102,23 @@
       gloedLaag.blendMode = 'add';
       particleLaag = new PIXI.Graphics();          /* stof/rook, boven de gebouwen */
       floaterLaag = new PIXI.Container();          /* opbrengst-cijfertjes */
+      waterAnimLaag = new PIXI.Graphics();         /* rimpels + schittering op het water */
+      wolkenLaag = new PIXI.Graphics();            /* drijvende wolkenschaduwen op het land */
       wereld.addChild(waterLaag);
+      wereld.addChild(waterAnimLaag);
       wereld.addChild(terreinLaag);
       wereld.addChild(rasterLaag);
       wereld.addChild(overlayLaag);
+      wereld.addChild(wolkenLaag);
       wereld.addChild(gebouwLaag);
       wereld.addChild(gloedLaag);
       wereld.addChild(particleLaag);
       wereld.addChild(floaterLaag);
       wereld.addChild(spookLaag);
       app.stage.addChild(wereld);
+
+      vogelLaag = new PIXI.Graphics();             /* vogels, scherm-ruimte */
+      app.stage.addChild(vogelLaag);
 
       lichtLaag = new PIXI.Graphics();            /* dag/nacht-was, bovenop */
       app.stage.addChild(lichtLaag);
@@ -1250,7 +1258,10 @@
     klokVorig = nu; klok += dt;
 
     tekenOverlay(s, cam);
+    tekenWaterLeven(s, cam);
+    tekenWolken(s);
     tekenGloed(s);
+    tekenVogels(cam);
     tekenHemel(s, cam);
     tekenLicht(s, cam);
     if (dispSprite) { dispSprite.x = (klok * 7) % 128; dispSprite.y = (klok * 4) % 128; }
@@ -1275,6 +1286,58 @@
       var ix = isoX(wx, wy), iy = isoY(wx, wy) - TEGEL * 0.2;
       gloedLaag.circle(ix, iy, TEGEL * (0.55 + G * 0.18)).fill({ color: 0xff8a2c, alpha: 0.05 * a });
       gloedLaag.circle(ix, iy, TEGEL * (0.3 + G * 0.1)).fill({ color: 0xffbf6a, alpha: 0.06 * a });
+    }
+  }
+
+  /* Drijvende rimpels en een zonneschittering op de zichtbare watertegels. */
+  function tekenWaterLeven(s, cam) {
+    if (!waterAnimLaag) return;
+    waterAnimLaag.clear();
+    if (cam.px() < 22) return;   /* rimpels alleen als redelijk ingezoomd (performance) */
+    var z = cam.zichtbaar(s.kaart), T = s.kaart.tegels, b = s.kaart.b;
+    var dag = lichtStand(s).dag;
+    for (var y = z.y0; y < z.y1; y++) {
+      for (var x = z.x0; x < z.x1; x++) {
+        var t = T[y * b + x];
+        if (!t || t.t !== 'water') continue;
+        var ix = isoX(x * TEGEL, y * TEGEL), iy = isoY(x * TEGEL, y * TEGEL) + TEGEL / 4;
+        for (var k = 0; k < 2; k++) {
+          var ph = klok * (1 + k * 0.4) + t.v * 9 + k * 2.1;
+          var yy = iy + (((t.v * 3.3 + k) % 1) - 0.5) * TEGEL * 0.3 + Math.sin(ph) * TEGEL * 0.04;
+          var xx = ix + (((t.v * 7.9 + k * 0.4) % 1) - 0.5) * TEGEL * 0.25 + Math.cos(ph) * TEGEL * 0.05;
+          var len = TEGEL * (0.08 + ((t.v * 11 + k) % 1) * 0.06);
+          waterAnimLaag.moveTo(xx - len, yy).lineTo(xx + len, yy).stroke({ width: TEGEL * 0.03, color: 0xe2f4fa, alpha: 0.10 });
+        }
+        if (dag > 0.3) {
+          var gx = ix + Math.sin(klok * 0.7 + t.v * 12) * TEGEL * 0.13;
+          waterAnimLaag.circle(gx, iy - TEGEL * 0.02, TEGEL * 0.03).fill({ color: 0xfff8de, alpha: 0.04 + dag * 0.14 * Math.abs(Math.sin(klok * 3 + t.v * 20)) });
+        }
+      }
+    }
+  }
+
+  /* Zachte wolkenschaduwen die over het land schuiven. */
+  function tekenWolken(s) {
+    if (!wolkenLaag) return;
+    wolkenLaag.clear();
+    var b = s.kaart.b, h = s.kaart.h, spanX = b * TEGEL + 600;
+    for (var i = 0; i < 5; i++) {
+      var cwx = ((klok * 22 + i * 430) % spanX) - 300;
+      var cwy = (0.12 + i * 0.18) * h * TEGEL;
+      wolkenLaag.ellipse(isoX(cwx, cwy), isoY(cwx, cwy), TEGEL * 3.4, TEGEL * 1.6).fill({ color: 0x0a1420, alpha: 0.05 });
+    }
+  }
+
+  /* Een paar vogels die in scherm-ruimte overvliegen, vleugels op en neer. */
+  function tekenVogels(cam) {
+    if (!vogelLaag) return;
+    vogelLaag.clear();
+    var W = cam.breedte;
+    for (var i = 0; i < 4; i++) {
+      var x = ((klok * 45 + i * 360) % (W + 120)) - 60;
+      var y = 60 + i * 26 + Math.sin(klok * 1.2 + i) * 8;
+      var w = 5, dip = Math.sin(klok * 6 + i) * 1.5 + 3;
+      vogelLaag.moveTo(x - w, y).lineTo(x, y + dip).lineTo(x + w, y).stroke({ width: 1.4, color: 0x2a2a2a, alpha: 0.5 });
     }
   }
 
