@@ -1041,8 +1041,17 @@
 
   /* -- figuren -- */
   var WANDELKLEUR = [0x8a5a3c, 0x6b7a9a, 0x9a8a4a, 0x7a4a4a, 0x5a7a5a, 0x8a6a8a];
-  function maakPersoon(kleur) {
+  function maakPersoon(kleur, kar) {
     var c = new PIXI.Graphics();
+    if (kar) {
+      /* Een handkar die achter de figuur aan hobbelt (naar schermlinks = 'achter'). */
+      c.ellipse(-6, 0, 4.2, 1.5).fill({ color: 0x000000, alpha: 0.16 });
+      c.rect(-9.5, -6, 6.5, 4.6).fill(0x8a6a40);
+      c.rect(-9.5, -7.4, 6.5, 1.6).fill(0x6a4a2a);
+      c.circle(-8.2, -0.6, 1.7).fill(0x3a2a18);
+      c.circle(-4.2, -0.6, 1.7).fill(0x3a2a18);
+      c.moveTo(-3, -4.5).lineTo(-1, -5.5).stroke({ width: 1, color: 0x5a4326, alpha: 0.8 });
+    }
     c.ellipse(0, 0, 3, 1.3).fill({ color: 0x000000, alpha: 0.2 });
     c.roundRect(-2, -8, 4, 7, 1.6).fill(kleur);
     c.circle(0, -9.4, 2).fill(0xf1c9a5);
@@ -1090,10 +1099,11 @@
 
   function spawnWandelaar() {
     var p = kies(levenPunten); if (!p) return;
-    var sp = maakPersoon(WANDELKLEUR[(rnd() * WANDELKLEUR.length) | 0]);
+    var kar = rnd() < 0.28;
+    var sp = maakPersoon(WANDELKLEUR[(rnd() * WANDELKLEUR.length) | 0], kar);
     sp._soort = 'wandelaar';
     gebouwLaag.addChild(sp);
-    wandelaars.push({ sprite: sp, wx: p.x, wy: p.y, doel: kies(levenPunten), snel: 13 + rnd() * 10, faze: rnd() * 6 });
+    wandelaars.push({ sprite: sp, wx: p.x, wy: p.y, doel: kies(levenPunten), snel: (kar ? 9 : 13) + rnd() * 9, faze: rnd() * 6, pauze: 0, werkt: true });
   }
   function spawnSchaap() {
     var p = kies(weiPunten); if (!p) return;
@@ -1129,10 +1139,23 @@
   }
 
   function stapFiguur(w, dt) {
+    /* Aangekomen → even blijven staan en 'werken' (snellere bob), dan pas een
+       nieuw doel kiezen. Rovers werken niet: die marcheren door. */
+    if (w.pauze > 0) {
+      w.pauze -= dt;
+      if (w.pauze <= 0) w.doel = kies(levenPunten) || w.doel;
+      w.faze += dt * 9;
+      var wb = Math.abs(Math.sin(w.faze)) * 1.5;
+      w.sprite.position.set(isoX(w.wx, w.wy), isoY(w.wx, w.wy) - wb);
+      w.sprite.zIndex = (w.wx + w.wy) / TEGEL + 0.02;
+      return;
+    }
     var dx = w.doel.x - w.wx, dy = w.doel.y - w.wy;
     var dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < 3) { w.doel = kies(levenPunten) || w.doel; }
-    else { var v = w.snel * dt; if (v > dist) v = dist; w.wx += dx / dist * v; w.wy += dy / dist * v; }
+    if (dist < 3) {
+      if (w.werkt) w.pauze = 0.8 + rnd() * 2.2;
+      else w.doel = kies(levenPunten) || w.doel;
+    } else { var v = w.snel * dt; if (v > dist) v = dist; w.wx += dx / dist * v; w.wy += dy / dist * v; }
     w.faze += dt * 7;
     var bob = Math.abs(Math.sin(w.faze)) * 1.2;
     w.sprite.position.set(isoX(w.wx, w.wy), isoY(w.wx, w.wy) - bob);
