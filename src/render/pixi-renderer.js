@@ -63,6 +63,7 @@
   var wachtMaat = null;           /* pasMaatAan die vóór app-init binnenkwam */
 
   var wereld, terreinLaag, waterLaag, rasterLaag, gebouwLaag, spookLaag;
+  var overlayLaag, particleLaag, floaterLaag;
   var hemelLaag, lichtLaag;
   var dispSprite = null, waterFilter = null, vignetDoek = null;
   var klokVorig = 0, klok = 0;             /* interne render-klok in seconden */
@@ -94,10 +95,16 @@
       gebouwLaag = new PIXI.Container();
       gebouwLaag.sortableChildren = true;        /* diepte-sortering op zIndex */
       spookLaag = new PIXI.Container();           /* bouw-spook + selectie, bovenop */
+      overlayLaag = new PIXI.Graphics();          /* kaartlaag-tint, boven grond, onder gebouwen */
+      particleLaag = new PIXI.Graphics();          /* stof e.d., boven de gebouwen */
+      floaterLaag = new PIXI.Container();          /* opbrengst-cijfertjes */
       wereld.addChild(waterLaag);
       wereld.addChild(terreinLaag);
       wereld.addChild(rasterLaag);
+      wereld.addChild(overlayLaag);
       wereld.addChild(gebouwLaag);
+      wereld.addChild(particleLaag);
+      wereld.addChild(floaterLaag);
       wereld.addChild(spookLaag);
       app.stage.addChild(wereld);
 
@@ -683,6 +690,112 @@
     }
   }
 
+  /* ------------------------------------ overlays, stof, floaters (fase 7) --- */
+
+  /* Zelfde rood → amber → groen ramp als de oude lagen.js, als kleurgetal. */
+  function laagKleur(v) {
+    var r, g;
+    if (v < 0.5) { r = 214; g = Math.round(60 + v * 2 * 130); }
+    else { r = Math.round(214 - (v - 0.5) * 2 * 150); g = 190; }
+    return (r << 16) | (g << 8) | 70;
+  }
+
+  /* De actieve kaartlaag als getinte ruiten. De waarden komen uit de canonieke
+     lagen.js (blijft meelopen), zo kan de kaart nooit van de simulatie afdrijven. */
+  function tekenOverlay(s, cam) {
+    overlayLaag.clear();
+    var lg = Game.render.lagen;
+    if (!lg || !lg.actief) return;
+    if (lg.ververs) lg.ververs(s);
+    var z = cam.zichtbaar(s.kaart), hw = TEGEL / 2, hh = TEGEL / 4;
+    for (var y = z.y0; y < z.y1; y++) {
+      for (var x = z.x0; x < z.x1; x++) {
+        var v = lg.waardeOp ? lg.waardeOp(s, x, y) : -1;
+        if (v < 0) continue;
+        var wx = x * TEGEL, wy = y * TEGEL, sx = isoX(wx, wy), sy = isoY(wx, wy);
+        overlayLaag.poly([sx, sy, sx + hw, sy + hh, sx, sy + hh * 2, sx - hw, sy + hh]).fill({ color: laagKleur(v), alpha: 0.42 });
+      }
+    }
+  }
+
+  /* -- stofdeeltjes. Vervangt Game.render.particles zodat de bestaande stof()-
+     aanroepen uit construction/raids in Pixi landen. Let op: die callers rekenen
+     in tegels*40 (een oude tegelmaat), niet TEGEL — dus delen door 40. -- */
+  var deeltjes = [];
+  var Deeltjes = {
+    reset: function () { deeltjes.length = 0; if (particleLaag) particleLaag.clear(); },
+    stof: function (wx, wy, kracht) {
+      var tx = wx / 40, ty = wy / 40;
+      var ix = isoX(tx * TEGEL, ty * TEGEL), iy = isoY(tx * TEGEL, ty * TEGEL);
+      var n = kracht || 3;
+      for (var i = 0; i < n; i++) {
+        deeltjes.push({ x: ix + (rnd() - 0.5) * 6, y: iy - 3, vx: (rnd() - 0.5) * 22, vy: -10 - rnd() * 16, leven: 0.5 + rnd() * 0.6, t: 0, r: 2 + rnd() * 3 });
+      }
+    },
+    emit: function () {}   /* de oude API had emit(); niet nodig hier */
+  };
+
+  function tickDeeltjes(dt) {
+    if (!particleLaag) return;
+    particleLaag.clear();
+    for (var i = deeltjes.length - 1; i >= 0; i--) {
+      var p = deeltjes[i];
+      p.t += dt;
+      if (p.t >= p.leven) { deeltjes.splice(i, 1); continue; }
+      p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 30 * dt;
+      var a = 1 - p.t / p.leven;
+      particleLaag.circle(p.x, p.y, p.r * (1 + p.t * 2)).fill({ color: 0xb0966e, alpha: a * 0.5 });
+    }
+  }
+
+  /* -- floaters: opbrengst-emoji's die boven werkende gebouwen opstijgen en
+     vervagen. Mirrort niets uit economy.js exact; het is een levensteken, geen
+     boekhouding. -- */
+  var floaters = [];
+  var floaterTimer = 0;
+
+  function opbrengstEmoji(d) {
+    var res = null;
+    if (d.wint && d.wint.res) res = d.wint.res;
+    else if (d.maakt && d.maakt.uit) { for (var k in d.maakt.uit) { res = k; break; } }
+    if (!res) return null;
+    var rc = Game.config.resources[res];
+    return rc ? rc.emoji : null;
+  }
+
+  function spawnFloater(s) {
+    var kandidaten = [];
+    for (var i = 0; i < s.gebouwen.length; i++) {
+      var g = s.gebouwen[i];
+      if (!g.gebouwd || (g.werkers || 0) <= 0) continue;
+      var d = Game.config.gebouw(g.type); if (!d) continue;
+      if (opbrengstEmoji(d)) kandidaten.push(g);
+    }
+    if (!kandidaten.length) return;
+    var g2 = kandidaten[(rnd() * kandidaten.length) | 0];
+    var d2 = Game.config.gebouw(g2.type);
+    var G = d2.grootte || 1;
+    var wx = (g2.x + G / 2) * TEGEL, wy = (g2.y + G / 2) * TEGEL;
+    var t = new PIXI.Text({ text: opbrengstEmoji(d2), style: { fontSize: 13 } });
+    t.anchor.set(0.5, 1);
+    t.position.set(isoX(wx, wy), isoY(wx, wy) - 24);
+    floaterLaag.addChild(t);
+    floaters.push({ sprite: t, x0: t.x, y0: t.y, t: 0, leven: 1.6 });
+  }
+
+  function tickFloaters(s, dt) {
+    floaterTimer -= dt;
+    if (floaterTimer <= 0) { spawnFloater(s); floaterTimer = 0.7 + rnd() * 0.8; }
+    for (var i = floaters.length - 1; i >= 0; i--) {
+      var f = floaters[i];
+      f.t += dt;
+      if (f.t >= f.leven) { f.sprite.destroy(); floaters.splice(i, 1); continue; }
+      var p = f.t / f.leven;
+      f.sprite.y = f.y0 - p * 22;
+      f.sprite.alpha = p < 0.15 ? p / 0.15 : (1 - (p - 0.15) / 0.85);
+    }
+  }
+
   /* --------------------------------------------------------------- tekenen - */
 
   R.teken = function (s, cam, ui) {
@@ -717,6 +830,7 @@
     var dt = Math.min(0.05, (nu - klokVorig) / 1000);
     klokVorig = nu; klok += dt;
 
+    tekenOverlay(s, cam);
     tekenHemel(s, cam);
     tekenLicht(s, cam);
     if (dispSprite) { dispSprite.x = (klok * 7) % 128; dispSprite.y = (klok * 4) % 128; }
@@ -743,13 +857,14 @@
   R.verversWandelaars = function (s) { verversLeven(s); };
   R.tickWandelaars = function (s, dt) { tickLeven(s, dt); };
   R.wandelaars = function () { return wandelaars; };
+  R.tickEffecten = function (s, dt) { if (!klaar) return; tickDeeltjes(dt); tickFloaters(s, dt); };
 
   /* --------------------------------------------- nog te porten (no-ops) ---- */
-  R.tickEffecten = function () {};
   R.tijdperkSweep = function () {};
   R.schok = function () {};
   R.flits = function () {};
 
   Game.render.renderer = R;
+  Game.render.particles = Deeltjes;   /* stof() uit construction/raids landt nu hier */
 
 })(window.Game);
