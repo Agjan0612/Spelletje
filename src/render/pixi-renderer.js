@@ -282,15 +282,51 @@
   }
 
   function bouwGebouwen(s) {
-    var oud = gebouwLaag.removeChildren();
-    for (var k = 0; k < oud.length; k++) oud[k].destroy({ children: true });
+    /* Alleen gebouwen en hun props opnieuw; wandelaars, dieren en rovers leven
+       verder in dezelfde laag en blijven staan (ze worden apart bijgehouden). */
+    var kinderen = gebouwLaag.children.slice();
+    for (var k = 0; k < kinderen.length; k++) {
+      var c = kinderen[k];
+      if (c._soort === 'gebouw' || c._soort === 'prop') { gebouwLaag.removeChild(c); c.destroy({ children: true }); }
+    }
     for (var i = 0; i < s.gebouwen.length; i++) {
       var g = s.gebouwen[i];
       var d = Game.config.gebouw(g.type);
       if (!d) continue;
       var ratio = 1;
       if (!g.gebouwd && d.bouwtijd) ratio = (g.voortgang || 0) / d.bouwtijd;
-      gebouwLaag.addChild(maakVolume(d, g.x, g.y, { id: g.id, ratio: ratio, uit: g.uit }));
+      var vol = maakVolume(d, g.x, g.y, { id: g.id, ratio: ratio, uit: g.uit });
+      vol._soort = 'gebouw';
+      gebouwLaag.addChild(vol);
+      if (g.gebouwd) maakProps(g, d);
+    }
+  }
+
+  /* Wat erfrommel rond een afgebouwd gebouw: vaten en kratten bij opslag/markt,
+     een houtstapel bij de houthakker, een struik bij een huis. Statisch, dus
+     samen met de gebouwen opnieuw opgebouwd. Afgeleid van de buildings, nooit
+     in Game.state (net als de oude props.js). */
+  function maakProps(g, d) {
+    var G = d.grootte || 1;
+    var mx = (g.x + G / 2) * TEGEL, my = (g.y + G / 2) * TEGEL;
+    var rnd = zaadFactor(g.id * 7 + 3);
+    function plaats(gfx, ox, oy) {
+      var wx = mx + ox, wy = my + oy;
+      gfx.position.set(isoX(wx, wy), isoY(wx, wy));
+      gfx._soort = 'prop';
+      gfx.zIndex = (g.x + G / 2 + ox / TEGEL) + (g.y + G / 2 + oy / TEGEL) - 0.05;
+      gebouwLaag.addChild(gfx);
+    }
+    var rand = G * TEGEL * 0.42;
+    if (d.opslag || d.opslagPer || /markt/.test(d.id)) {
+      plaats(maakVat(), -rand, rand * 0.4);
+      plaats(maakVat(), -rand * 0.6, rand * 0.7);
+    } else if (/hout/.test(d.id)) {
+      plaats(maakHoutstapel(), rand * 0.6, rand * 0.5);
+    } else if (d.woonruimte && rnd > 0.99) {
+      plaats(maakStruik(), rand * 0.7, rand * 0.3);
+    } else if (d.woonruimte) {
+      plaats(maakStruik(), -rand * 0.7, rand * 0.5);
     }
   }
 
@@ -488,6 +524,165 @@
     } catch (e) { dispSprite = null; waterFilter = null; }
   }
 
+  /* -------------------------------------------------- leven (fase 6) -------- */
+
+  /* Decoratieve willekeur mag NOOIT Math.random gebruiken: de simulatie trekt
+     daar zelf uit (raids/gebeurtenissen/geboortes), dus dat zou de
+     determinisme breken. Game.render.rng (mulberry32, uit beweging.js) is de
+     render-only stroom; met een eigen mulberry als terugval. */
+  var _rs = 0x9e3779b9 >>> 0;
+  function rlokaal() {
+    _rs = (_rs + 0x6D2B79F5) | 0;
+    var t = Math.imul(_rs ^ _rs >>> 15, 1 | _rs);
+    t = (t + Math.imul(t ^ t >>> 7, 61 | t)) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  }
+  function rnd() { return (Game.render && Game.render.rng) ? Game.render.rng() : rlokaal(); }
+  function kies(arr) { return arr.length ? arr[(rnd() * arr.length) | 0] : null; }
+
+  /* -- prop-vormpjes (klein, in iso-ruimte, voeten op y=0) -- */
+  function maakVat() {
+    var c = new PIXI.Graphics();
+    c.ellipse(0, 0, 2.6, 1.2).fill({ color: 0x000000, alpha: 0.16 });
+    c.roundRect(-2.2, -5, 4.4, 5, 1).fill(0x7a5a34);
+    c.rect(-2.2, -3.4, 4.4, 0.8).fill(0x5c4326);
+    return c;
+  }
+  function maakHoutstapel() {
+    var c = new PIXI.Graphics();
+    c.ellipse(0, 0, 4, 1.6).fill({ color: 0x000000, alpha: 0.16 });
+    c.roundRect(-4, -2.4, 8, 2.4, 1).fill(0x8a6a40);
+    c.roundRect(-3, -4.4, 6, 2.2, 1).fill(0x9a774a);
+    return c;
+  }
+  function maakStruik() {
+    var c = new PIXI.Graphics();
+    c.ellipse(0, 0, 3, 1.3).fill({ color: 0x000000, alpha: 0.14 });
+    c.circle(-1.4, -3, 2.4).fill(0x4f7a38);
+    c.circle(1.4, -3, 2.4).fill(0x568238);
+    c.circle(0, -5, 2.6).fill(0x5f8c40);
+    return c;
+  }
+
+  /* -- figuren -- */
+  var WANDELKLEUR = [0x8a5a3c, 0x6b7a9a, 0x9a8a4a, 0x7a4a4a, 0x5a7a5a, 0x8a6a8a];
+  function maakPersoon(kleur) {
+    var c = new PIXI.Graphics();
+    c.ellipse(0, 0, 3, 1.3).fill({ color: 0x000000, alpha: 0.2 });
+    c.roundRect(-2, -8, 4, 7, 1.6).fill(kleur);
+    c.circle(0, -9.4, 2).fill(0xf1c9a5);
+    return c;
+  }
+  function maakSchaap() {
+    var c = new PIXI.Graphics();
+    c.ellipse(0, 0, 3.2, 1.4).fill({ color: 0x000000, alpha: 0.16 });
+    c.ellipse(0, -3, 3.4, 2.4).fill(0xf0ece2);
+    c.circle(2.6, -3.6, 1.5).fill(0x4a4038);
+    return c;
+  }
+  function maakRover() {
+    var c = new PIXI.Graphics();
+    c.ellipse(0, 0, 3, 1.3).fill({ color: 0x000000, alpha: 0.24 });
+    c.roundRect(-2.2, -8.5, 4.4, 7.5, 1.4).fill(0x3a2f33);
+    c.circle(0, -10, 2).fill(0xcf9f86);
+    c.rect(2, -11, 1, 8).fill(0x9a9aa0);       /* speer */
+    return c;
+  }
+
+  /* -- toestand van de levende laag (render-only, nooit in Game.state) -- */
+  var wandelaars = [], dieren = [], rovers = [];
+  var levenPunten = [], weiPunten = [];
+
+  function wisLeven() {
+    [wandelaars, dieren, rovers].forEach(function (lijst) {
+      for (var i = 0; i < lijst.length; i++) if (lijst[i].sprite) lijst[i].sprite.destroy({ children: true });
+      lijst.length = 0;
+    });
+  }
+
+  function verzamelPunten(s) {
+    levenPunten = []; weiPunten = [];
+    for (var i = 0; i < s.gebouwen.length; i++) {
+      var g = s.gebouwen[i];
+      if (!g.gebouwd) continue;
+      var d = Game.config.gebouw(g.type); if (!d) continue;
+      var G = d.grootte || 1;
+      var cx = (g.x + G / 2) * TEGEL, cy = (g.y + G / 2) * TEGEL;
+      levenPunten.push({ x: cx, y: cy });
+      if (/schaap/.test(d.id) || d.id === 'boerderij') weiPunten.push({ x: cx, y: cy, r: G * TEGEL * 0.9 });
+    }
+  }
+
+  function spawnWandelaar() {
+    var p = kies(levenPunten); if (!p) return;
+    var sp = maakPersoon(WANDELKLEUR[(rnd() * WANDELKLEUR.length) | 0]);
+    sp._soort = 'wandelaar';
+    gebouwLaag.addChild(sp);
+    wandelaars.push({ sprite: sp, wx: p.x, wy: p.y, doel: kies(levenPunten), snel: 13 + rnd() * 10, faze: rnd() * 6 });
+  }
+  function spawnSchaap() {
+    var p = kies(weiPunten); if (!p) return;
+    var sp = maakSchaap();
+    sp._soort = 'dier';
+    gebouwLaag.addChild(sp);
+    dieren.push({ sprite: sp, thuis: p, wx: p.x + (rnd() - 0.5) * p.r, wy: p.y + (rnd() - 0.5) * p.r, doel: null, snel: 5 + rnd() * 4, faze: rnd() * 6, wacht: rnd() * 3 });
+  }
+
+  function verversRovers(s) {
+    var actief = s.raid && s.raid.fase && s.raid.fase !== 'klaar' && s.raid.fase !== 'voorbij';
+    if (!actief) { while (rovers.length) { var r = rovers.pop(); r.sprite.destroy(); } return; }
+    var doelN = 5;
+    var mid = s.start ? { x: (s.start.x + 0.5) * TEGEL, y: (s.start.y + 0.5) * TEGEL } : { x: s.kaart.b * TEGEL / 2, y: s.kaart.h * TEGEL / 2 };
+    while (rovers.length < doelN) {
+      var hoek = rnd() * Math.PI * 2, straal = (s.kaart.b + s.kaart.h) * TEGEL * 0.4;
+      var sp = maakRover(); sp._soort = 'rover'; gebouwLaag.addChild(sp);
+      rovers.push({ sprite: sp, wx: mid.x + Math.cos(hoek) * straal, wy: mid.y + Math.sin(hoek) * straal, doel: mid, snel: 16 + rnd() * 6, faze: rnd() * 6 });
+    }
+    while (rovers.length > doelN) { var rr = rovers.pop(); rr.sprite.destroy(); }
+  }
+
+  function verversLeven(s) {
+    if (!klaar) return;
+    verzamelPunten(s);
+    var doelW = levenPunten.length ? Game.util.clamp(Math.round((s.bevolking.totaal || 0) * 0.5), 2, 45) : 0;
+    while (wandelaars.length < doelW) spawnWandelaar();
+    while (wandelaars.length > doelW) { var w = wandelaars.pop(); w.sprite.destroy(); }
+    var doelD = Game.util.clamp(weiPunten.length * 3, 0, 24);
+    while (dieren.length < doelD && weiPunten.length) spawnSchaap();
+    while (dieren.length > doelD) { var a = dieren.pop(); a.sprite.destroy(); }
+    verversRovers(s);
+  }
+
+  function stapFiguur(w, dt) {
+    var dx = w.doel.x - w.wx, dy = w.doel.y - w.wy;
+    var dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 3) { w.doel = kies(levenPunten) || w.doel; }
+    else { var v = w.snel * dt; if (v > dist) v = dist; w.wx += dx / dist * v; w.wy += dy / dist * v; }
+    w.faze += dt * 7;
+    var bob = Math.abs(Math.sin(w.faze)) * 1.2;
+    w.sprite.position.set(isoX(w.wx, w.wy), isoY(w.wx, w.wy) - bob);
+    w.sprite.zIndex = (w.wx + w.wy) / TEGEL + 0.02;
+  }
+
+  function tickLeven(s, dt) {
+    if (!klaar || dt <= 0) return;
+    var i;
+    for (i = 0; i < wandelaars.length; i++) stapFiguur(wandelaars[i], dt);
+    for (i = 0; i < rovers.length; i++) stapFiguur(rovers[i], dt);
+    for (i = 0; i < dieren.length; i++) {
+      var a = dieren[i];
+      a.wacht -= dt;
+      if (!a.doel || a.wacht <= 0) {
+        a.doel = { x: a.thuis.x + (rnd() - 0.5) * a.thuis.r, y: a.thuis.y + (rnd() - 0.5) * a.thuis.r };
+        a.wacht = 2 + rnd() * 4;
+      }
+      var dx = a.doel.x - a.wx, dy = a.doel.y - a.wy, dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > 2) { var v = a.snel * dt; if (v > dist) v = dist; a.wx += dx / dist * v; a.wy += dy / dist * v; }
+      a.sprite.position.set(isoX(a.wx, a.wy), isoY(a.wx, a.wy));
+      a.sprite.zIndex = (a.wx + a.wy) / TEGEL + 0.01;
+    }
+  }
+
   /* --------------------------------------------------------------- tekenen - */
 
   R.teken = function (s, cam, ui) {
@@ -496,12 +691,13 @@
     if (kaartSeed !== s.kaart.seed) wereldDirty = true;
     if (wereldDirty) {
       bouwTerrein(s);
+      wisLeven();                    /* nieuwe wereld → begin met leeg leven */
       wereldDirty = false;
       kaartSeed = s.kaart.seed;
       gebouwSig = '';                /* nieuw terrein → gebouwen ook opnieuw */
     }
     var sig = gebouwHandtekening(s);
-    if (sig !== gebouwSig) { bouwGebouwen(s); gebouwSig = sig; }
+    if (sig !== gebouwSig) { bouwGebouwen(s); verversLeven(s); gebouwSig = sig; }
 
     /* Camera → container-transform. Zie camera.wereldNaarScherm: een kind op
        iso-coördinaat (isoX,isoY) landt na deze scale+translate exact waar de
@@ -544,14 +740,15 @@
     return tekst;
   };
 
+  R.verversWandelaars = function (s) { verversLeven(s); };
+  R.tickWandelaars = function (s, dt) { tickLeven(s, dt); };
+  R.wandelaars = function () { return wandelaars; };
+
   /* --------------------------------------------- nog te porten (no-ops) ---- */
-  R.verversWandelaars = function () {};
-  R.tickWandelaars = function () {};
   R.tickEffecten = function () {};
   R.tijdperkSweep = function () {};
   R.schok = function () {};
   R.flits = function () {};
-  R.wandelaars = function () { return []; };
 
   Game.render.renderer = R;
 
