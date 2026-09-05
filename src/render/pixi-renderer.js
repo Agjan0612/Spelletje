@@ -159,25 +159,58 @@
     return t ? (t.h || 0) : terug;
   }
 
+  /* Afstand van elke watertegel tot het dichtstbijzijnde land (flood fill vanaf
+     de kust), zodat ondiep water turquoise wordt en open water donker. Land = 0.
+     Eén keer per kaart-seed. */
+  var diepteCache = { seed: null, arr: null };
+  function berekenDiepte(kaart) {
+    if (diepteCache.seed === kaart.seed && diepteCache.arr && diepteCache.arr.length === kaart.tegels.length) return diepteCache.arr;
+    var b = kaart.b, h = kaart.h, T = kaart.tegels, N = b * h;
+    var d = new Int16Array(N), rij = [];
+    var i, x, y;
+    for (i = 0; i < N; i++) {
+      if (T[i].t !== 'water') { d[i] = 0; continue; }
+      x = i % b; y = (i / b) | 0;
+      var kust = false;
+      if (x > 0 && T[i - 1].t !== 'water') kust = true;
+      else if (x < b - 1 && T[i + 1].t !== 'water') kust = true;
+      else if (y > 0 && T[i - b].t !== 'water') kust = true;
+      else if (y < h - 1 && T[i + b].t !== 'water') kust = true;
+      if (kust) { d[i] = 1; rij.push(i); }
+    }
+    for (var q = 0; q < rij.length; q++) {
+      i = rij[q]; x = i % b; y = (i / b) | 0;
+      var buren = [x > 0 ? i - 1 : -1, x < b - 1 ? i + 1 : -1, y > 0 ? i - b : -1, y < h - 1 ? i + b : -1];
+      for (var k = 0; k < 4; k++) {
+        var j = buren[k];
+        if (j >= 0 && T[j].t === 'water' && d[j] === 0) { d[j] = d[i] + 1; rij.push(j); }
+      }
+    }
+    diepteCache = { seed: kaart.seed, arr: d };
+    return d;
+  }
+
+  /* Welke twee ruit-hoeken een tegel deelt met elke 4-buur. */
+  var BUUR = [[-1, 0, 'top', 'left'], [0, -1, 'top', 'right'], [1, 0, 'right', 'bottom'], [0, 1, 'left', 'bottom']];
+
   function bouwTerrein(s) {
     var kaart = s.kaart, T = kaart.tegels, b = kaart.b, h = kaart.h;
     var seizoen = s.seizoen || 0;
     var hw = TEGEL / 2, hh = TEGEL / 4;
     var g = terreinLaag;
+    var diepte = berekenDiepte(kaart);
     g.clear();
     waterLaag.clear();
     for (var ty = 0; ty < h; ty++) {
       for (var tx = 0; tx < b; tx++) {
-        var t = T[ty * b + tx];
+        var idx = ty * b + tx;
+        var t = T[idx];
         if (!t) continue;
         var rij = TERREIN[t.t] || TERREIN.gras;
         var kleur = hexNum(rij[seizoen] || rij[0]);
         var isWater = t.t === 'water';
         var doel = isWater ? waterLaag : g;
         if (!isWater) {
-          /* Hillshade als in de oude sprites.js: hoogteverschil met de buren
-             linksboven, alsof het licht van linksboven komt. Plus de per-tegel
-             detailschakering uit t.v, zodat een grasveld niet één vlakke kleur is. */
           var hc = t.h || 0;
           var ul = tegelHoogte(T, b, h, tx - 1, ty - 1, hc);
           var u = tegelHoogte(T, b, h, tx, ty - 1, hc);
@@ -186,16 +219,42 @@
           var relief = Game.util.clamp(1 + dh * 2.4, 0.8, 1.22);
           kleur = schaal(kleur, relief * (0.9 + (t.v || 0) * 0.2));
         } else {
-          /* Subtiele deining zodat een watervlak niet één platte kleur is. */
-          kleur = schaal(kleur, ((tx + ty) & 1) ? 1.04 : 0.96);
+          /* Ondiep (turquoise) → diep (donkerblauw) naar afstand tot de kust. */
+          var tf = Game.util.clamp((diepte[idx] - 1) / 6, 0, 1);
+          kleur = mengNum(0x79c6c0, kleur, tf);
+          kleur = schaal(kleur, ((tx + ty) & 1) ? 1.03 : 0.97);
         }
         var wx = tx * TEGEL, wy = ty * TEGEL;
         var sx = isoX(wx, wy), sy = isoY(wx, wy);
-        doel.poly([sx, sy, sx + hw, sy + hh, sx, sy + hh * 2, sx - hw, sy + hh]).fill(kleur);
+        var hoek = {
+          top: { x: sx, y: sy }, right: { x: sx + hw, y: sy + hh },
+          bottom: { x: sx, y: sy + hh * 2 }, left: { x: sx - hw, y: sy + hh }
+        };
+        doel.poly([hoek.top.x, hoek.top.y, hoek.right.x, hoek.right.y, hoek.bottom.x, hoek.bottom.y, hoek.left.x, hoek.left.y]).fill(kleur);
 
-        /* Straten en bruggen zijn tegelvlaggen, geen gebouwen — teken ze als
-           een smaller ruitje boven op de grond (altijd op de landlaag, ook een
-           brug boven water). */
+        /* Kust: op watertegels schuim langs de land-randen, op landtegels een
+           zandrand langs de water-randen — samen een strand in plaats van een
+           harde ruit-grens. */
+        for (var e = 0; e < 4; e++) {
+          var nx = tx + BUUR[e][0], ny = ty + BUUR[e][1];
+          if (nx < 0 || ny < 0 || nx >= b || ny >= h) continue;
+          var buur = T[ny * b + nx];
+          if (!buur) continue;
+          var buurWater = buur.t === 'water';
+          if (isWater === buurWater) continue;
+          var a = hoek[BUUR[e][2]], c2 = hoek[BUUR[e][3]];
+          if (isWater) {
+            waterLaag.moveTo(a.x, a.y).lineTo(c2.x, c2.y).stroke({ width: hw * 0.16, color: 0xd7efe9, alpha: 0.55 });
+          } else {
+            /* Zandstrook: van de water-rand 35% naar het tegelmidden. */
+            var mcx = sx, mcy = sy + hh;
+            var ai = { x: a.x + (mcx - a.x) * 0.35, y: a.y + (mcy - a.y) * 0.35 };
+            var ci = { x: c2.x + (mcx - c2.x) * 0.35, y: c2.y + (mcy - c2.y) * 0.35 };
+            g.poly([a.x, a.y, c2.x, c2.y, ci.x, ci.y, ai.x, ai.y]).fill({ color: 0xd8c48a, alpha: 0.55 });
+          }
+        }
+
+        /* Straten en bruggen: een smaller ruitje boven op de grond. */
         if (t.weg) {
           var q = 0.82, qw = hw * q, qh = hh * q;
           g.poly([sx, sy + hh - qh, sx + qw, sy + hh, sx, sy + hh + qh, sx - qw, sy + hh])
