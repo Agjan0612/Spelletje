@@ -63,7 +63,8 @@
   var wachtMaat = null;           /* pasMaatAan die vóór app-init binnenkwam */
 
   var wereld, terreinLaag, waterLaag, rasterLaag, gebouwLaag, spookLaag;
-  var overlayLaag, particleLaag, floaterLaag;
+  var overlayLaag, particleLaag, floaterLaag, gloedLaag;
+  var schoorstenen = [];              /* iso-rookpunten van gebouwen met een haard */
   var hemelLaag, lichtLaag;
   var dispSprite = null, waterFilter = null, vignetDoek = null;
   var klokVorig = 0, klok = 0;             /* interne render-klok in seconden */
@@ -96,13 +97,16 @@
       gebouwLaag.sortableChildren = true;        /* diepte-sortering op zIndex */
       spookLaag = new PIXI.Container();           /* bouw-spook + selectie, bovenop */
       overlayLaag = new PIXI.Graphics();          /* kaartlaag-tint, boven grond, onder gebouwen */
-      particleLaag = new PIXI.Graphics();          /* stof e.d., boven de gebouwen */
+      gloedLaag = new PIXI.Graphics();             /* warme avondgloed (additief) */
+      gloedLaag.blendMode = 'add';
+      particleLaag = new PIXI.Graphics();          /* stof/rook, boven de gebouwen */
       floaterLaag = new PIXI.Container();          /* opbrengst-cijfertjes */
       wereld.addChild(waterLaag);
       wereld.addChild(terreinLaag);
       wereld.addChild(rasterLaag);
       wereld.addChild(overlayLaag);
       wereld.addChild(gebouwLaag);
+      wereld.addChild(gloedLaag);
       wereld.addChild(particleLaag);
       wereld.addChild(floaterLaag);
       wereld.addChild(spookLaag);
@@ -270,7 +274,10 @@
      verplaatst of afgebouwd raakt. Honderden gebouwen (straten zitten er niet
      bij), dus dit per frame samenstellen is goedkoop. */
   function gebouwHandtekening(s) {
-    var uit = s.gebouwen.length + '|' + (s.wegTeller || 0) + '|';
+    /* Ook de nacht-emmer en het seizoen: bij dag↔nacht gaan de raampjes aan,
+       en de winter zet sneeuw op de daken — dus dan opnieuw opbouwen. */
+    var nachtBucket = lichtStand(s).nacht > 0.5 ? 1 : 0;
+    var uit = s.gebouwen.length + '|' + (s.wegTeller || 0) + '|n' + nachtBucket + '|s' + (s.seizoen || 0) + '|';
     for (var i = 0; i < s.gebouwen.length; i++) {
       var g = s.gebouwen[i];
       uit += g.id + ',' + g.type + ',' + g.x + ',' + g.y + ',' +
@@ -441,7 +448,7 @@
     if (cfg.kruis) kruisTop(c, cx, apexY);
     if (cfg.vlag) vlagTop(c, cx, (cfg.stijl === 'plat' || cfg.stijl === 'geen') ? cy - H : apexY);
     if (cfg.wieken) wieken(c, cx, cy - H * 0.7, TEGEL, opties.tijd || 0);
-    if (cfg.schoorsteen && cfg.stijl !== 'geen') schoorsteen(c, top, dakH);
+    if (cfg.schoorsteen && cfg.stijl !== 'geen') c._rookpunt = schoorsteen(c, top, dakH);
 
     /* 6. Emoji-badge boven de nok. */
     if (d.emoji && opties.badge !== false && !cfg.wieken) {
@@ -505,6 +512,7 @@
     var x = top.cx + top.hw * 0.3, y = top.cy - dakH * 0.3;
     c.rect(x - 2, y - 7, 4, 7).fill(0x7a5040);
     c.rect(x - 2.6, y - 8, 5.2, 1.6).fill(0x5f3d30);
+    return { x: x, y: y - 8 };   /* rookpunt boven de schoorsteen */
   }
 
   /* Deuren en ramen op de twee zichtbare muurvlakken. Elk vlak is een
@@ -551,15 +559,19 @@
       var c = kinderen[k];
       if (c._soort === 'gebouw' || c._soort === 'prop') { gebouwLaag.removeChild(c); c.destroy({ children: true }); }
     }
+    var nacht = lichtStand(s).nacht > 0.5;
+    var seizoen = s.seizoen || 0;
+    schoorstenen = [];
     for (var i = 0; i < s.gebouwen.length; i++) {
       var g = s.gebouwen[i];
       var d = Game.config.gebouw(g.type);
       if (!d) continue;
       var ratio = 1;
       if (!g.gebouwd && d.bouwtijd) ratio = (g.voortgang || 0) / d.bouwtijd;
-      var vol = maakVolume(d, g.x, g.y, { id: g.id, ratio: ratio, uit: g.uit });
+      var vol = maakVolume(d, g.x, g.y, { id: g.id, ratio: ratio, uit: g.uit, nacht: nacht, seizoen: seizoen });
       vol._soort = 'gebouw';
       gebouwLaag.addChild(vol);
+      if (vol._rookpunt && g.gebouwd && !g.uit) schoorstenen.push(vol._rookpunt);
       if (g.gebouwd) maakProps(g, d);
     }
   }
@@ -1106,6 +1118,7 @@
      aanroepen uit construction/raids in Pixi landen. Let op: die callers rekenen
      in tegels*40 (een oude tegelmaat), niet TEGEL — dus delen door 40. -- */
   var deeltjes = [];
+  var rookTimer = 0;
   var Deeltjes = {
     reset: function () { deeltjes.length = 0; if (particleLaag) particleLaag.clear(); },
     stof: function (wx, wy, kracht) {
@@ -1113,11 +1126,23 @@
       var ix = isoX(tx * TEGEL, ty * TEGEL), iy = isoY(tx * TEGEL, ty * TEGEL);
       var n = kracht || 3;
       for (var i = 0; i < n; i++) {
-        deeltjes.push({ x: ix + (rnd() - 0.5) * 6, y: iy - 3, vx: (rnd() - 0.5) * 22, vy: -10 - rnd() * 16, leven: 0.5 + rnd() * 0.6, t: 0, r: 2 + rnd() * 3 });
+        deeltjes.push({ x: ix + (rnd() - 0.5) * 6, y: iy - 3, vx: (rnd() - 0.5) * 22, vy: -10 - rnd() * 16, leven: 0.5 + rnd() * 0.6, t: 0, r: 2 + rnd() * 3, kleur: 0xb0966e, zwaarte: 30, alpha0: 0.5, groei: 2 });
       }
     },
-    emit: function () {}   /* de oude API had emit(); niet nodig hier */
+    emit: function () {}
   };
+
+  /* Rook uit de schoorstenen: stijgt langzaam, dijt uit, vervaagt, met wat wind. */
+  function tickRook(dt) {
+    if (!schoorstenen.length) return;
+    rookTimer -= dt;
+    if (rookTimer > 0) return;
+    rookTimer = 0.35;
+    for (var i = 0; i < schoorstenen.length; i++) {
+      var r = schoorstenen[i];
+      deeltjes.push({ x: r.x + (rnd() - 0.5) * 2, y: r.y, vx: 4 + rnd() * 4, vy: -7 - rnd() * 5, leven: 1.8 + rnd() * 1.2, t: 0, r: 1.6 + rnd() * 1.4, kleur: 0xc4c2bd, zwaarte: -3, alpha0: 0.3, groei: 3 });
+    }
+  }
 
   function tickDeeltjes(dt) {
     if (!particleLaag) return;
@@ -1126,9 +1151,9 @@
       var p = deeltjes[i];
       p.t += dt;
       if (p.t >= p.leven) { deeltjes.splice(i, 1); continue; }
-      p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 30 * dt;
+      p.x += p.vx * dt; p.y += p.vy * dt; p.vy += (p.zwaarte || 30) * dt;
       var a = 1 - p.t / p.leven;
-      particleLaag.circle(p.x, p.y, p.r * (1 + p.t * 2)).fill({ color: 0xb0966e, alpha: a * 0.5 });
+      particleLaag.circle(p.x, p.y, p.r * (1 + p.t * (p.groei || 2))).fill({ color: p.kleur || 0xb0966e, alpha: a * (p.alpha0 || 0.5) });
     }
   }
 
@@ -1216,12 +1241,33 @@
     klokVorig = nu; klok += dt;
 
     tekenOverlay(s, cam);
+    tekenGloed(s);
     tekenHemel(s, cam);
     tekenLicht(s, cam);
     if (dispSprite) { dispSprite.x = (klok * 7) % 128; dispSprite.y = (klok * 4) % 128; }
 
     app.render();
   };
+
+  /* Warme avondgloed rond de gebouwen (additief), sterker naarmate het donkerder
+     wordt — samen met de verlichte ramen leest een stad 's nachts als bewoond. */
+  function tekenGloed(s) {
+    if (!gloedLaag) return;
+    gloedLaag.clear();
+    var nachtN = lichtStand(s).nacht;
+    if (nachtN < 0.28) return;
+    var a = (nachtN - 0.28) / 0.72;
+    for (var i = 0; i < s.gebouwen.length; i++) {
+      var g = s.gebouwen[i];
+      if (!g.gebouwd || g.uit) continue;
+      var d = Game.config.gebouw(g.type); if (!d) continue;
+      var G = d.grootte || 1;
+      var wx = (g.x + G / 2) * TEGEL, wy = (g.y + G / 2) * TEGEL;
+      var ix = isoX(wx, wy), iy = isoY(wx, wy) - TEGEL * 0.2;
+      gloedLaag.circle(ix, iy, TEGEL * (0.55 + G * 0.18)).fill({ color: 0xff8a2c, alpha: 0.05 * a });
+      gloedLaag.circle(ix, iy, TEGEL * (0.3 + G * 0.1)).fill({ color: 0xffbf6a, alpha: 0.06 * a });
+    }
+  }
 
   /* Zelfde tekst als de oude renderer, voor de toast bij een klik op een node. */
   R.tegelInfo = function (s, tx, ty) {
@@ -1242,7 +1288,7 @@
   R.verversWandelaars = function (s) { verversLeven(s); };
   R.tickWandelaars = function (s, dt) { tickLeven(s, dt); };
   R.wandelaars = function () { return wandelaars; };
-  R.tickEffecten = function (s, dt) { if (!klaar) return; tickDeeltjes(dt); tickFloaters(s, dt); };
+  R.tickEffecten = function (s, dt) { if (!klaar) return; tickRook(dt); tickDeeltjes(dt); tickFloaters(s, dt); };
 
   /* --------------------------------------------- nog te porten (no-ops) ---- */
   R.tijdperkSweep = function () {};
