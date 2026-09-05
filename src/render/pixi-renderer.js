@@ -67,8 +67,9 @@
   var waterAnimLaag, wolkenLaag, vogelLaag, weerLaag;
   var schoorstenen = [];              /* iso-rookpunten van gebouwen met een haard */
   var weer = { fase: 'droog', t: 12, intens: 0, natheid: 0 };   /* render-only weerstaat */
-  var hemelLaag, lichtLaag;
-  var dispSprite = null, waterFilter = null, vignetDoek = null;
+  var waaiBomen = [], waaiVlaggen = [], windFase = 0;   /* wind-animatie: boomkruinen + vlaggendoek */
+  var hemelLaag, lichtLaag, diepteLaag;
+  var dispSprite = null, waterFilter = null, vignetDoek = null, kleurGrade = null;
   var klokVorig = 0, klok = 0;             /* interne render-klok in seconden */
   var hemelSig = '';                        /* alleen lucht opnieuw tekenen bij verandering */
 
@@ -124,6 +125,8 @@
       wereld.addChild(spookLaag);
       app.stage.addChild(wereld);
 
+      diepteLaag = new PIXI.Graphics();            /* atmosferische diepte-waas, scherm-ruimte */
+      app.stage.addChild(diepteLaag);
       vogelLaag = new PIXI.Graphics();             /* vogels, scherm-ruimte */
       app.stage.addChild(vogelLaag);
       weerLaag = new PIXI.Graphics();              /* regen + mist, scherm-ruimte */
@@ -135,6 +138,7 @@
       if (vignetDoek) app.stage.addChild(vignetDoek);
 
       stelWaterFilterIn();
+      stelKleurGradeIn();
 
       /* Wij tekenen zelf, gestuurd door de vaste game-lus in main.js, in plaats
          van op Pixi's eigen ticker — zo weerspiegelt het beeld altijd de state
@@ -165,6 +169,8 @@
   R.verversWereld = function (s) {
     wereldDirty = true;
     kaartSeed = null;              /* forceer herbouw van het terrein */
+    /* Nieuwe/geladen stad: geen bouw-plof voor gebouwen die er al staan. */
+    afgebouwd = {}; eersteGebouwBouw = true; plofjes.length = 0;
   };
 
   R.verversGebouwen = function (s) {
@@ -252,6 +258,16 @@
           bottom: { x: sx, y: sy + hh * 2 }, left: { x: sx - hw, y: sy + hh }
         };
         doel.poly([hoek.top.x, hoek.top.y, hoek.right.x, hoek.right.y, hoek.bottom.x, hoek.bottom.y, hoek.left.x, hoek.left.y]).fill(kleur);
+
+        /* Grondtextuur: twee minuscule spikkels (één donkerder, één lichter) per
+           landtegel, op een vaste plek uit t.v. Breekt de vlakke fill zonder
+           assets; het zit in de statische terreinlaag, dus kost niets per frame. */
+        if (!isWater) {
+          var cxp = sx, cyp = sy + hh;
+          var f1 = (t.v * 17.3) % 1, f2 = (t.v * 29.7) % 1, f3 = (t.v * 43.1) % 1, f4 = (t.v * 7.9) % 1;
+          g.circle(cxp + (f1 - 0.5) * hw * 0.9, cyp + (f2 - 0.5) * hh * 1.1, Math.max(0.6, hw * 0.07)).fill({ color: schaal(kleur, 0.85), alpha: 0.5 });
+          g.circle(cxp + (f3 - 0.5) * hw * 0.9, cyp + (f4 - 0.5) * hh * 1.1, Math.max(0.5, hw * 0.055)).fill({ color: schaal(kleur, 1.15), alpha: 0.4 });
+        }
 
         /* Kust: op watertegels schuim langs de land-randen, op landtegels een
            zandrand langs de water-randen — samen een strand in plaats van een
@@ -573,8 +589,15 @@
     c.rect(cx - 3.2, apexY - 6.5, 6.4, 1.8).fill(0xf0e6c8);
   }
   function vlagTop(c, cx, y) {
-    c.rect(cx - 0.7, y - 13, 1.4, 13).fill(0x6a5030);
-    c.poly([cx + 0.7, y - 13, cx + 9, y - 10.5, cx + 0.7, y - 8]).fill(0xc0392b);
+    c.rect(cx - 0.7, y - 13, 1.4, 13).fill(0x6a5030);      /* mast — blijft staan */
+    /* Het doek als eigen Graphics rond de mast-top (0,0), zodat een skew het als
+       een wapperende vlag laat golven. Op de volume gezet zodat bouwGebouwen het
+       kan verzamelen voor de wind-animatie. */
+    var vlag = new PIXI.Graphics();
+    vlag.poly([0, 0, 8.3, 2.5, 0, 5]).fill(0xc0392b);
+    vlag.position.set(cx + 0.7, y - 13);
+    c.addChild(vlag);
+    c._vlag = vlag;
   }
   function wieken(c, cx, cy, p, tijd) {
     var hub = { x: cx, y: cy };
@@ -640,6 +663,10 @@
     var nacht = lichtStand(s).nacht > 0.5;
     var seizoen = s.seizoen || 0;
     schoorstenen = [];
+    effectpunten = [];
+    spiegels = [];
+    waaiVlaggen.length = 0;
+    var nieuwAf = [];
     for (var i = 0; i < s.gebouwen.length; i++) {
       var g = s.gebouwen[i];
       var d = Game.config.gebouw(g.type);
@@ -650,7 +677,42 @@
       vol._soort = 'gebouw';
       gebouwLaag.addChild(vol);
       if (vol._rookpunt && g.gebouwd && !g.uit) schoorstenen.push(vol._rookpunt);
+      if (vol._vlag) waaiVlaggen.push({ sprite: vol._vlag, snel: 1.3 + zaadFactor(g.id) * 0.6, faze: (g.id * 1.7) % 6.283, amp: 0.13 });
+      if (g.gebouwd && !g.uit) { noteerEffectpunt(g, d); noteerSpiegeling(s, g, d); }
       if (g.gebouwd) maakProps(g, d);
+      /* Nieuw afgebouwd sinds de vorige opbouw? → een korte "plof" + stofwolk. */
+      if (g.gebouwd && !afgebouwd[g.id]) { if (!eersteGebouwBouw) nieuwAf.push({ vol: vol, g: g, d: d }); afgebouwd[g.id] = true; }
+    }
+    eersteGebouwBouw = false;
+    for (var j = 0; j < nieuwAf.length; j++) vierAfbouw(nieuwAf[j].vol, nieuwAf[j].g, nieuwAf[j].d);
+  }
+
+  /* Bouw-juice: een net afgebouwd gebouw zet zich met een korte squash-en-settle
+     en een stofwolk aan de voet. Puur render — het gebouw zelf is al klaar in de
+     simulatie; dit is alleen de viering. */
+  var afgebouwd = {}, eersteGebouwBouw = true, plofjes = [];
+  function vierAfbouw(vol, g, d) {
+    var G = d.grootte || 1;
+    /* De volume-Graphics tekent op absolute iso-coördinaten (origin op wereld
+       0,0). Zet pivot én positie op het footprint-midden zodat ze elkaar opheffen
+       (geen visuele sprong) maar de schaal wél om het gebouw draait. */
+    var mx = (g.x + G / 2) * TEGEL, my = (g.y + G / 2) * TEGEL;
+    var cx = isoX(mx, my), cy = isoY(mx, my);
+    vol.pivot.set(cx, cy); vol.position.set(cx, cy);
+    vol._plof = { t: 0, duur: 0.45 };
+    plofjes.push(vol);
+    Deeltjes.stof((g.x + G / 2) * 40, (g.y + G / 2) * 40, 6 + G * 2);   /* stof() rekent in tegels*40 */
+  }
+  function tickPlofjes(dt) {
+    for (var i = plofjes.length - 1; i >= 0; i--) {
+      var v = plofjes[i];
+      if (!v._plof || v.destroyed) { plofjes.splice(i, 1); continue; }
+      var p = v._plof; p.t += dt;
+      var f = p.t / p.duur;
+      if (f >= 1) { v.scale.set(1, 1); v._plof = null; plofjes.splice(i, 1); continue; }
+      /* Overshoot: dip in y, terug via een gedempte sinus. */
+      var e = Math.sin(f * Math.PI * 2.2) * (1 - f) * 0.16;
+      v.scale.set(1 - e * 0.6, 1 + e);
     }
   }
 
@@ -721,15 +783,29 @@
   }
 
   function maakBoom(t, x, y, seizoen) {
-    var c = new PIXI.Graphics();
+    var c = new PIXI.Container();
+    var schaduwG = new PIXI.Graphics();   /* alle grondschaduwen samen, blijven liggen */
+    c.addChild(schaduwG);
     var d = tegelDiamant(x, y);
     var deel = t.max > 0 ? Game.util.clamp(t.amt / t.max, 0, 1) : 0.7;
     var aantal = Math.max(1, Math.round(1 + deel * 2));
     for (var i = 0; i < aantal; i++) {
       var ox = d.cx + TEGEL * (((i * 37 + t.v * 100) % 46) / 100 - 0.23);
       var oy = d.cy + TEGEL * (((i * 61 + t.v * 70) % 20) / 100 - 0.06);
-      grondschaduw(c, ox, oy + TEGEL * 0.03, TEGEL * 0.11, TEGEL * (0.34 + deel * 0.16), 0.2);
-      boomVorm(c, ox, oy, deel, seizoen, t.v + i);
+      /* De grondschaduw blijft liggen; alleen de kruin wiegt. */
+      grondschaduw(schaduwG, ox, oy + TEGEL * 0.03, TEGEL * 0.11, TEGEL * (0.34 + deel * 0.16), 0.2);
+      /* Elke boom als eigen Graphics, getekend rond zijn voet (0,0) en op de
+         tegel gezet, zodat een kleine rotatie om de voet als wind-wieg leest. */
+      var tg = new PIXI.Graphics();
+      boomVorm(tg, 0, 0, deel, seizoen, t.v + i);
+      tg.position.set(ox, oy);
+      c.addChild(tg);
+      waaiBomen.push({
+        sprite: tg,
+        snel: 0.7 + ((t.v * 3.1 + i) % 1) * 0.6,
+        faze: ((t.v * 6.7 + i * 2.3) % 1) * 6.283,
+        amp: 0.02 + deel * 0.03
+      });
     }
     return c;
   }
@@ -791,6 +867,7 @@
 
   function wisKenmerken() {
     if (!gebouwLaag) return;
+    waaiBomen.length = 0;          /* de boomkruinen worden zo opnieuw opgebouwd */
     var k = gebouwLaag.children.slice();
     for (var i = 0; i < k.length; i++) if (k[i]._soort === 'kenmerk') { gebouwLaag.removeChild(k[i]); k[i].destroy({ children: true }); }
   }
@@ -1003,6 +1080,37 @@
       waterFilter = new PIXI.DisplacementFilter({ sprite: dispSprite, scale: 9 });
       waterLaag.filters = [waterFilter];
     } catch (e) { dispSprite = null; waterFilter = null; }
+  }
+
+  /* Eén globale kleurgradatie over de hele scène — de "film-look" die alle losse
+     paletten (terrein, gebouwen, lucht) tot één beeld bindt. Scherm-groot (op de
+     stage), dus goedkoop: één extra volledige pass, geen wereld-grote render.
+     De grade beweegt zacht mee met de dagfase — overdag iets warmer en voller,
+     's nachts koeler en ingetogener. Bewust subtiel: het moet lezen als kleur-
+     correctie, niet als een filter. Terugval: geen ColorMatrixFilter → niets. */
+  function stelKleurGradeIn() {
+    try {
+      if (!PIXI.ColorMatrixFilter) return;
+      kleurGrade = new PIXI.ColorMatrixFilter();
+      app.stage.filters = [kleurGrade];
+    } catch (e) { kleurGrade = null; }
+  }
+
+  function werkKleurGradeBij(s) {
+    if (!kleurGrade) return;
+    var L = lichtStand(s);
+    var warm = Math.max(L.avond, L.ochtend);        /* 0..1 rond schemer/dageraad */
+    kleurGrade.reset();
+    /* Overdag lichte extra verzadiging; 's nachts juist ontzadigen. */
+    kleurGrade.saturate(0.10 * L.dag - 0.14 * L.nacht, true);
+    /* Iets meer contrast overdag, vlakker in het donker. */
+    kleurGrade.contrast(0.06 * L.dag - 0.05 * L.nacht, true);
+    /* Warme goud-tint bij schemer, koele blauw-tint diep in de nacht. */
+    if (warm > 0.01) {
+      kleurGrade.tint(mengNum(0xffffff, 0xffb066, warm * 0.5), true);
+    } else if (L.nacht > 0.3) {
+      kleurGrade.tint(mengNum(0xffffff, 0x9fb4e0, (L.nacht - 0.3) * 0.4), true);
+    }
   }
 
   /* -------------------------------------------------- leven (fase 6) -------- */
@@ -1245,6 +1353,53 @@
     }
   }
 
+  /* Werkeffecten: elk werkend gebouw van een bepaald slag krijgt een emitter —
+     vonken bij de smid, damp bij brouwerij/bakkerij/keuken, een plons bij het
+     viswerk. Afgeleid van de gebouwen in bouwGebouwen (nooit in Game.state); hier
+     spuwt elk punt op zijn eigen klok wat deeltjes in dezelfde stroom als de rook. */
+  var effectpunten = [], spiegels = [];
+  /* Staat dit gebouw met een watertegel pal ten zuiden van zijn footprint? Dan
+     een spiegelpunt op die tegel, met de dakkleur voor de weerschijn overdag. */
+  function noteerSpiegeling(s, g, d) {
+    var G = d.grootte || 1, b = s.kaart.b, h = s.kaart.h, T = s.kaart.tegels;
+    var tx = Math.floor(g.x + G / 2), ty = g.y + G;
+    if (tx < 0 || ty < 0 || tx >= b || ty >= h) return;
+    var onder = T[ty * b + tx];
+    if (!onder || onder.t !== 'water') return;
+    var wx = (tx + 0.5) * TEGEL, wy = (ty + 0.5) * TEGEL;
+    spiegels.push({ x: isoX(wx, wy), y: isoY(wx, wy) + TEGEL / 4 - TEGEL * 0.1, kleur: dakVoor(d) });
+  }
+  function noteerEffectpunt(g, d) {
+    var id = d.id || '';
+    var soort = null;
+    if (/smid|smederij|wapen/.test(id)) soort = 'vonk';
+    else if (/brouw|bakk|keuken|kombuis|oven/.test(id)) soort = 'stoom';
+    else if (/vis|haven/.test(id)) soort = 'plons';
+    if (!soort) return;
+    var G = d.grootte || 1;
+    var wx = (g.x + G / 2) * TEGEL, wy = (g.y + G / 2) * TEGEL;
+    effectpunten.push({ x: isoX(wx, wy), y: isoY(wx, wy) + TEGEL * 0.06, soort: soort, timer: rnd() * 0.6 });
+  }
+  function tickWerkeffect(dt) {
+    for (var i = 0; i < effectpunten.length; i++) {
+      var e = effectpunten[i];
+      e.timer -= dt;
+      if (e.timer > 0) continue;
+      if (e.soort === 'vonk') {
+        e.timer = 0.5 + rnd() * 0.9;
+        for (var k = 0; k < 3; k++) {
+          deeltjes.push({ x: e.x + (rnd() - 0.5) * 4, y: e.y - TEGEL * 0.12, vx: (rnd() - 0.5) * 34, vy: -18 - rnd() * 22, leven: 0.28 + rnd() * 0.3, t: 0, r: 0.8 + rnd() * 1.1, kleur: rnd() < 0.5 ? 0xffd257 : 0xff9a3c, zwaarte: 140, alpha0: 0.95, groei: 0 });
+        }
+      } else if (e.soort === 'stoom') {
+        e.timer = 0.55 + rnd() * 0.5;
+        deeltjes.push({ x: e.x + (rnd() - 0.5) * 3, y: e.y - TEGEL * 0.1, vx: 2 + rnd() * 3, vy: -8 - rnd() * 4, leven: 1.3 + rnd() * 0.9, t: 0, r: 1.4 + rnd() * 1.2, kleur: 0xe6ebee, zwaarte: -4, alpha0: 0.2, groei: 3 });
+      } else {   /* plons */
+        e.timer = 1.4 + rnd() * 2.2;
+        deeltjes.push({ x: e.x + (rnd() - 0.5) * 6, y: e.y + TEGEL * 0.08, vx: 0, vy: 0, leven: 0.5, t: 0, r: 1.6, kleur: 0xbfe3ea, zwaarte: 0, alpha0: 0.4, groei: 6 });
+      }
+    }
+  }
+
   function tickDeeltjes(dt) {
     if (!particleLaag) return;
     particleLaag.clear();
@@ -1345,10 +1500,13 @@
     tekenWaterLeven(s, cam);
     tekenWolken(s);
     tekenGloed(s);
+    zwaaiWind(s, dt);              /* bomen en vlaggen wiegen in de wind */
+    tekenDiepte(s, cam);          /* verre tegels vervagen in een blauwe waas */
     tekenVogels(cam);
     tekenWeer(s, cam);
     tekenHemel(s, cam);
     tekenLicht(s, cam);
+    werkKleurGradeBij(s);         /* globale kleurgradatie, volgt de dagfase */
     if (dispSprite) { dispSprite.x = (klok * 7) % 128; dispSprite.y = (klok * 4) % 128; }
 
     app.render();
@@ -1397,7 +1555,79 @@
           var gx = ix + Math.sin(klok * 0.7 + t.v * 12) * TEGEL * 0.13;
           waterAnimLaag.circle(gx, iy - TEGEL * 0.02, TEGEL * 0.03).fill({ color: 0xfff8de, alpha: 0.04 + dag * 0.14 * Math.abs(Math.sin(klok * 3 + t.v * 20)) });
         }
+        /* Levende branding: langs elke kust-rand een schuimlijn die pulseert, zodat
+           de statische zandrand uit bouwTerrein niet doods aanvoelt. */
+        var hw2 = TEGEL / 2, hh2 = TEGEL / 4, cy2 = iy;
+        var hk = { top: { x: ix, y: cy2 - hh2 }, right: { x: ix + hw2, y: cy2 }, bottom: { x: ix, y: cy2 + hh2 }, left: { x: ix - hw2, y: cy2 } };
+        for (var e = 0; e < 4; e++) {
+          var nx = x + BUUR[e][0], ny = y + BUUR[e][1];
+          if (nx < 0 || ny < 0 || nx >= b || ny >= s.kaart.h) continue;
+          var buur = T[ny * b + nx];
+          if (!buur || buur.t === 'water') continue;
+          var puls = 0.06 + 0.10 * (0.5 + 0.5 * Math.sin(klok * 2.1 + t.v * 8 + e));
+          var a2 = hk[BUUR[e][2]], c2 = hk[BUUR[e][3]];
+          waterAnimLaag.moveTo(a2.x, a2.y).lineTo(c2.x, c2.y).stroke({ width: TEGEL * 0.09, color: 0xeaf7f2, alpha: puls });
+        }
       }
+    }
+    tekenSpiegeling(s);
+  }
+
+  /* Spiegeling: gebouwen aan de waterkant werpen een zachte, wiebelende weerschijn
+     op het water eronder — overdag hun dakkleur, 's nachts een warme lichtgloed
+     (samen met de verlichte ramen). De punten komen uit bouwGebouwen, dus alleen
+     de handvol gebouwen die écht aan het water staan. */
+  function tekenSpiegeling(s) {
+    if (!spiegels.length) return;
+    var L = lichtStand(s), nacht = L.nacht;
+    for (var i = 0; i < spiegels.length; i++) {
+      var sp = spiegels[i];
+      var kl = nacht > 0.3 ? 0xffb066 : sp.kleur;
+      var a = nacht > 0.3 ? 0.10 + nacht * 0.18 : 0.10 * L.dag;
+      if (a < 0.02) continue;
+      var wob = Math.sin(klok * 1.5 + sp.x * 0.04);
+      for (var k = 0; k < 4; k++) {
+        var f = k / 4;
+        var yy = sp.y + f * TEGEL * 0.42;
+        waterAnimLaag.ellipse(sp.x + wob * TEGEL * 0.06 * (f + 0.3), yy, TEGEL * (0.2 - f * 0.03), TEGEL * 0.05).fill({ color: kl, alpha: a * (1 - f) });
+      }
+    }
+  }
+
+  /* Atmosferische diepte: een zachte blauwe waas die naar de bovenrand van het
+     iso-scherm sterker wordt, zodat verre tegels terugwijken. Scherm-ruimte, één
+     verticaal verloop in een handvol banden. Zwakker 's nachts (de nacht-was doet
+     daar al het werk) en zwakker tijdens regen (dan overheerst de grauwe bui). */
+  function tekenDiepte(s, cam) {
+    if (!diepteLaag) return;
+    diepteLaag.clear();
+    var L = lichtStand(s);
+    var top = 0.16 * L.dag * (1 - weer.intens * 0.7);
+    if (top < 0.01) return;
+    var kleur = mengNum(0x9fc0d8, 0xd8e6ef, L.ochtend * 0.6);   /* dageraad wat lichter */
+    var W = cam.breedte, Hh = cam.hoogte, N = 10, band = (Hh * 0.55) / N;
+    for (var i = 0; i < N; i++) {
+      var f = 1 - i / N;                 /* 1 bovenaan → 0 op ~55% hoogte */
+      diepteLaag.rect(0, i * band, W, band + 1).fill({ color: kleur, alpha: top * f * f });
+    }
+  }
+
+  /* Wind: boomkruinen wiegen om hun voet, vlaggendoek golft via een skew. Eén
+     trage vlaag-oscillator plus de regenintensiteit bepalen de kracht, zodat het
+     hele beeld samen ademt in plaats van elk ding op zijn eigen ritme. */
+  function zwaaiWind(s, dt) {
+    windFase += dt * (0.9 + weer.intens * 1.4);
+    var vlaag = 0.6 + 0.4 * Math.sin(windFase * 0.28) + weer.intens * 1.0;
+    var i, w;
+    for (i = 0; i < waaiBomen.length; i++) {
+      w = waaiBomen[i];
+      if (w.sprite.destroyed) continue;
+      w.sprite.rotation = Math.sin(windFase * w.snel + w.faze) * w.amp * vlaag;
+    }
+    for (i = 0; i < waaiVlaggen.length; i++) {
+      w = waaiVlaggen[i];
+      if (w.sprite.destroyed) continue;
+      w.sprite.skew.x = Math.sin(windFase * w.snel + w.faze) * w.amp * (0.7 + vlaag * 0.5);
     }
   }
 
@@ -1483,7 +1713,7 @@
   R.verversWandelaars = function (s) { verversLeven(s); };
   R.tickWandelaars = function (s, dt) { tickLeven(s, dt); };
   R.wandelaars = function () { return wandelaars; };
-  R.tickEffecten = function (s, dt) { if (!klaar) return; tickWeer(dt); tickRook(dt); tickDeeltjes(dt); tickFloaters(s, dt); };
+  R.tickEffecten = function (s, dt) { if (!klaar) return; tickWeer(dt); tickRook(dt); tickWerkeffect(dt); tickPlofjes(dt); tickDeeltjes(dt); tickFloaters(s, dt); };
   R.__weer = weer;   /* debug-handle om het weer te forceren (tests/console) */
 
   /* --------------------------------------------- nog te porten (no-ops) ---- */

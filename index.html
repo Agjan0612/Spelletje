@@ -7,6 +7,12 @@
 <!-- Favicon als inline SVG: geen extra bestand en dus ook geen mislukte
      request naar favicon.ico, waar de browser anders altijd om vraagt. -->
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏰</text></svg>">
+<!-- Titelfont (Cinzel): geeft koppen een eigen, uitgehouwen letter. Laadt via
+     Google Fonts; valt bij offline of blokkade netjes terug op de serif-stack
+     hieronder, dus het spel blijft zonder de font gewoon werken. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&display=swap">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
