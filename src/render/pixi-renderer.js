@@ -245,16 +245,25 @@
           var buur = T[ny * b + nx];
           if (!buur) continue;
           var buurWater = buur.t === 'water';
-          if (isWater === buurWater) continue;
           var a = hoek[BUUR[e][2]], c2 = hoek[BUUR[e][3]];
-          if (isWater) {
-            waterLaag.moveTo(a.x, a.y).lineTo(c2.x, c2.y).stroke({ width: hw * 0.16, color: 0xd7efe9, alpha: 0.55 });
-          } else {
-            /* Zandstrook: van de water-rand 35% naar het tegelmidden. */
-            var mcx = sx, mcy = sy + hh;
-            var ai = { x: a.x + (mcx - a.x) * 0.35, y: a.y + (mcy - a.y) * 0.35 };
-            var ci = { x: c2.x + (mcx - c2.x) * 0.35, y: c2.y + (mcy - c2.y) * 0.35 };
-            g.poly([a.x, a.y, c2.x, c2.y, ci.x, ci.y, ai.x, ai.y]).fill({ color: 0xd8c48a, alpha: 0.55 });
+          var mcx = sx, mcy = sy + hh;
+          if (isWater !== buurWater) {
+            /* Kust: schuim aan de waterkant, zandstrand aan de landkant. */
+            if (isWater) {
+              waterLaag.moveTo(a.x, a.y).lineTo(c2.x, c2.y).stroke({ width: hw * 0.16, color: 0xd7efe9, alpha: 0.55 });
+            } else {
+              var ai = { x: a.x + (mcx - a.x) * 0.35, y: a.y + (mcy - a.y) * 0.35 };
+              var ci = { x: c2.x + (mcx - c2.x) * 0.35, y: c2.y + (mcy - c2.y) * 0.35 };
+              g.poly([a.x, a.y, c2.x, c2.y, ci.x, ci.y, ai.x, ai.y]).fill({ color: 0xd8c48a, alpha: 0.55 });
+            }
+          } else if (!isWater && buur.t !== t.t) {
+            /* Zachte overgang: de buurkleur bloedt een stukje deze tegel in, zodat
+               gras/bos/akker/rots niet met een harde ruit-grens tegen elkaar staan. */
+            var brij = TERREIN[buur.t] || TERREIN.gras;
+            var bk = schaal(hexNum(brij[seizoen] || brij[0]), 0.98);
+            var bi = { x: a.x + (mcx - a.x) * 0.4, y: a.y + (mcy - a.y) * 0.4 };
+            var bj = { x: c2.x + (mcx - c2.x) * 0.4, y: c2.y + (mcy - c2.y) * 0.4 };
+            g.poly([a.x, a.y, c2.x, c2.y, bj.x, bj.y, bi.x, bi.y]).fill({ color: bk, alpha: 0.4 });
           }
         }
 
