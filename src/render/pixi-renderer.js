@@ -367,6 +367,13 @@
     juwelier: { muurH: 0.56, stijl: 'schuin', dakH: 0.5, muur: '#d3c39c', dak: '#6a5240' }
   };
   var SCHOORSTEEN = { huisje: 1, vakwerkhuis: 1, herenhuis: 1, boerderij: 1, herberg: 1, bakkerij: 1, brouwerij: 1, smederij: 1, wapensmid: 1 };
+  /* Dakmateriaal per gebouw: riet voor hutten/schuren/boerderijen, lei voor
+     kerken/vestingwerk/hallen, pan (dakpannen) voor de rest. */
+  var LEIDAK = { kapel: 1, kerk: 1, kathedraal: 1, wachttoren: 1, poort: 1, kasteel: 1, stadhuis: 1, universiteit: 1, gildehuis: 1 };
+  var RIETDAK = { huisje: 1, boerderij: 1, herberg: 1, voorraadschuur: 1, graanschuur: 1, pakhuis: 1, schaapskooi: 1, houthakkershut: 1, jachthut: 1, vissershut: 1, steengroeve: 1, kopermijn: 1, ijzermijn: 1, edelsteenmijn: 1 };
+  /* Huizen met een half-timber gevel (vakwerk). */
+  var VAKWERK = { vakwerkhuis: 1, herenhuis: 1, herberg: 1 };
+  function dakstijlVoor(id) { return LEIDAK[id] ? 'lei' : (RIETDAK[id] ? 'riet' : 'pan'); }
 
   function isoCfg(d) {
     var b = ISO[d.id] || ISO_D;
@@ -377,6 +384,8 @@
       muur: hexNum(b.muur || ISO_D.muur),
       dak: hexNum(b.dak || ISO_D.dak),
       smal: b.smal || 0,
+      dakstijl: dakstijlVoor(d.id),
+      vakwerk: !!VAKWERK[d.id],
       vlag: b.vlag, kruis: b.kruis, kantelen: b.kantelen, torens: b.torens,
       wieken: b.wieken, luifel: b.luifel, uithang: b.uithang,
       schoorsteen: b.schoorsteen || SCHOORSTEEN[d.id]
@@ -429,6 +438,8 @@
 
     /* Gevel: deuren en ramen op de muurvlakken (niet op een open muur). */
     if (cfg.stijl !== 'geen' && !cfg.wieken && G <= 4 && ratio >= 0.6) gevel(c, foot, top, G, !!opties.nacht);
+    /* Vakwerk: donker houtskelet over de pleistermuren van de betere huizen. */
+    if (cfg.vakwerk && ratio >= 0.8) vakwerk(c, foot, top);
 
     /* 3. Dak naar type. Overstek: de dakvoet is iets breder dan de muurtop. */
     if (cfg.stijl === 'schuin' || cfg.stijl === 'punt') {
@@ -438,6 +449,11 @@
       c.poly([over.bottom.x, over.bottom.y, over.right.x, over.right.y, apex.x, apex.y]).fill(schaal(dak, 0.88));
       c.poly([over.top.x, over.top.y, over.left.x, over.left.y, apex.x, apex.y]).fill(schaal(dak, 0.76));
       c.poly([over.right.x, over.right.y, over.top.x, over.top.y, apex.x, apex.y]).fill(schaal(dak, 0.68));
+      /* Dakmateriaal-textuur op de twee voordak-vlakken (onder de sneeuw). */
+      if (ratio >= 0.8) {
+        dakTextuur(c, over.left, over.bottom, apex, cfg.dakstijl, dak);
+        dakTextuur(c, over.bottom, over.right, apex, cfg.dakstijl, dak);
+      }
       if ((opties.seizoen | 0) === 3) {   /* sneeuwkap */
         var sd = 0.46, sa = { x: apex.x, y: apex.y };
         var sl = lerpP(sa, over.left, sd), sr = lerpP(sa, over.right, sd), sb = lerpP(sa, over.bottom, sd);
@@ -483,6 +499,42 @@
   }
 
   function lerpP(a, b, t) { return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }; }
+
+  /* Dakmateriaal-textuur: lijnen evenwijdig aan de dakvoet op een dakvlak.
+     riet = weinig, warme banden; pan = dakpanrijen; lei = fijne donkere lijnen. */
+  function dakTextuur(c, a, b, apex, stijl, dak) {
+    var n = stijl === 'riet' ? 3 : (stijl === 'lei' ? 6 : 5);
+    var kl = schaal(dak, stijl === 'riet' ? 0.82 : (stijl === 'lei' ? 0.72 : 1.06));
+    var w = stijl === 'riet' ? 1.4 : 0.7;
+    for (var i = 1; i < n; i++) {
+      var t = i / n;
+      var p1 = lerpP(a, apex, t), p2 = lerpP(b, apex, t);
+      c.moveTo(p1.x, p1.y).lineTo(p2.x, p2.y).stroke({ width: w, color: kl, alpha: 0.4 });
+    }
+  }
+
+  /* Vakwerk: een donker houtskelet over de pleistermuren (balken, posten en een
+     schoorstut in het bovenvak). */
+  function timberLijn(c, bl, u, v, s0, t0, s1, t1) {
+    var p = vlakPunt(bl, u, v, s0, t0), q = vlakPunt(bl, u, v, s1, t1);
+    c.moveTo(p.x, p.y).lineTo(q.x, q.y).stroke({ width: 1.4, color: 0x40301f, alpha: 0.82 });
+  }
+  function vakwerk(c, foot, top) {
+    var faces = [
+      { bl: foot.bottom, br: foot.right, tl: top.bottom },
+      { bl: foot.left, br: foot.bottom, tl: top.left }
+    ];
+    for (var f = 0; f < faces.length; f++) {
+      var F = faces[f];
+      var u = { x: F.br.x - F.bl.x, y: F.br.y - F.bl.y };
+      var v = { x: F.tl.x - F.bl.x, y: F.tl.y - F.bl.y };
+      timberLijn(c, F.bl, u, v, 0.06, 0.92, 0.94, 0.92);
+      timberLijn(c, F.bl, u, v, 0.06, 0.5, 0.94, 0.5);
+      for (var i = 0; i <= 3; i++) { var s = 0.06 + i * 0.293; timberLijn(c, F.bl, u, v, s, 0.5, s, 0.92); }
+      timberLijn(c, F.bl, u, v, 0.06, 0.5, 0.35, 0.92);
+      timberLijn(c, F.bl, u, v, 0.64, 0.92, 0.94, 0.5);
+    }
+  }
 
   /* Kantelen: tandjes langs de twee voor-randen van de muurtop. */
   function kantelen(c, top) {
