@@ -4,3 +4,6 @@ dist/
 *.png
 !assets/**/*.png
 _*.mjs
+
+# lokale smoke-test scripts (niet inchecken)
+_smoke*.mjs

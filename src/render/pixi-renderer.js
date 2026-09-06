@@ -24,19 +24,37 @@
 
   var TEGEL = 34;                 /* moet gelijk zijn aan camera.js */
 
-  /* Terreinpalet — dezelfde waarden als de oude sprites.js, zodat de wereld
-     herkenbaar blijft. Vier varianten per terrein; t.v kiest er een. */
-  var TERREIN = {
-    gras:       ['#6f8f4a', '#6b8b41', '#8a8a3f', '#c9cfc4'],
-    vruchtbaar: ['#8a7a3e', '#9a8437', '#a88a35', '#bfc0b0'],
-    bos:        ['#3f6033', '#3a5c2c', '#5c5f2a', '#7f8c7a'],
-    rots:       ['#7d7a72', '#7d7a72', '#7a766c', '#9d9d9a'],
-    berg:       ['#5f5a52', '#5f5a52', '#5c5750', '#8d8d8d'],
-    water:      ['#3f6f8f', '#42749a', '#3c6a89', '#4a6f85']
+  /* Terreinpalet komt uit js/render/palet.js (AoE2-geijkt, per seizoen), met een
+     terugval hier zodat de renderlaag nooit stukloopt als palet niet geladen is.
+     Vier varianten per terrein; t.v/het seizoen kiest er een. */
+  var PAL = (Game.render && Game.render.palet) || null;
+  var TERREIN = PAL ? PAL.terrein : {
+    gras:       [0x6f9646, 0x74923c, 0x93923f, 0xc9cfc4],
+    vruchtbaar: [0x8f7d3c, 0xa08636, 0xac8a33, 0xbfc0b0],
+    bos:        [0x3f6033, 0x3a5c2c, 0x5c5f2a, 0x7f8c7a],
+    rots:       [0x817d73, 0x817d73, 0x7d786d, 0x9d9d9a],
+    berg:       [0x625d54, 0x625d54, 0x5e5850, 0x8d8d8d],
+    water:      [0x3f6f8f, 0x42749a, 0x3c6a89, 0x4a6f85]
   };
-  var WEGKLEUR = 0xbfa878;         /* aangestampt zand */
-  var BRUGKLEUR = 0xa9865b;        /* houten dek */
-  var LUCHT = 0x8fb3cf;            /* off-map = zee/lucht */
+  var WEGKLEUR = PAL ? PAL.weg : 0xbfa878;         /* aangestampt zand */
+  var BRUGKLEUR = PAL ? PAL.brug : 0xa9865b;       /* houten dek */
+  var LUCHT = PAL ? PAL.lucht : 0x8fb3cf;          /* off-map = zee/lucht */
+  /* Spelerskleur (AoE2-blauw): vlaggen, banieren, daknok, deuren, unit-tunieken. */
+  var SPELER = PAL ? PAL.speler : 0x2f57c8;
+  var SPELER_LICHT = PAL ? PAL.spelerLicht : 0x5f83e0;
+  var SPELER_DONKER = PAL ? PAL.spelerDonker : 0x1d3a94;
+
+  /* Textuur-matrix voor de terreinvulling: de ruistextuur wordt in wereld-ruimte
+     (textureSpace 'global') herhaald, zo klein geschaald dat de korrel natuurlijk
+     aanvoelt en over de tegelgrenzen doorloopt. Lui opgebouwd (PIXI moet er zijn). */
+  var TEXMAT = null;
+  function terreinTex(soort, seizoen) {
+    var tt = Game.render.terreintextuur;
+    if (!tt) return null;
+    var tex = tt.get(soort, seizoen);
+    if (tex && !TEXMAT && window.PIXI) { TEXMAT = new PIXI.Matrix(); TEXMAT.scale(0.72, 0.72); }
+    return TEXMAT ? tex : null;
+  }
 
   /* --------------------------------------------------------------- helpers */
 
@@ -228,9 +246,10 @@
         var t = T[idx];
         if (!t) continue;
         var rij = TERREIN[t.t] || TERREIN.gras;
-        var kleur = hexNum(rij[seizoen] || rij[0]);
+        var kleur = rij[seizoen] != null ? rij[seizoen] : rij[0];
         var isWater = t.t === 'water';
         var doel = isWater ? waterLaag : g;
+        var tint = 0xffffff, tex = null;
         if (!isWater) {
           var hc = t.h || 0;
           var ul = tegelHoogte(T, b, h, tx - 1, ty - 1, hc);
@@ -238,11 +257,17 @@
           var l = tegelHoogte(T, b, h, tx - 1, ty, hc);
           var dh = hc - (ul * 0.5 + u * 0.25 + l * 0.25);
           var relief = Game.util.clamp(1 + dh * 2.4, 0.8, 1.22);
-          kleur = schaal(kleur, relief * (0.9 + (t.v || 0) * 0.2));
+          /* De geschilderde terreintextuur draagt de kleur; de hillshade en een
+             vleugje per-tegel-ruis worden er als multiply-tint overheen gelegd.
+             Zonder textuur (geen PIXI/canvas) valt alles terug op platte kleur. */
+          var mul = Game.util.clamp(relief * (0.86 + (t.v || 0) * 0.2), 0.5, 1);
+          tex = terreinTex(t.t, seizoen);
+          if (tex) tint = schaal(0xffffff, mul);
+          else kleur = schaal(kleur, relief * (0.9 + (t.v || 0) * 0.2));
         } else {
           /* Ondiep (turquoise) → diep (donkerblauw) naar afstand tot de kust. */
           var tf = Game.util.clamp((diepte[idx] - 1) / 6, 0, 1);
-          kleur = mengNum(0x79c6c0, kleur, tf);
+          kleur = mengNum(PAL ? PAL.waterOndiep : 0x8fd0c8, kleur, tf);
           kleur = schaal(kleur, ((tx + ty) & 1) ? 1.03 : 0.97);
         }
         var wx = tx * TEGEL, wy = ty * TEGEL;
@@ -251,7 +276,9 @@
           top: { x: sx, y: sy }, right: { x: sx + hw, y: sy + hh },
           bottom: { x: sx, y: sy + hh * 2 }, left: { x: sx - hw, y: sy + hh }
         };
-        doel.poly([hoek.top.x, hoek.top.y, hoek.right.x, hoek.right.y, hoek.bottom.x, hoek.bottom.y, hoek.left.x, hoek.left.y]).fill(kleur);
+        var poly = [hoek.top.x, hoek.top.y, hoek.right.x, hoek.right.y, hoek.bottom.x, hoek.bottom.y, hoek.left.x, hoek.left.y];
+        if (tex) doel.poly(poly).fill({ texture: tex, color: tint, matrix: TEXMAT, textureSpace: 'global' });
+        else doel.poly(poly).fill(kleur);
 
         /* Kust: op watertegels schuim langs de land-randen, op landtegels een
            zandrand langs de water-randen — samen een strand in plaats van een
@@ -277,7 +304,7 @@
             /* Zachte overgang: de buurkleur bloedt een stukje deze tegel in, zodat
                gras/bos/akker/rots niet met een harde ruit-grens tegen elkaar staan. */
             var brij = TERREIN[buur.t] || TERREIN.gras;
-            var bk = schaal(hexNum(brij[seizoen] || brij[0]), 0.98);
+            var bk = schaal(brij[seizoen] != null ? brij[seizoen] : brij[0], 0.98);
             var bi = { x: a.x + (mcx - a.x) * 0.4, y: a.y + (mcy - a.y) * 0.4 };
             var bj = { x: c2.x + (mcx - c2.x) * 0.4, y: c2.y + (mcy - c2.y) * 0.4 };
             g.poly([a.x, a.y, c2.x, c2.y, bj.x, bj.y, bi.x, bi.y]).fill({ color: bk, alpha: 0.4 });
@@ -489,6 +516,9 @@
     if (cfg.luifel) luifel(c, foot, H);
     if (cfg.kruis) kruisTop(c, cx, apexY);
     if (cfg.vlag) vlagTop(c, cx, (cfg.stijl === 'plat' || cfg.stijl === 'geen') ? cy - H : apexY);
+    /* Spelerskleur: een blauwe banier tegen de voorgevel van vlag-dragende (dus
+       civiele) gebouwen — het AoE2-detail dat een stad meteen 'van jou' maakt. */
+    if (cfg.vlag && cfg.stijl !== 'geen' && ratio >= 0.8) banier(c, foot, top);
     if (cfg.wieken) wieken(c, cx, cy - H * 0.7, TEGEL, opties.tijd || 0);
     if (cfg.schoorsteen && cfg.stijl !== 'geen') c._rookpunt = schoorsteen(c, top, dakH);
 
@@ -565,16 +595,42 @@
     }
   }
   function luifel(c, foot, H) {
-    c.poly([foot.left.x, foot.left.y - H * 0.5, foot.bottom.x, foot.bottom.y - H * 0.5,
-      foot.bottom.x, foot.bottom.y - H * 0.5 + 4, foot.left.x, foot.left.y - H * 0.5 + 4]).fill({ color: 0xc0503a, alpha: 0.9 });
+    /* Gestreepte markt-/havenluifel in spelerskleur en room — de AoE2-marktkraam. */
+    var y = foot.left.y - H * 0.5, y2 = y + 4;
+    var lx = foot.left.x, bx = foot.bottom.x;
+    var n = 6;
+    for (var i = 0; i < n; i++) {
+      var t0 = i / n, t1 = (i + 1) / n;
+      var xa = lx + (bx - lx) * t0, xb = lx + (bx - lx) * t1;
+      var ya = y + (foot.bottom.y - foot.left.y) * t0, yb = y + (foot.bottom.y - foot.left.y) * t1;
+      c.poly([xa, ya, xb, yb, xb, yb + 4, xa, ya + 4]).fill({ color: i % 2 ? 0xf0e6cc : SPELER, alpha: 0.92 });
+    }
   }
   function kruisTop(c, cx, apexY) {
     c.rect(cx - 0.9, apexY - 9, 1.8, 9).fill(0xf0e6c8);
     c.rect(cx - 3.2, apexY - 6.5, 6.4, 1.8).fill(0xf0e6c8);
   }
   function vlagTop(c, cx, y) {
-    c.rect(cx - 0.7, y - 13, 1.4, 13).fill(0x6a5030);
-    c.poly([cx + 0.7, y - 13, cx + 9, y - 10.5, cx + 0.7, y - 8]).fill(0xc0392b);
+    c.rect(cx - 0.7, y - 15, 1.4, 15).fill(0x6a5030);
+    c.circle(cx, y - 15, 1.1).fill(0xd7a94b);                          /* gouden knop */
+    c.poly([cx + 0.7, y - 15, cx + 10, y - 12.5, cx + 0.7, y - 9]).fill(SPELER);       /* spelerskleur-wimpel */
+    c.poly([cx + 0.7, y - 15, cx + 10, y - 12.5, cx + 6, y - 12]).fill(SPELER_LICHT);  /* lichtvlak */
+  }
+
+  /* Een blauwe (spelerskleur) banier die tegen de voorgevel hangt: een lap doek
+     met een lichte middenbaan en een gekartelde onderrand. */
+  function banier(c, foot, top) {
+    var bl = foot.bottom, br = foot.right, tl = top.bottom;
+    var u = { x: br.x - bl.x, y: br.y - bl.y }, v = { x: tl.x - bl.x, y: tl.y - bl.y };
+    var s0 = 0.62, w = 0.2, t0 = 0.28, t1 = 0.9;
+    var p = function (s, t) { return { x: bl.x + u.x * s + v.x * t, y: bl.y + u.y * s + v.y * t }; };
+    var a = p(s0, t1), b2 = p(s0 + w, t1), d = p(s0 + w, t0), e = p(s0, t0);
+    c.poly([a.x, a.y, b2.x, b2.y, d.x, d.y, e.x, e.y]).fill(SPELER);
+    var lm = p(s0 + w * 0.5, t1), lb = p(s0 + w * 0.5, t0);
+    c.moveTo(lm.x, lm.y).lineTo(lb.x, lb.y).stroke({ width: 1.4, color: SPELER_LICHT, alpha: 0.8 });
+    /* gekartelde onderrand */
+    var mid = p(s0 + w * 0.5, t0 - 0.06);
+    c.poly([e.x, e.y, mid.x, mid.y, d.x, d.y]).fill(SPELER_DONKER);
   }
   function wieken(c, cx, cy, p, tijd) {
     var hub = { x: cx, y: cy };
@@ -700,7 +756,7 @@
     return { cx: sx, cy: sy + TEGEL / 4, hw: TEGEL / 2, hh: TEGEL / 4, topx: sx, topy: sy };
   }
 
-  var BLADKLEUR = [0x3a6b2f, 0x356428, 0x8a5f1e, 0x51624e];
+  var BLADKLEUR = PAL ? PAL.blad : [0x3f7233, 0x386a2b, 0x8a5f1e, 0x51624e];
 
   function boomVorm(g, ox, oy, deel, seizoen, seed) {
     var blad = BLADKLEUR[seizoen] || BLADKLEUR[0];
@@ -789,6 +845,57 @@
     return c;
   }
 
+  /* Riet/lisdodde langs de oever: een pol slanke halmen met een enkele bruine
+     kolf, op landtegels die aan water grenzen. Deterministisch uit t.v. */
+  function maakRiet(t, x, y, seizoen) {
+    var c = new PIXI.Graphics();
+    var d = tegelDiamant(x, y);
+    var kl = seizoen === 3 ? 0x8f9174 : (seizoen === 2 ? 0x9a8a48 : 0x5f7f3a);
+    var aantal = 3 + Math.floor((t.v * 17) % 4);
+    for (var i = 0; i < aantal; i++) {
+      var ox = d.cx + TEGEL * (((i * 29 + t.v * 80) % 40) / 100 - 0.2);
+      var oy = d.cy + TEGEL * (((i * 53 + t.v * 50) % 24) / 100 - 0.02);
+      var hh = TEGEL * (0.22 + ((i * 13 + t.v * 30) % 12) / 100);
+      var buig = ((i * 7 + t.v * 40) % 10) / 10 - 0.5;
+      c.moveTo(ox, oy).quadraticCurveTo(ox + buig * 4, oy - hh * 0.6, ox + buig * 7, oy - hh)
+        .stroke({ width: 1.1, color: kl, alpha: 0.92 });
+      if (i % 3 === 0) c.roundRect(ox + buig * 7 - 1, oy - hh - 3, 2, 4, 1).fill(0x6a4326);   /* kolf */
+    }
+    return c;
+  }
+
+  /* Waterlelies op ondiep water: een paar platte groene schijven, soms een
+     roze bloem. Ze liggen plat, dus geen schaduw of hoogte. */
+  function maakLelie(t, x, y) {
+    var c = new PIXI.Graphics();
+    var d = tegelDiamant(x, y);
+    var aantal = 1 + Math.floor((t.v * 11) % 3);
+    for (var i = 0; i < aantal; i++) {
+      var ox = d.cx + TEGEL * (((i * 31 + t.v * 90) % 44) / 100 - 0.22);
+      var oy = d.cy + TEGEL * (((i * 47 + t.v * 60) % 22) / 100 - 0.02);
+      var r = TEGEL * (0.07 + ((i * 9 + t.v * 20) % 5) / 100);
+      c.ellipse(ox, oy, r, r * 0.5).fill({ color: 0x3f7a44, alpha: 0.9 });
+      c.ellipse(ox, oy, r, r * 0.5).stroke({ width: 0.6, color: 0x2c5a30, alpha: 0.5 });
+      if (((i * 3 + t.v * 100) | 0) % 5 === 0) c.circle(ox, oy - r * 0.2, r * 0.28).fill(0xe8a6c8);
+    }
+    return c;
+  }
+
+  function grenstAanWater(T, b, h, x, y) {
+    if (x > 0 && T[y * b + x - 1] && T[y * b + x - 1].t === 'water') return true;
+    if (x < b - 1 && T[y * b + x + 1] && T[y * b + x + 1].t === 'water') return true;
+    if (y > 0 && T[(y - 1) * b + x] && T[(y - 1) * b + x].t === 'water') return true;
+    if (y < h - 1 && T[(y + 1) * b + x] && T[(y + 1) * b + x].t === 'water') return true;
+    return false;
+  }
+  function grenstAanLand(T, b, h, x, y) {
+    if (x > 0 && T[y * b + x - 1] && T[y * b + x - 1].t !== 'water') return true;
+    if (x < b - 1 && T[y * b + x + 1] && T[y * b + x + 1].t !== 'water') return true;
+    if (y > 0 && T[(y - 1) * b + x] && T[(y - 1) * b + x].t !== 'water') return true;
+    if (y < h - 1 && T[(y + 1) * b + x] && T[(y + 1) * b + x].t !== 'water') return true;
+    return false;
+  }
+
   function wisKenmerken() {
     if (!gebouwLaag) return;
     var k = gebouwLaag.children.slice();
@@ -802,10 +909,13 @@
       for (var x = 0; x < b; x++) {
         var t = T[y * b + x]; if (!t) continue;
         var c = null;
+        var vh = (t.v * 100) | 0;
         if (t.t === 'bos') c = maakBoom(t, x, y, seizoen);
         else if (t.t === 'rots') c = maakRots(t, x, y);
         else if (t.t === 'berg') c = maakBerg(t, x, y);
         else if (t.t === 'gras' && t.n === 'wild' && t.amt > 0) c = maakHert(t, x, y);
+        else if (t.t === 'water' && !t.weg && grenstAanLand(T, b, h, x, y) && vh % 4 === 0) c = maakLelie(t, x, y);
+        else if (t.t !== 'water' && !t.weg && grenstAanWater(T, b, h, x, y) && vh % 2 === 0) c = maakRiet(t, x, y, seizoen);
         if (c) { c._soort = 'kenmerk'; c.zIndex = x + y + 1; gebouwLaag.addChild(c); }
       }
     }
@@ -898,7 +1008,7 @@
 
   /* ---------------------------------------------- licht, lucht, water (fase 5) */
 
-  var ZEE = [0x27506b, 0x295473, 0x254a64, 0x2b4a5e];
+  var ZEE = PAL ? PAL.waterDiep : [0x27506b, 0x295473, 0x254a64, 0x2b4a5e];
 
   /* Meng twee rgb-getallen; t=0 → a, t=1 → b. */
   function mengNum(a, b, t) {

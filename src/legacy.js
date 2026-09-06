@@ -56,6 +56,8 @@ import '../js/core/save.js';
    - lagen:    per-tegel overlay-waarden
    - minimap:  eigen minimap-canvas */
 import '../js/render/camera.js';
+import '../js/render/palet.js';
+import '../js/render/terreintextuur.js';
 import '../js/render/beweging.js';
 import '../js/render/atlas.js';
 import '../js/render/sfeer.js';
