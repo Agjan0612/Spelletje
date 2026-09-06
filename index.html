@@ -7,6 +7,12 @@
 <!-- Favicon als inline SVG: geen extra bestand en dus ook geen mislukte
      request naar favicon.ico, waar de browser anders altijd om vraagt. -->
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏰</text></svg>">
+<!-- Titelfont (Cinzel): geeft koppen een eigen, uitgehouwen letter. Laadt via
+     Google Fonts; valt bij offline of blokkade netjes terug op de serif-stack
+     hieronder, dus het spel blijft zonder de font gewoon werken. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&display=swap">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -121,6 +127,59 @@
 
 <!-- ===== Overlays ===== -->
 <div id="overlay" class="hidden">
+  <!-- Titel-achtergrond: alleen zichtbaar op het welkomstscherm (#overlay.titel).
+       Een geanimeerde middeleeuwse skyline achter de welkomstkaart — puur CSS/SVG,
+       los van de spelstaat, zodat de eerste indruk er meteen staat. -->
+  <div id="titel-achtergrond" aria-hidden="true">
+    <div class="t-lucht"></div>
+    <div class="t-zon"></div>
+    <div class="t-wolk w1"></div>
+    <div class="t-wolk w2"></div>
+    <div class="t-wolk w3"></div>
+    <svg class="t-vogels" viewBox="0 0 400 120" preserveAspectRatio="xMidYMid meet">
+      <g fill="none" stroke="#2a2118" stroke-width="2" stroke-linecap="round">
+        <path class="v1" d="M0 20 L8 26 L16 20"/>
+        <path class="v2" d="M0 20 L7 25 L14 20"/>
+        <path class="v3" d="M0 20 L9 27 L18 20"/>
+      </g>
+    </svg>
+    <svg class="t-silhouet" viewBox="0 0 1200 340" preserveAspectRatio="xMidYMax slice">
+      <!-- verre heuvel -->
+      <path class="heuvel-ver" d="M0 220 Q300 170 600 205 T1200 200 V340 H0 Z"/>
+      <!-- stadssilhouet -->
+      <g class="stad">
+        <!-- huisjes links -->
+        <path d="M120 300 V245 L150 220 L180 245 V300 Z"/>
+        <path d="M175 300 V255 L205 232 L235 255 V300 Z"/>
+        <!-- molen -->
+        <path d="M280 300 V232 L300 220 L320 232 V300 Z"/>
+        <g class="molen-wieken" transform="translate(300 226)">
+          <path d="M0 0 L34 0 M0 0 L-34 0 M0 0 L0 34 M0 0 L0 -34" stroke="#241a10" stroke-width="4" stroke-linecap="round"/>
+        </g>
+        <!-- kerk met spits -->
+        <path d="M430 300 V210 H500 V300 Z"/>
+        <path d="M430 210 L465 150 L500 210 Z"/>
+        <path d="M462 150 V132 M453 141 H473" stroke="#241a10" stroke-width="4"/>
+        <!-- burcht-toren midden -->
+        <path d="M560 300 V180 H620 V180 L620 168 L611 168 L611 176 L602 176 L602 168 L593 168 L593 176 L584 176 L584 168 L575 168 L575 176 L566 176 L566 168 L560 168 Z"/>
+        <path d="M620 300 V205 H660 V205 L660 195 L653 195 L653 202 L646 202 L646 195 L639 195 L639 202 L632 202 L632 195 L625 195 L625 202 L620 202 Z"/>
+        <!-- vlag op de toren -->
+        <g class="stad-vlag" transform="translate(590 168)">
+          <path d="M0 0 V-26" stroke="#241a10" stroke-width="3"/>
+          <path class="doek" d="M0 -26 L22 -20 L0 -14 Z" fill="#8c3326"/>
+        </g>
+        <!-- huisjes rechts -->
+        <path d="M720 300 V250 L748 228 L776 250 V300 Z"/>
+        <path d="M800 300 V240 L832 216 L864 240 V300 Z"/>
+        <path d="M880 300 V258 L906 236 L932 258 V300 Z"/>
+        <!-- poorttoren rechts -->
+        <path d="M980 300 V200 H1030 V200 L1030 190 L1023 190 L1023 197 L1016 197 L1016 190 L1009 190 L1009 197 L1002 197 L1002 190 L995 190 L995 197 L988 197 L988 190 L980 190 Z"/>
+        <path d="M1080 300 V255 L1108 232 L1136 255 V300 Z"/>
+      </g>
+    </svg>
+    <div class="t-mist"></div>
+    <div class="t-vignet"></div>
+  </div>
   <div id="overlay-card">
     <h2 id="overlay-title"></h2>
     <div id="overlay-body"></div>
@@ -128,85 +187,9 @@
   </div>
 </div>
 
-<!-- Scripts: klassieke script-tags in afhankelijkheidsvolgorde,
-     zodat het spel ook werkt door index.html gewoon te openen (file://). -->
-<script src="js/namespace.js"></script>
-
-<script src="js/config/instellingen.js"></script>
-<script src="js/config/resources.js"></script>
-<script src="js/config/jobs.js"></script>
-<script src="js/config/buildings.js"></script>
-<script src="js/config/ages.js"></script>
-<script src="js/config/quests.js"></script>
-<script src="js/config/handel.js"></script>
-<script src="js/config/opdrachten.js"></script>
-<script src="js/config/gebeurtenissen.js"></script>
-<script src="js/config/onderzoek.js"></script>
-<script src="js/config/rovers.js"></script>
-<script src="js/config/standen.js"></script>
-<script src="js/config/buursteden.js"></script>
-<script src="js/config/scenarios.js"></script>
-<script src="js/config/faam.js"></script>
-
-<script src="js/core/rng.js"></script>
-<script src="js/core/map.js"></script>
-<script src="js/core/state.js"></script>
-<script src="js/core/construction.js"></script>
-<script src="js/core/economy.js"></script>
-<script src="js/core/population.js"></script>
-<script src="js/core/seasons.js"></script>
-<script src="js/core/raids.js"></script>
-<script src="js/core/ages.js"></script>
-<script src="js/core/feesten.js"></script>
-<script src="js/core/handel.js"></script>
-<script src="js/core/opdrachten.js"></script>
-<script src="js/core/gebeurtenissen.js"></script>
-<script src="js/core/onderzoek.js"></script>
-<script src="js/core/buurt.js"></script>
-<script src="js/core/logistiek.js"></script>
-<script src="js/core/plek.js"></script>
-<script src="js/core/demografie.js"></script>
-<script src="js/core/standen.js"></script>
-<script src="js/core/buren.js"></script>
-<script src="js/core/kroniek.js"></script>
-<script src="js/core/arbeid.js"></script>
-<script src="js/core/dorpelingen.js"></script>
-<script src="js/core/historie.js"></script>
-<script src="js/core/faam.js"></script>
-<script src="js/core/save.js"></script>
-
-<script src="js/render/camera.js"></script>
-<script src="js/render/beweging.js"></script>
-<script src="js/render/atlas.js"></script>
-<script src="js/render/particles.js"></script>
-<script src="js/render/weer.js"></script>
-<script src="js/render/paths.js"></script>
-<script src="js/render/raiders.js"></script>
-<script src="js/render/props.js"></script>
-<script src="js/render/wildlife.js"></script>
-<script src="js/render/floaters.js"></script>
-<script src="js/render/sfeer.js"></script>
-<script src="js/render/sprites.js"></script>
-<script src="js/render/villagers.js"></script>
-<script src="js/render/renderer.js"></script>
-<script src="js/render/lagen.js"></script>
-<script src="js/render/minimap.js"></script>
-
-<script src="js/ui/log.js"></script>
-<script src="js/ui/audio.js"></script>
-<script src="js/ui/tip.js"></script>
-<script src="js/ui/hud.js"></script>
-<script src="js/ui/buildmenu.js"></script>
-<script src="js/ui/panel.js"></script>
-<script src="js/ui/quests.js"></script>
-<script src="js/ui/grafiek.js"></script>
-<script src="js/ui/overlay.js"></script>
-<script src="js/ui/stad.js"></script>
-<script src="js/ui/onderzoek.js"></script>
-<script src="js/ui/lagen.js"></script>
-<script src="js/ui/kolom.js"></script>
-
-<script src="js/devcheck.js"></script>
-<script src="js/main.js"></script>
+<!-- Eén module-entry. Vite bundelt PixiJS en de bestaande IIFE-modules
+     (die volgorde staat in src/legacy.js) plus de nieuwe Pixi-renderlaag.
+     De laadvolgorde is dezelfde afhankelijkheidsvolgorde als voorheen. -->
+<script type="module" src="/src/main.js"></script>
 </body>
 </html>

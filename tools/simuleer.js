@@ -31,8 +31,11 @@ var WORTEL = path.resolve(__dirname, '..');
 
 /* ------------------------------------------------------------- de wereld -- */
 
-/* De laadvolgorde staat in index.html en nergens anders — die lezen we uit,
-   zodat het harnas niet stilletjes achterloopt op een nieuw core-bestand. */
+/* De laadvolgorde staat sinds de PixiJS-migratie in src/legacy.js (de import-
+   volgorde van de IIFE-modules) en nergens anders — die lezen we uit, zodat het
+   harnas niet stilletjes achterloopt op een nieuw core-bestand. src/legacy.js
+   laadt js/main.js niet (dat staat in src/main.js, ná de renderer), dus die
+   plakken we er hier achteraan: main.js draagt de tickvolgorde. */
 /* Twee interfacebestanden doen echt simulatiewerk (het logboek dat de kroniek
    terugleest, en de doelen die beloningen uitkeren) en raken de DOM alleen
    binnen functies die hier nooit aangeroepen worden. Die laden dus gewoon mee,
@@ -40,17 +43,17 @@ var WORTEL = path.resolve(__dirname, '..');
 var UI_TOEGESTAAN = { 'js/ui/log.js': 1, 'js/ui/quests.js': 1 };
 
 function bestandslijst() {
-  var html = fs.readFileSync(path.join(WORTEL, 'index.html'), 'utf8');
+  var legacy = fs.readFileSync(path.join(WORTEL, 'src', 'legacy.js'), 'utf8');
   var uit = [];
-  var re = /<script src="([^"]+)"/g;
+  var re = /import\s+'\.\.\/([^']+)'/g;
   var m;
-  while ((m = re.exec(html))) {
-    var src = m[1];
+  while ((m = re.exec(legacy))) {
+    var src = m[1];                                                 /* bv. js/core/map.js */
     if (/^js\/render\//.test(src)) continue;                       /* tekenlaag */
     if (/^js\/ui\//.test(src) && !UI_TOEGESTAAN[src]) continue;    /* DOM-panelen */
-    uit.push(src);                                                 /* main.js wél:
-      daar staat de tickvolgorde, en die hoort maar op één plek te staan. */
+    uit.push(src);
   }
+  uit.push('js/main.js');                                          /* tickvolgorde, op één plek */
   return uit;
 }
 

@@ -1,0 +1,18 @@
+{
+  "name": "dorp-tot-stad",
+  "version": "1.0.0",
+  "description": "Dorp tot Stad — middeleeuwse city builder, nu met een PixiJS-renderlaag.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 4173"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.63.0",
+    "vite": "^5.4.0"
+  },
+  "dependencies": {
+    "pixi-filters": "^6.1.5",
+    "pixi.js": "^8.5.0"
+  }
+}
