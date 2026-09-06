@@ -146,7 +146,9 @@ button:active:not(:disabled) { transform: translateY(1px); }
   transition: border-color var(--soepel), background var(--soepel);
 }
 .resrow.small .res { font-size: 12.5px; padding: 2px 7px; }
-.res .ico { font-size: 14px; align-self: center; filter: saturate(.92); }
+.res .ico { font-size: 14px; align-self: center; filter: saturate(.92); display: inline-flex; }
+.res .ico svg { width: 18px; height: 18px; display: block; filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .5)); }
+.resrow.small .res .ico svg { width: 16px; height: 16px; }
 .res .val { font-weight: 700; letter-spacing: .2px; transition: color var(--soepel); }
 /* The rolling counter tints by direction (fase 8.2). */
 .res .val.stijgt { color: var(--goud-licht); }
@@ -569,6 +571,8 @@ ul.dorpsboek .sinds { color: var(--perkament-dof); font-size: 11px; min-width: 9
 .bouwkaart .nm { font-size: 11.5px; font-weight: 700; line-height: 1.15; margin: 1px 0 3px; }
 .bouwkaart .ks { font-size: 10.5px; color: var(--perkament-dof); line-height: 1.4; font-variant-numeric: tabular-nums; }
 .bouwkaart .ks .mist { color: #e8907c; font-weight: 700; }
+.bouwkaart .ks span { display: inline-flex; align-items: center; gap: 1px; }
+.bouwkaart .ks svg { width: 12px; height: 12px; vertical-align: middle; }
 .bouwkaart .slot { position: absolute; top: 3px; right: 5px; font-size: 12px; }
 .bouwkaart .hk {
   position: absolute; top: 3px; left: 5px; font-size: 9.5px;

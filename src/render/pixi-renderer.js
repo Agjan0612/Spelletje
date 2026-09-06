@@ -508,13 +508,21 @@
     if (cfg.wieken) wieken(c, cx, cy - H * 0.7, TEGEL, opties.tijd || 0);
     if (cfg.schoorsteen && cfg.stijl !== 'geen') c._rookpunt = schoorsteen(c, top, dakH);
 
-    /* 6. Emoji-badge boven de nok. */
-    if (d.emoji && opties.badge !== false && !cfg.wieken) {
-      var badge = new PIXI.Text({ text: d.emoji, style: { fontSize: 15 } });
-      badge.anchor.set(0.5, 1);
+    /* 6. Icoon-badge boven de nok, op een klein donker bordje. Eigen icoonset
+       (iconen.js) in plaats van OS-emoji; terugval op de emoji als de icoon mist. */
+    if (opties.badge !== false && !cfg.wieken) {
       var by = (cfg.stijl === 'plat' || cfg.stijl === 'geen') ? cy - H - 3 : apexY + dakH * 0.4;
-      badge.position.set(cx, by);
-      c.addChild(badge);
+      var ico = Game.render.iconen && Game.render.iconen.pixi(Game.render.iconen.badgeVoorGebouw(d), 15);
+      if (ico) {
+        c.circle(cx, by - 7.5, 9.5).fill({ color: 0x1c140c, alpha: 0.4 });
+        ico.position.set(cx, by);
+        c.addChild(ico);
+      } else if (d.emoji) {
+        var badge = new PIXI.Text({ text: d.emoji, style: { fontSize: 15 } });
+        badge.anchor.set(0.5, 1);
+        badge.position.set(cx, by);
+        c.addChild(badge);
+      }
     }
 
     if (opties.spook) c.alpha = 0.6;
@@ -1419,13 +1427,10 @@
   var floaters = [];
   var floaterTimer = 0;
 
-  function opbrengstEmoji(d) {
-    var res = null;
-    if (d.wint && d.wint.res) res = d.wint.res;
-    else if (d.maakt && d.maakt.uit) { for (var k in d.maakt.uit) { res = k; break; } }
-    if (!res) return null;
-    var rc = Game.config.resources[res];
-    return rc ? rc.emoji : null;
+  function opbrengstRes(d) {
+    if (d.wint && d.wint.res) return d.wint.res;
+    if (d.maakt && d.maakt.uit) { for (var k in d.maakt.uit) return k; }
+    return null;
   }
 
   function spawnFloater(s) {
@@ -1434,15 +1439,21 @@
       var g = s.gebouwen[i];
       if (!g.gebouwd || (g.werkers || 0) <= 0) continue;
       var d = Game.config.gebouw(g.type); if (!d) continue;
-      if (opbrengstEmoji(d)) kandidaten.push(g);
+      if (opbrengstRes(d)) kandidaten.push(g);
     }
     if (!kandidaten.length) return;
     var g2 = kandidaten[(rnd() * kandidaten.length) | 0];
     var d2 = Game.config.gebouw(g2.type);
     var G = d2.grootte || 1;
     var wx = (g2.x + G / 2) * TEGEL, wy = (g2.y + G / 2) * TEGEL;
-    var t = new PIXI.Text({ text: opbrengstEmoji(d2), style: { fontSize: 13 } });
-    t.anchor.set(0.5, 1);
+    var res = opbrengstRes(d2);
+    var sleutel = Game.render.iconen && Game.render.iconen.resSleutel(res);
+    var t = sleutel ? Game.render.iconen.pixi(sleutel, 15) : null;
+    if (!t) {
+      var rc = Game.config.resources[res] || {};
+      t = new PIXI.Text({ text: rc.emoji || '', style: { fontSize: 13 } });
+      t.anchor.set(0.5, 1);
+    }
     t.position.set(isoX(wx, wy), isoY(wx, wy) - 24);
     floaterLaag.addChild(t);
     floaters.push({ sprite: t, x0: t.x, y0: t.y, t: 0, leven: 1.6 });

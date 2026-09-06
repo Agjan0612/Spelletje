@@ -62,6 +62,7 @@ import '../js/render/sfeer.js';
 import '../js/render/sprites.js';
 import '../js/render/lagen.js';
 import '../js/render/minimap.js';
+import '../js/render/iconen.js';
 import '../js/ui/log.js';
 import '../js/ui/audio.js';
 import '../js/ui/tip.js';

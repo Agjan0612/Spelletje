@@ -158,8 +158,10 @@
       var delen = [];
       for (var r in d.kosten) {
         var genoeg = s.res[r] >= d.kosten[r];
-        delen.push('<span class="' + (genoeg ? '' : 'mist') + '">' +
-          Game.config.resources[r].emoji + d.kosten[r] + '</span>');
+        var ic = Game.render.iconen
+          ? Game.render.iconen.htmlOfEmoji(r, 12, Game.config.resources[r].emoji)
+          : Game.config.resources[r].emoji;
+        delen.push('<span class="' + (genoeg ? '' : 'mist') + '">' + ic + d.kosten[r] + '</span>');
       }
       ks.innerHTML = delen.join(' ') || 'gratis';
       kaart.appendChild(ks);

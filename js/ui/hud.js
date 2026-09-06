@@ -58,7 +58,10 @@
     Game.config.resourceOrder.forEach(function (id) {
       var def = Game.config.resources[id];
       var el = Game.util.el('div', 'res');
-      el.appendChild(Game.util.el('span', 'ico', def.emoji));
+      var ico = Game.util.el('span', 'ico');
+      var svg = Game.render.iconen && Game.render.iconen.svg(id, 18);
+      if (svg) ico.innerHTML = svg; else ico.textContent = def.emoji;
+      el.appendChild(ico);
       var val = Game.util.el('span', 'val', '0');
       el.appendChild(val);
       var delta = Game.util.el('span', 'delta', '');
