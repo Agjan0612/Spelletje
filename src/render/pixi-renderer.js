@@ -321,12 +321,61 @@
           }
         }
 
+        /* Grond-strooisel: keitjes, graspollen en bloemen bovenop de grond,
+           ingebakken in de statische terreinlaag (geen per-frame kost). Breekt
+           de vlakte bij middel-zoom. Alleen op open gras/akker zonder weg. */
+        if (!isWater && !t.weg && (t.t === 'gras' || t.t === 'vruchtbaar')) {
+          strooiGrond(g, t, sx, sy + hh, hw, hh, seizoen);
+        }
+
         /* Straten en bruggen: een smaller ruitje boven op de grond. */
         if (t.weg) {
           var q = 0.82, qw = hw * q, qh = hh * q;
           g.poly([sx, sy + hh - qh, sx + qw, sy + hh, sx, sy + hh + qh, sx - qw, sy + hh])
             .fill(t.brug ? BRUGKLEUR : WEGKLEUR);
         }
+      }
+    }
+  }
+
+  /* Deterministische per-tegel LCG uit t.v (niet Math.random, niet de sim-RNG),
+     zodat het strooisel elke keer identiek is en de simulatie ongemoeid blijft. */
+  function tegelRng(t) {
+    var s = ((t.v * 233280) | 0) + 1;
+    return function () { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+  }
+
+  /* Strooi 0..3 kleine grond-elementen binnen de ruit (cx,cy = ruitmidden). */
+  function strooiGrond(g, t, cx, cy, hw, hh, seizoen) {
+    var r = tegelRng(t);
+    if (r() > 0.62) return;                       /* ~38% van de tegels */
+    var n = 1 + (r() < 0.5 ? 1 : 0);
+    var winter = seizoen === 3;
+    for (var i = 0; i < n; i++) {
+      /* punt binnen de ruit: schaal de offset zodat het in de diamant valt */
+      var u = (r() - 0.5), v = (r() - 0.5);
+      var px = cx + (u - v) * hw * 0.7;
+      var py = cy + (u + v) * hh * 0.7;
+      var soort = r();
+      if (soort < 0.4) {
+        /* keitje */
+        var br = 1.1 + r() * 1.6;
+        g.ellipse(px, py + br * 0.3, br * 1.1, br * 0.5).fill({ color: 0x000000, alpha: 0.12 });
+        g.poly([px - br, py, px - br * 0.4, py - br, px + br * 0.6, py - br * 0.7, px + br, py]).fill(0x8b8478);
+        g.poly([px - br * 0.4, py - br, px + br * 0.6, py - br * 0.7, px + br * 0.1, py - br * 0.15]).fill(0xa8a294);
+      } else if (soort < 0.82 || winter) {
+        /* graspol: een paar korte opstaande sprietjes */
+        var kl = winter ? 0x9a9576 : (t.t === 'vruchtbaar' ? 0x8a9a4a : (seizoen === 2 ? 0x93923f : 0x5f8038));
+        var kt = r() * 1.2 - 0.6;
+        for (var k = -1; k <= 1; k++) {
+          g.moveTo(px + k * 1.1, py).quadraticCurveTo(px + k * 1.1 + kt, py - 2.4, px + k * 1.1 + kt * 1.6, py - 4 - r() * 1.5)
+            .stroke({ width: 0.9, color: kl, alpha: 0.85 });
+        }
+      } else {
+        /* bloempje: steel + gekleurde kop */
+        var bkl = [0xf2e6a0, 0xe8f0f4, 0xe8a6c8, 0xf0c060][(r() * 4) | 0];
+        g.moveTo(px, py).lineTo(px + (r() - 0.5) * 1.4, py - 3.5).stroke({ width: 0.8, color: 0x4c6f2f, alpha: 0.8 });
+        g.circle(px + (r() - 0.5) * 1.4, py - 4, 1).fill(bkl);
       }
     }
   }
@@ -815,40 +864,62 @@
     return c;
   }
 
+  /* Eén blokkerig rots-massief: een brede voet die naar een vlakker plateau
+     versmalt (geen spitse kegel), met een verlichte toprand, een donkere en een
+     lichte zijflank, en horizontale rotslagen. Leest als een klif/rotswand.
+     baseY = voorste voetlijn; w = halve voetbreedte; H = hoogte. */
+  function rotsMassief(c, cx, baseY, w, H, basis, plat) {
+    var tw = w * (plat ? 0.66 : 0.5);                 /* topbreedte */
+    var topY = baseY - H, capY = topY - H * 0.12;
+    /* voorvlak (mid) */
+    c.poly([cx - w, baseY, cx - tw, topY, cx + tw, topY, cx + w, baseY]).fill(basis);
+    /* linker schaduwflank */
+    c.poly([cx - w, baseY, cx - tw, topY, cx - tw * 0.35, topY, cx - w * 0.35, baseY]).fill(schaal(basis, 0.74));
+    /* rechter lichtflank */
+    c.poly([cx + w * 0.4, baseY, cx + tw * 0.4, topY, cx + tw, topY, cx + w, baseY]).fill(schaal(basis, 1.14));
+    /* verlicht plateau bovenop */
+    c.poly([cx - tw, topY, cx - tw * 0.7, capY, cx + tw * 0.85, capY, cx + tw, topY]).fill(schaal(basis, 1.26));
+    /* horizontale rotslagen op het voorvlak */
+    for (var i = 1; i <= 3; i++) {
+      var f = i / 4;
+      var lw = w + (tw - w) * f, ly = baseY - H * f;
+      c.moveTo(cx - lw * 0.92, ly).lineTo(cx + lw * 0.92, ly).stroke({ width: 0.8, color: schaal(basis, 0.55), alpha: 0.35 });
+    }
+    /* een paar verticale scheuren */
+    c.moveTo(cx - tw * 0.2, topY).lineTo(cx - w * 0.2, baseY).stroke({ width: 0.8, color: schaal(basis, 0.5), alpha: 0.3 });
+    return { topY: topY, capY: capY, tw: tw, cx: cx };
+  }
+
   function maakBerg(t, x, y, seizoen) {
     var c = new PIXI.Graphics();
     var d = tegelDiamant(x, y);
-    var top = { x: d.topx, y: d.topy }, bottom = { x: d.cx, y: d.cy + d.hh };
-    var left = { x: d.cx - d.hw, y: d.cy }, right = { x: d.cx + d.hw, y: d.cy };
-    var r1 = (t.v * 7.31) % 1, r2 = (t.v * 13.77) % 1, r3 = (t.v * 23.9) % 1;
-    var H = TEGEL * (0.5 + r1 * 1.15);
-    var apex = { x: d.cx + (r2 - 0.5) * TEGEL * 0.34, y: d.cy - H };
-    grondschaduw(c, d.cx, d.cy + d.hh * 0.2, d.hw * 0.85, H * 0.5, 0.22);
-    function tri(a, b, e, k) { c.poly([a.x, a.y, b.x, b.y, e.x, e.y]).fill(k); }
-    /* Warmere, rotsachtige grijstinten — minder cartooneske kegel. */
-    if (r2 > 0.3) {
-      var kant = r1 > 0.5 ? 1 : -1;
-      var sub = { x: d.cx + kant * d.hw * 0.5, y: d.cy - H * (0.4 + r2 * 0.3) };
-      tri(left, bottom, sub, 0x554e46); tri(bottom, right, sub, 0x6b6154);
+    var r1 = (t.v * 7.31) % 1, r2 = (t.v * 13.77) % 1, r3 = (t.v * 23.9) % 1, r4 = (t.v * 31.3) % 1;
+    /* Breder dan de tegel zodat aangrenzende bergtegels tot één doorlopende
+       rotskam versmelten in plaats van een veld losse pieken. Lager en botter. */
+    var w = d.hw * 1.12;
+    var baseY = d.cy + d.hh * 0.85;
+    var H = TEGEL * (0.55 + r1 * 0.8);
+    grondschaduw(c, d.cx, d.cy + d.hh * 0.35, w * 0.9, H * 0.45, 0.24);
+    var basis = 0x6b6357;
+    /* Hoofdmassief. */
+    var m = rotsMassief(c, d.cx, baseY, w, H * 0.72, basis, true);
+    /* Een tweede, hogere kop iets opzij — geeft een grillige kam. */
+    var top2 = m;
+    if (r2 > 0.35) {
+      top2 = rotsMassief(c, d.cx + (r2 - 0.5) * w * 0.7, baseY - H * 0.34, w * 0.6, H * 0.55, schaal(basis, 1.05), false);
     }
-    tri(left, bottom, apex, 0x655d51); tri(bottom, right, apex, 0x847a6b);
-    tri(top, left, apex, 0x4e473d); tri(top, right, apex, 0x6f6659);
-    /* Rots-striaties: een paar donkere kloofjes langs de flank voor textuur. */
-    var f1 = lerpP(apex, bottom, 0.5), f2 = lerpP(apex, left, 0.55);
-    c.moveTo(apex.x, apex.y).lineTo(f1.x, f1.y).stroke({ width: 1, color: 0x3c352c, alpha: 0.4 });
-    c.moveTo(apex.x, apex.y).lineTo(f2.x, f2.y).stroke({ width: 1, color: 0x3c352c, alpha: 0.3 });
-    /* Wat puin aan de voet. */
-    if (r3 > 0.4) {
-      var px = d.cx + (r3 - 0.5) * d.hw, py = d.cy + d.hh * 0.4;
-      c.poly([px - 3, py + 1, px - 1, py - 2, px + 2, py - 1, px + 3, py + 1]).fill(0x6b6155);
+    /* Losse rotsblokken aan de voet. */
+    if (r3 > 0.35) {
+      var px = d.cx + (r3 - 0.5) * w * 1.4, py = baseY + d.hh * 0.15;
+      var br = 2.5 + r4 * 2.5;
+      c.poly([px - br, py, px - br * 0.5, py - br, px + br * 0.6, py - br * 0.7, px + br, py]).fill(schaal(basis, 0.9));
+      c.poly([px - br * 0.5, py - br, px + br * 0.6, py - br * 0.7, px + br * 0.1, py - br * 0.2]).fill(schaal(basis, 1.15));
     }
-    /* Sneeuwkap alleen op echt hoge toppen (of in de winter), zachter en grijzer. */
-    if (r1 > 0.6 || seizoen === 3) {
-      var kapY = apex.y + H * 0.22;
-      var sl = { x: apex.x + (left.x - apex.x) * 0.22, y: kapY };
-      var sr = { x: apex.x + (right.x - apex.x) * 0.22, y: kapY };
-      var sb = { x: apex.x + (bottom.x - apex.x) * 0.22, y: apex.y + H * 0.28 };
-      tri(apex, sl, sb, 0xdbe4ea); tri(apex, sb, sr, 0xeef3f7);
+    /* Sneeuw alleen op de hoogste toppen (of in de winter), zacht en grijzig. */
+    if (r1 > 0.62 || seizoen === 3) {
+      var tw = top2.tw;
+      c.poly([top2.cx - tw, top2.topY, top2.cx - tw * 0.7, top2.capY, top2.cx + tw * 0.85, top2.capY, top2.cx + tw, top2.topY]).fill({ color: 0xeaf1f6, alpha: 0.92 });
+      c.poly([top2.cx - tw, top2.topY, top2.cx - tw * 0.4, top2.topY + H * 0.14, top2.cx + tw * 0.5, top2.topY + H * 0.12, top2.cx + tw, top2.topY]).fill({ color: 0xdbe4ea, alpha: 0.7 });
     }
     return c;
   }
