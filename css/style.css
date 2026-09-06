@@ -29,8 +29,13 @@
      and a lit parchment for anything you are meant to read. Defined once so a
      new panel never has to invent its own brown. */
   --eik: linear-gradient(180deg, #4a3524 0%, #33230f 55%, #241708 100%);
+  /* AoE2-paneel: perkament-warmte, een gehouwen-steen nerf (fijne horizontale
+     lagen) en een gouden lichtlijn langs de bovenrand. Alles additief en subtiel,
+     zodat de layout niet verandert. */
   --paneel:
-    radial-gradient(120% 90% at 20% 0%, rgba(215, 169, 75, .10), transparent 62%),
+    linear-gradient(180deg, rgba(240, 205, 127, .16), transparent 3px),
+    radial-gradient(120% 90% at 20% 0%, rgba(215, 169, 75, .12), transparent 62%),
+    repeating-linear-gradient(0deg, rgba(255, 240, 210, .022) 0 2px, rgba(0, 0, 0, .03) 2px 4px),
     linear-gradient(180deg, rgba(56, 39, 24, .97), rgba(28, 19, 11, .97));
   --soepel: 140ms cubic-bezier(.3, .7, .4, 1);
 }

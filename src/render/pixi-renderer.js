@@ -805,30 +805,40 @@
     return c;
   }
 
-  function maakBerg(t, x, y) {
+  function maakBerg(t, x, y, seizoen) {
     var c = new PIXI.Graphics();
     var d = tegelDiamant(x, y);
     var top = { x: d.topx, y: d.topy }, bottom = { x: d.cx, y: d.cy + d.hh };
     var left = { x: d.cx - d.hw, y: d.cy }, right = { x: d.cx + d.hw, y: d.cy };
-    var r1 = (t.v * 7.31) % 1, r2 = (t.v * 13.77) % 1;
-    var H = TEGEL * (0.55 + r1 * 1.25);
+    var r1 = (t.v * 7.31) % 1, r2 = (t.v * 13.77) % 1, r3 = (t.v * 23.9) % 1;
+    var H = TEGEL * (0.5 + r1 * 1.15);
     var apex = { x: d.cx + (r2 - 0.5) * TEGEL * 0.34, y: d.cy - H };
-    grondschaduw(c, d.cx, d.cy + d.hh * 0.2, d.hw * 0.8, H * 0.5, 0.2);
+    grondschaduw(c, d.cx, d.cy + d.hh * 0.2, d.hw * 0.85, H * 0.5, 0.22);
     function tri(a, b, e, k) { c.poly([a.x, a.y, b.x, b.y, e.x, e.y]).fill(k); }
+    /* Warmere, rotsachtige grijstinten — minder cartooneske kegel. */
     if (r2 > 0.3) {
       var kant = r1 > 0.5 ? 1 : -1;
       var sub = { x: d.cx + kant * d.hw * 0.5, y: d.cy - H * (0.4 + r2 * 0.3) };
-      tri(left, bottom, sub, 0x4e4941); tri(bottom, right, sub, 0x63594c);
+      tri(left, bottom, sub, 0x554e46); tri(bottom, right, sub, 0x6b6154);
     }
-    tri(left, bottom, apex, 0x5e574d); tri(bottom, right, apex, 0x7d7365);
-    tri(top, left, apex, 0x484238); tri(top, right, apex, 0x665e52);
-    /* Sneeuwkap op de hogere toppen (of elke top in de winter). */
-    if (r1 > 0.45) {
-      var kapY = apex.y + H * 0.28;
-      var sl = { x: apex.x + (left.x - apex.x) * 0.28, y: kapY };
-      var sr = { x: apex.x + (right.x - apex.x) * 0.28, y: kapY };
-      var sb = { x: apex.x + (bottom.x - apex.x) * 0.28, y: apex.y + H * 0.34 };
-      tri(apex, sl, sb, 0xeef4fa); tri(apex, sb, sr, 0xf6fbff);
+    tri(left, bottom, apex, 0x655d51); tri(bottom, right, apex, 0x847a6b);
+    tri(top, left, apex, 0x4e473d); tri(top, right, apex, 0x6f6659);
+    /* Rots-striaties: een paar donkere kloofjes langs de flank voor textuur. */
+    var f1 = lerpP(apex, bottom, 0.5), f2 = lerpP(apex, left, 0.55);
+    c.moveTo(apex.x, apex.y).lineTo(f1.x, f1.y).stroke({ width: 1, color: 0x3c352c, alpha: 0.4 });
+    c.moveTo(apex.x, apex.y).lineTo(f2.x, f2.y).stroke({ width: 1, color: 0x3c352c, alpha: 0.3 });
+    /* Wat puin aan de voet. */
+    if (r3 > 0.4) {
+      var px = d.cx + (r3 - 0.5) * d.hw, py = d.cy + d.hh * 0.4;
+      c.poly([px - 3, py + 1, px - 1, py - 2, px + 2, py - 1, px + 3, py + 1]).fill(0x6b6155);
+    }
+    /* Sneeuwkap alleen op echt hoge toppen (of in de winter), zachter en grijzer. */
+    if (r1 > 0.6 || seizoen === 3) {
+      var kapY = apex.y + H * 0.22;
+      var sl = { x: apex.x + (left.x - apex.x) * 0.22, y: kapY };
+      var sr = { x: apex.x + (right.x - apex.x) * 0.22, y: kapY };
+      var sb = { x: apex.x + (bottom.x - apex.x) * 0.22, y: apex.y + H * 0.28 };
+      tri(apex, sl, sb, 0xdbe4ea); tri(apex, sb, sr, 0xeef3f7);
     }
     return c;
   }
@@ -912,7 +922,7 @@
         var vh = (t.v * 100) | 0;
         if (t.t === 'bos') c = maakBoom(t, x, y, seizoen);
         else if (t.t === 'rots') c = maakRots(t, x, y);
-        else if (t.t === 'berg') c = maakBerg(t, x, y);
+        else if (t.t === 'berg') c = maakBerg(t, x, y, seizoen);
         else if (t.t === 'gras' && t.n === 'wild' && t.amt > 0) c = maakHert(t, x, y);
         else if (t.t === 'water' && !t.weg && grenstAanLand(T, b, h, x, y) && vh % 4 === 0) c = maakLelie(t, x, y);
         else if (t.t !== 'water' && !t.weg && grenstAanWater(T, b, h, x, y) && vh % 2 === 0) c = maakRiet(t, x, y, seizoen);
@@ -1059,10 +1069,15 @@
      getint (goedkoop, raakt elk kind), de was legt de warme schemer eroverheen. */
   function tekenLicht(s, cam) {
     var L = lichtStand(s);
-    /* Basis: overdag wit, 's nachts een donkere blauwe tint over alles. */
-    wereld.tint = mengNum(0xffffff, 0x3a4a72, L.nacht * 0.72);
+    /* Basis: overdag een héél lichte warme tint (de geschilderde AoE2-ambient),
+       's nachts een donkere blauwe tint over alles. */
+    wereld.tint = mengNum(0xfff4e2, 0x3a4a72, L.nacht * 0.72);
 
     lichtLaag.clear();
+    /* Altijd een vleugje warme, zonovergoten ambient overdag — bindt de scène. */
+    if (L.dag > 0.02) {
+      lichtLaag.rect(0, 0, cam.breedte, cam.hoogte).fill({ color: 0xffd9a0, alpha: L.dag * 0.05 });
+    }
     var warm = Math.max(L.avond, L.ochtend);
     if (warm > 0.01) {
       lichtLaag.rect(0, 0, cam.breedte, cam.hoogte).fill({ color: L.avond > L.ochtend ? 0xff9040 : 0xffb060, alpha: warm * 0.16 });
@@ -1170,6 +1185,9 @@
     }
     c.ellipse(0, 0, 3, 1.3).fill({ color: 0x000000, alpha: 0.2 });
     c.roundRect(-2, -8, 4, 7, 1.6).fill(kleur);
+    /* Spelerskleur: een blauw schoudersjaal-accent zodat een dorpeling als
+       'jouw volk' leest, net als de spelerskleur op units in AoE2. */
+    c.rect(-2, -6.4, 4, 1.4).fill(SPELER);
     c.circle(0, -9.4, 2).fill(0xf1c9a5);
     return c;
   }

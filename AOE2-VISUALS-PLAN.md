@@ -1,5 +1,12 @@
 # Bouwplan — Age of Empires 2-look
 
+> **Status: fase 0 t/m 7 geïmplementeerd** (renderlaag, deterministisch, geen
+> sim-/config-/state-wijziging). Nieuwe modules: `js/render/palet.js`,
+> `js/render/terreintextuur.js`; de rest in `src/render/pixi-renderer.js` en
+> `css/style.css`. Getest headless (0 console-fouten), harness ongewijzigd,
+> `npm run build` groen. Dit document blijft staan als ontwerp-referentie en
+> voor de nog-optionele echte sprite-lanes (`assets/iso/`, `atlas.werker`).
+
 Doel: de visuele stijl van *Dorp tot Stad* optrekken naar de **look-and-feel van
 Age of Empires II: Definitive Edition** (de vier referentie-afbeeldingen): warme,
 geschilderde terreintexturen, rijk gedetailleerde gebouwen met **spelerskleur**
