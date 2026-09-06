@@ -37,6 +37,7 @@
       actiesEl.appendChild(b);
     });
     wrap.classList.remove('hidden');
+    wrap.classList.remove('titel');   /* alleen het welkomstscherm zet 'm weer aan */
   };
 
   O.sluit = function (hervat) {
@@ -90,6 +91,7 @@
         'waar je iets mee moet. Kijk in het tabblad <b>Stad</b> rechts.</li>' +
         '</ul>';
     }, knoppen, false);
+    wrap.classList.add('titel');   /* geanimeerde skyline achter de welkomstkaart */
   };
 
   /* --------------------------------------------------------------- hulp -- */
