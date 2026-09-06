@@ -47,6 +47,19 @@
   /* Textuur-matrix voor de terreinvulling: de ruistextuur wordt in wereld-ruimte
      (textureSpace 'global') herhaald, zo klein geschaald dat de korrel natuurlijk
      aanvoelt en over de tegelgrenzen doorloopt. Lui opgebouwd (PIXI moet er zijn). */
+  /* De multiply-tint die `basis` naar `doel` trekt: per kanaal 255*doel/basis.
+     Vermenigvuldigen kan alleen donkerder maken, dus dit werkt zolang doel niet
+     lichter is dan basis — bij water is basis de lichtste (ondiepe) kleur. */
+  function deelKleur(doel, basis) {
+    var o = 0, sch = [16, 8, 0];
+    for (var i = 0; i < 3; i++) {
+      var dv = (doel >> sch[i]) & 255, bv = (basis >> sch[i]) & 255;
+      var v = bv ? Math.round(255 * dv / bv) : 255;
+      o |= (v > 255 ? 255 : v < 0 ? 0 : v) << sch[i];
+    }
+    return o;
+  }
+
   var TEXMAT = null;
   function terreinTex(soort, seizoen) {
     var tt = Game.render.terreintextuur;
@@ -225,8 +238,27 @@
         if (j >= 0 && T[j].t === 'water' && d[j] === 0) { d[j] = d[i] + 1; rij.push(j); }
       }
     }
-    diepteCache = { seed: kaart.seed, arr: d };
-    return d;
+    /* De BFS levert hele stappen op, en dat gaf een zichtbaar getrapte
+       dieptegradiënt: elke ruit een eigen tint. Twee box-blur-passes maken er
+       een vloeiend veld van, zodat ondiep→diep geleidelijk verloopt in plaats
+       van per tegel te springen. Land blijft 0 (de kustlijn). */
+    var z = new Float32Array(N), z2 = new Float32Array(N);
+    for (i = 0; i < N; i++) z[i] = d[i];
+    for (var pas = 0; pas < 2; pas++) {
+      for (i = 0; i < N; i++) {
+        if (T[i].t !== 'water') { z2[i] = 0; continue; }
+        x = i % b; y = (i / b) | 0;
+        var som = z[i], tel = 1;
+        if (x > 0) { som += z[i - 1]; tel++; }
+        if (x < b - 1) { som += z[i + 1]; tel++; }
+        if (y > 0) { som += z[i - b]; tel++; }
+        if (y < h - 1) { som += z[i + b]; tel++; }
+        z2[i] = som / tel;
+      }
+      z.set(z2);
+    }
+    diepteCache = { seed: kaart.seed, arr: z };
+    return z;
   }
 
   /* Welke twee ruit-hoeken een tegel deelt met elke 4-buur. */
@@ -267,10 +299,12 @@
           if (tex) tint = schaal(0xffffff, mul);
           else kleur = schaal(kleur, relief * (0.9 + (t.v || 0) * 0.2));
         } else {
-          /* Ondiep (turquoise) → diep (donkerblauw) naar afstand tot de kust. */
-          var tf = Game.util.clamp((diepte[idx] - 1) / 6, 0, 1);
+          /* Ondiep (turquoise) → diep (donkerblauw) over het vloeiend gemaakte
+             diepteveld. Bewust géén per-tegel-ruis meer: het oude
+             ((tx+ty)&1)-trucje was letterlijk een dambord over de zee. */
+          var tf = Game.util.clamp((diepte[idx] - 0.4) / 4.2, 0, 1);
+          tf = tf * tf * (3 - 2 * tf);                     /* smoothstep */
           kleur = mengNum(PAL ? PAL.waterOndiep : 0x8fd0c8, kleur, tf);
-          kleur = schaal(kleur, ((tx + ty) & 1) ? 1.03 : 0.97);
         }
         var wx = tx * TEGEL, wy = ty * TEGEL;
         var sx = isoX(wx, wy), sy = isoY(wx, wy);
@@ -279,7 +313,15 @@
           bottom: { x: sx, y: sy + hh * 2 }, left: { x: sx - hw, y: sy + hh }
         };
         var poly = [hoek.top.x, hoek.top.y, hoek.right.x, hoek.right.y, hoek.bottom.x, hoek.bottom.y, hoek.left.x, hoek.left.y];
-        if (tex) doel.poly(poly).fill({ texture: tex, color: tint, matrix: TEXMAT, textureSpace: 'global' });
+        if (isWater) {
+          /* Water: één vulling met de golftextuur (gebakken in de ondiep-kleur),
+             met een multiply-tint die hem naar de juiste diepte trekt. Omdat de
+             textuur in wereld-ruimte ligt (textureSpace 'global') loopt het
+             golfdetail over de tegelgrenzen door en verdwijnen de ruit-naden. */
+          var wtex = terreinTex('water', seizoen);
+          if (wtex) doel.poly(poly).fill({ texture: wtex, color: deelKleur(kleur, PAL ? PAL.waterOndiep : 0x93d6cd), matrix: TEXMAT, textureSpace: 'global' });
+          else doel.poly(poly).fill(kleur);
+        } else if (tex) doel.poly(poly).fill({ texture: tex, color: tint, matrix: TEXMAT, textureSpace: 'global' });
         else doel.poly(poly).fill(kleur);
 
         /* Kust: op watertegels schuim langs de land-randen, op landtegels een
@@ -296,11 +338,17 @@
           if (isWater !== buurWater) {
             /* Kust: schuim aan de waterkant, zandstrand aan de landkant. */
             if (isWater) {
-              waterLaag.moveTo(a.x, a.y).lineTo(c2.x, c2.y).stroke({ width: hw * 0.16, color: 0xd7efe9, alpha: 0.55 });
+              /* Branding: een brede zachte band met een smalle heldere kam erop. */
+              waterLaag.moveTo(a.x, a.y).lineTo(c2.x, c2.y).stroke({ width: hw * 0.34, color: 0xbfe6e2, alpha: 0.3 });
+              waterLaag.moveTo(a.x, a.y).lineTo(c2.x, c2.y).stroke({ width: hw * 0.13, color: 0xecfbf7, alpha: 0.65 });
             } else {
-              var ai = { x: a.x + (mcx - a.x) * 0.35, y: a.y + (mcy - a.y) * 0.35 };
-              var ci = { x: c2.x + (mcx - c2.x) * 0.35, y: c2.y + (mcy - c2.y) * 0.35 };
-              g.poly([a.x, a.y, c2.x, c2.y, ci.x, ci.y, ai.x, ai.y]).fill({ color: 0xd8c48a, alpha: 0.55 });
+              var ai = { x: a.x + (mcx - a.x) * 0.42, y: a.y + (mcy - a.y) * 0.42 };
+              var ci = { x: c2.x + (mcx - c2.x) * 0.42, y: c2.y + (mcy - c2.y) * 0.42 };
+              g.poly([a.x, a.y, c2.x, c2.y, ci.x, ci.y, ai.x, ai.y]).fill({ color: 0xd8c48a, alpha: 0.5 });
+              /* Nat zand: een donkerder, verzadigder randje pal aan het water. */
+              var aw = { x: a.x + (mcx - a.x) * 0.16, y: a.y + (mcy - a.y) * 0.16 };
+              var cw = { x: c2.x + (mcx - c2.x) * 0.16, y: c2.y + (mcy - c2.y) * 0.16 };
+              g.poly([a.x, a.y, c2.x, c2.y, cw.x, cw.y, aw.x, aw.y]).fill({ color: 0xa8905c, alpha: 0.45 });
             }
           } else if (!isWater && buur.t !== t.t) {
             /* Zachte overgang: de buurkleur bloedt in twee lagen deze tegel in —
@@ -360,7 +408,7 @@
       if (soort < 0.4) {
         /* keitje */
         var br = 1.1 + r() * 1.6;
-        g.ellipse(px, py + br * 0.3, br * 1.1, br * 0.5).fill({ color: 0x000000, alpha: 0.12 });
+        blob(g, px, py + br * 0.3, br * 1.1, br * 0.5, { color: 0x000000, alpha: 0.12 });
         g.poly([px - br, py, px - br * 0.4, py - br, px + br * 0.6, py - br * 0.7, px + br, py]).fill(0x8b8478);
         g.poly([px - br * 0.4, py - br, px + br * 0.6, py - br * 0.7, px + br * 0.1, py - br * 0.15]).fill(0x969084);
       } else if (soort < 0.82 || winter) {
@@ -878,12 +926,26 @@
 
   function schaduwRichting() { return (Game.render.sfeer && Game.render.sfeer.SCHADUW) || { x: 0.62, y: 0.30 }; }
 
+  /* Een ronde vlek als 7-hoek in plaats van een ellips. Pixi tesselleert een
+     ellips in tientallen driehoeken; op de maat waarop wij ze gebruiken
+     (bladpluken, grondschaduwen, keitjes) is een 7-hoek visueel niet te
+     onderscheiden en kost hij een fractie. Dat scheelt honderdduizenden
+     driehoeken op een kaart vol bos. */
+  function blob(g, cx, cy, rx, ry, vulling) {
+    var p = [];
+    for (var i = 0; i < 7; i++) {
+      var a = i / 7 * Math.PI * 2;
+      p.push(cx + Math.cos(a) * rx, cy + Math.sin(a) * ry);
+    }
+    g.poly(p).fill(vulling);
+  }
+
   /* De grondschaduw van een staand ding: een donkere ellips, weggeleund langs de
      ene lichtrichting die de hele scène deelt. */
   function grondschaduw(g, cx, cy, straal, hoogte, alpha) {
     var ric = schaduwRichting();
-    g.ellipse(cx + hoogte * ric.x * 0.5, cy + hoogte * ric.y * 0.5, straal + hoogte * 0.28, straal * 0.55)
-      .fill({ color: 0x181410, alpha: alpha });
+    blob(g, cx + hoogte * ric.x * 0.5, cy + hoogte * ric.y * 0.5,
+      straal + hoogte * 0.28, straal * 0.55, { color: 0x181410, alpha: alpha });
   }
 
   /* Iso-ruit van tegel (x,y) in wereld-ruimte: middelpunt + halve maten. */
@@ -940,19 +1002,17 @@
     var kruin = oy - st - r * 0.5;
     /* Pluken van donker (rechtsonder, in de schaduw) naar licht (linksboven). */
     var pluk = [
-      [ 0.58,  0.30, 0.66, 0.68],
-      [-0.58,  0.26, 0.64, 0.80],
-      [ 0.06,  0.46, 0.68, 0.72],
-      [ 0.34, -0.26, 0.60, 0.98],
-      [ 0.00, -0.02, 0.76, 0.92],
-      [-0.36, -0.38, 0.64, 1.16],
-      [-0.10, -0.68, 0.44, 1.3]
+      [ 0.52,  0.30, 0.70, 0.70],
+      [-0.52,  0.24, 0.68, 0.82],
+      [ 0.28, -0.24, 0.66, 1.0],
+      [ 0.00,  0.02, 0.80, 0.92],
+      [-0.30, -0.46, 0.62, 1.2]
     ];
     for (var i = 0; i < pluk.length; i++) {
       var P4 = pluk[i];
       var px = ox + P4[0] * r + jit * (0.4 + P4[1]);
       var py = kruin + P4[1] * r;
-      g.ellipse(px, py, P4[2] * r, P4[2] * r * 0.88).fill(schaal(basis, P4[3]));
+      blob(g, px, py, P4[2] * r, P4[2] * r * 0.88, schaal(basis, P4[3]));
     }
     if (winter) {
       /* Winter: kale takken door de dunne kruin heen + wat sneeuw bovenop. */
@@ -970,7 +1030,7 @@
     /* Dichter bos, en per boom een eigen maat — een kluitje gelijke exemplaren
        leest als behang. Achterste (hoogste) bomen eerst, zodat de voorste
        overlappen en de kluit diepte krijgt. */
-    var aantal = Math.max(2, Math.round(2 + deel * 2));
+    var aantal = Math.max(2, Math.round(1.6 + deel * 1.4));
     var bomen = [];
     for (var i = 0; i < aantal; i++) {
       bomen.push({
@@ -992,14 +1052,24 @@
   function maakRots(t, x, y) {
     var c = new PIXI.Graphics();
     var d = tegelDiamant(x, y);
-    var aantal = 1 + Math.floor(((t.v * 5.7) % 1) * 3);
+    var aantal = 2 + Math.floor(((t.v * 5.7) % 1) * 3);
     for (var i = 0; i < aantal; i++) {
-      var ox = d.cx + TEGEL * (((i * 41 + t.v * 90) % 50) / 100 - 0.25);
-      var oy = d.cy + TEGEL * (((i * 67 + t.v * 60) % 26) / 100 - 0.1);
-      grondschaduw(c, ox, oy + TEGEL * 0.05, TEGEL * 0.1, TEGEL * 0.14, 0.18);
-      var r = TEGEL * (0.1 + ((i * 13 + t.v * 30) % 8) / 100);
-      c.poly([ox - r, oy + r * 0.5, ox - r * 0.4, oy - r, ox + r * 0.6, oy - r * 0.8, ox + r, oy + r * 0.5]).fill(0x7f7b72);
-      c.poly([ox - r * 0.4, oy - r, ox + r * 0.6, oy - r * 0.8, ox + r * 0.15, oy + r * 0.1]).fill(0x9c9488);
+      var ox = d.cx + TEGEL * (((i * 41 + t.v * 90) % 56) / 100 - 0.28);
+      var oy = d.cy + TEGEL * (((i * 67 + t.v * 60) % 30) / 100 - 0.12);
+      /* Elke kei een eigen breedte, hoogte en scheve top — anders is een
+         rotsveld een raster van precies hetzelfde driehoekje. */
+      var j1 = ((i * 13 + t.v * 30) % 10) / 10, j2 = ((i * 29 + t.v * 47) % 10) / 10;
+      var r = TEGEL * (0.08 + j1 * 0.08);
+      var br = r * (0.8 + j2 * 0.6), hg = r * (0.9 + j1 * 0.7);
+      var tint = 0.92 + j2 * 0.18;
+      grondschaduw(c, ox, oy + TEGEL * 0.04, br * 0.9, hg * 0.8, 0.2);
+      var tx2 = ox + (j2 - 0.5) * br * 0.5;
+      c.poly([ox - br, oy + r * 0.4, ox - br * 0.45, oy - hg * 0.75, tx2, oy - hg,
+        ox + br * 0.6, oy - hg * 0.6, ox + br, oy + r * 0.4]).fill(schaal(0x7f7b72, tint));
+      c.poly([ox - br * 0.45, oy - hg * 0.75, tx2, oy - hg, ox + br * 0.6, oy - hg * 0.6,
+        ox + br * 0.1, oy - hg * 0.15]).fill(schaal(0xa39c90, tint));
+      c.moveTo(tx2, oy - hg).lineTo(ox + br * 0.1, oy - hg * 0.15)
+        .stroke({ width: 0.6, color: 0x5c584f, alpha: 0.4 });
     }
     return c;
   }
@@ -1010,16 +1080,22 @@
      volume, waar een egale kegel of een plat plateau juist vlak oogt.
      Bewust NIET breder dan de tegel: overlappende brede massieven liepen in
      elkaar over en hun verlichte toppen leken los te zweven. */
-  function rotsPiek(c, cx, baseY, w, H, basis, j) {
-    var ax = cx + (j - 0.5) * w * 0.34, ay = baseY - H;
-    var L = { x: cx - w, y: baseY }, R = { x: cx + w, y: baseY };
+  function rotsPiek(c, cx, baseY, w, H, basis, j, j2, j3) {
+    j2 = j2 == null ? 0.5 : j2; j3 = j3 == null ? 0.5 : j3;
+    /* Asymmetrische voet en een geknikte flank: zonder deze variatie krijgt elke
+       rots exact hetzelfde silhouet en leest een veld ervan als behang. */
+    var ax = cx + (j - 0.5) * w * 0.42, ay = baseY - H * (0.9 + j2 * 0.2);
+    var L = { x: cx - w * (0.78 + j2 * 0.44), y: baseY + H * (j3 - 0.5) * 0.06 };
+    var R = { x: cx + w * (0.78 + j3 * 0.44), y: baseY + H * (j2 - 0.5) * 0.06 };
     var M = { x: cx + (j - 0.5) * w * 0.5, y: baseY + H * 0.03 };
+    /* Knik in de linkerflank: een schouder halverwege, hoogte per rots anders. */
+    var S = { x: ax + (L.x - ax) * (0.42 + j3 * 0.24), y: ay + (L.y - ay) * (0.34 + j2 * 0.3) };
     /* Achtervlak: een smalle donkere wig net achter de nok. Smal én ondiep
        gehouden — bij lage bulten liepen brede achtervlakken van buurtegels in
        elkaar over en vormden donkere stervormen op de grond. */
-    c.poly([ax, ay, ax - w * 0.3, ay + H * 0.42, ax + w * 0.34, ay + H * 0.38]).fill(schaal(basis, 0.58));
+    c.poly([ax, ay, ax - w * 0.3, ay + H * 0.42, ax + w * 0.34, ay + H * 0.38]).fill(schaal(basis, 0.64));
     /* linkerflank (schaduw) en rechterflank (licht) */
-    c.poly([L.x, L.y, M.x, M.y, ax, ay]).fill(schaal(basis, 0.73));
+    c.poly([L.x, L.y, M.x, M.y, ax, ay, S.x, S.y]).fill(schaal(basis, 0.78));
     c.poly([M.x, M.y, R.x, R.y, ax, ay]).fill(schaal(basis, 1.12));
     /* nokrand: lichte lijn over de scheiding, geeft de kant scherpte */
     c.moveTo(ax, ay).lineTo(M.x, M.y).stroke({ width: 0.8, color: schaal(basis, 1.3), alpha: 0.5 });
@@ -1047,13 +1123,13 @@
     var top = r1 > 0.7;
     var H = top ? TEGEL * (0.62 + (r1 - 0.7) / 0.3 * 0.5) : TEGEL * (0.24 + r1 * 0.42);
     var w = d.hw * (top ? 0.95 : 1.06);
-    var basis = schaal(0x6f6659, 0.9 + r4 * 0.2);      /* tintvariatie per rots */
+    var basis = schaal(0x877d6d, 0.9 + r4 * 0.2);      /* tintvariatie per rots */
     grondschaduw(c, d.cx, d.cy + d.hh * 0.3, w * 0.85, H * 0.45, 0.24);
     /* Een lagere zijkam eerst (staat er achter), dan de hoofdpiek ervoor. */
     if (r2 > 0.4) {
-      rotsPiek(c, d.cx + (r2 - 0.5) * w * 1.1, baseY - d.hh * 0.18, w * 0.6, H * 0.55, schaal(basis, 0.88), r3);
+      rotsPiek(c, d.cx + (r2 - 0.5) * w * 1.1, baseY - d.hh * 0.18, w * 0.6, H * 0.55, schaal(basis, 0.88), r3, r4, r1);
     }
-    var P4 = rotsPiek(c, d.cx, baseY, w, H, basis, r2);
+    var P4 = rotsPiek(c, d.cx, baseY, w, H, basis, r2, r3, r4);
     /* Losse rotsblokken aan de voet. */
     if (r3 > 0.45) {
       var px = d.cx + (r3 - 0.5) * w * 1.5, py = baseY + d.hh * 0.12, br = 2.2 + r4 * 2.2;

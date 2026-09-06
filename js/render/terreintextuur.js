@@ -77,11 +77,54 @@
     bos:        { licht: 0x5c7a3e, donker: 0x274421, vlek: 0x3a5230 },
     vruchtbaar: { licht: 0xc4a860, donker: 0x6f5a26, vlek: 0x8a6a30 },
     rots:       { licht: 0xa9a496, donker: 0x5f5b52, vlek: 0x6f6a5e },
-    berg:       { licht: 0x8f8a80, donker: 0x484238, vlek: 0x5c5750 }
+    berg:       { licht: 0x8f8a80, donker: 0x484238, vlek: 0x5c5750 },
+    water:      { licht: 0xcdeef0, donker: 0x1d4258, vlek: 0x6fb6b8 }
   };
 
-  var STIJL = { gras: 'gras', bos: 'gras', vruchtbaar: 'akker', rots: 'rots', berg: 'rots' };
-  var SEED = { gras: 1234567, bos: 7654321, vruchtbaar: 2468013, rots: 1357924, berg: 9182736 };
+  var STIJL = { gras: 'gras', bos: 'gras', vruchtbaar: 'akker', rots: 'rots', berg: 'rots', water: 'water' };
+  var SEED = { gras: 1234567, bos: 7654321, vruchtbaar: 2468013, rots: 1357924, berg: 9182736, water: 5551212 };
+
+  /* Water wordt gebakken in de óndiepe kleur, met golfkammen en -dalen erin.
+     De renderer vult elke watertegel één keer met deze textuur en trekt hem met
+     een multiply-tint naar de juiste diepte — net als bij land. Dat is bewust
+     één vulling: een tweede, transparante golf-overlay bovenop de basiskleur
+     kostte onder softwarerendering ruim het dubbele aan frametijd. */
+  function bakWater(basis, acc, r) {
+    var c = document.createElement('canvas');
+    c.width = c.height = MAAT;
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = hexStr(basis);
+    ctx.fillRect(0, 0, MAAT, MAAT);
+    ctx.lineCap = 'round';
+    /* lange, flauw golvende kammen in twee richtingen */
+    for (var laag = 0; laag < 2; laag++) {
+      var licht = laag === 0;
+      var n = licht ? 26 : 18;
+      for (var i = 0; i < n; i++) {
+        var y0 = r() * MAAT, x0 = r() * MAAT;
+        var len = 26 + r() * 70, amp = 2 + r() * 4;
+        ctx.globalAlpha = (licht ? 0.14 : 0.13) + r() * 0.09;
+        ctx.strokeStyle = hexStr(licht ? acc.licht : acc.donker);
+        ctx.lineWidth = licht ? 1 + r() * 1.6 : 2 + r() * 3;
+        for (var wrap = -1; wrap <= 1; wrap++) {
+          ctx.beginPath();
+          ctx.moveTo(x0 + wrap * MAAT, y0);
+          ctx.bezierCurveTo(x0 + len * 0.33 + wrap * MAAT, y0 - amp,
+                            x0 + len * 0.66 + wrap * MAAT, y0 + amp,
+                            x0 + len + wrap * MAAT, y0);
+          ctx.stroke();
+        }
+      }
+    }
+    /* fijne schittering */
+    ctx.globalAlpha = 1;
+    for (var k = 0; k < 90; k++) {
+      var sx = r() * MAAT, sy = r() * MAAT;
+      vlek(ctx, sx, sy, 0.7 + r() * 1.3, hexStr(acc.licht), 0.1 + r() * 0.16);
+    }
+    ctx.globalAlpha = 1;
+    return c;
+  }
 
   function bakCanvas(soort, basis, seizoen) {
     var c = document.createElement('canvas');
@@ -91,6 +134,8 @@
     var acc = ACCENT[soort] || { licht: schaal(basis, 1.2), donker: schaal(basis, 0.75), vlek: schaal(basis, 0.9) };
     var r = prng((SEED[soort] || 111) + (seizoen | 0) * 97);
     var winter = seizoen === 3;
+
+    if (stijl === 'water') return bakWater(P ? P.waterOndiep : 0x93d6cd, acc, r);
 
     ctx.fillStyle = hexStr(basis);
     ctx.fillRect(0, 0, MAAT, MAAT);

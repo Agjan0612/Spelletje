@@ -46,8 +46,8 @@
   };
 
   /* Water-diepte: ondiep (turquoise) → diep (donker blauwgroen). */
-  P.waterOndiep = 0x8fd0c8;
-  P.waterDiep = [0x27506b, 0x295473, 0x254a64, 0x2b4a5e];
+  P.waterOndiep = 0x93d6cd;
+  P.waterDiep = [0x1d4364, 0x1f476c, 0x1b3f5d, 0x213f55];
   P.oeverschuim = 0xdcf3ee;
   P.strand = 0xd8c48a;
 
