@@ -52,7 +52,7 @@
     var tt = Game.render.terreintextuur;
     if (!tt) return null;
     var tex = tt.get(soort, seizoen);
-    if (tex && !TEXMAT && window.PIXI) { TEXMAT = new PIXI.Matrix(); TEXMAT.scale(0.72, 0.72); }
+    if (tex && !TEXMAT && window.PIXI) { TEXMAT = new PIXI.Matrix(); TEXMAT.scale(1.05, 1.05); }
     return TEXMAT ? tex : null;
   }
 
@@ -257,10 +257,12 @@
           var l = tegelHoogte(T, b, h, tx - 1, ty, hc);
           var dh = hc - (ul * 0.5 + u * 0.25 + l * 0.25);
           var relief = Game.util.clamp(1 + dh * 2.4, 0.8, 1.22);
-          /* De geschilderde terreintextuur draagt de kleur; de hillshade en een
-             vleugje per-tegel-ruis worden er als multiply-tint overheen gelegd.
-             Zonder textuur (geen PIXI/canvas) valt alles terug op platte kleur. */
-          var mul = Game.util.clamp(relief * (0.86 + (t.v || 0) * 0.2), 0.5, 1);
+          /* De geschilderde terreintextuur draagt kleur én variatie; alleen de
+             hillshade wordt er als multiply-tint overheen gelegd. Bewust géén
+             per-tegel-ruis meer in de tint: die maakte een zichtbaar dambord,
+             terwijl de textuur (global textureSpace) juist naadloos doorloopt.
+             Zonder textuur valt alles terug op platte kleur (mét t.v-ruis). */
+          var mul = Game.util.clamp(relief * 0.94 + 0.05, 0.62, 1);
           tex = terreinTex(t.t, seizoen);
           if (tex) tint = schaal(0xffffff, mul);
           else kleur = schaal(kleur, relief * (0.9 + (t.v || 0) * 0.2));
@@ -301,13 +303,21 @@
               g.poly([a.x, a.y, c2.x, c2.y, ci.x, ci.y, ai.x, ai.y]).fill({ color: 0xd8c48a, alpha: 0.55 });
             }
           } else if (!isWater && buur.t !== t.t) {
-            /* Zachte overgang: de buurkleur bloedt een stukje deze tegel in, zodat
-               gras/bos/akker/rots niet met een harde ruit-grens tegen elkaar staan. */
+            /* Zachte overgang: de buurkleur bloedt in twee lagen deze tegel in —
+               een brede zwakke en een smalle sterke band — zodat gras/bos/akker/
+               rots niet met een harde ruit-grens tegen elkaar staan maar in elkaar
+               overvloeien. Textuur van de buur gebruiken als die er is. */
             var brij = TERREIN[buur.t] || TERREIN.gras;
+            var btex = terreinTex(buur.t, seizoen);
             var bk = schaal(brij[seizoen] != null ? brij[seizoen] : brij[0], 0.98);
-            var bi = { x: a.x + (mcx - a.x) * 0.4, y: a.y + (mcy - a.y) * 0.4 };
-            var bj = { x: c2.x + (mcx - c2.x) * 0.4, y: c2.y + (mcy - c2.y) * 0.4 };
-            g.poly([a.x, a.y, c2.x, c2.y, bj.x, bj.y, bi.x, bi.y]).fill({ color: bk, alpha: 0.4 });
+            var diep = [0.6, 0.32], alfa = [0.34, 0.5];
+            for (var bl = 0; bl < 2; bl++) {
+              var bi = { x: a.x + (mcx - a.x) * diep[bl], y: a.y + (mcy - a.y) * diep[bl] };
+              var bj = { x: c2.x + (mcx - c2.x) * diep[bl], y: c2.y + (mcy - c2.y) * diep[bl] };
+              var band = [a.x, a.y, c2.x, c2.y, bj.x, bj.y, bi.x, bi.y];
+              if (btex) g.poly(band).fill({ texture: btex, color: schaal(0xffffff, mul), matrix: TEXMAT, textureSpace: 'global', alpha: alfa[bl] });
+              else g.poly(band).fill({ color: bk, alpha: alfa[bl] });
+            }
           }
         }
 
