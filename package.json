@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview --port 4173"
+    "preview": "vite preview --port 4173",
+    "balans": "node tools/simuleer.js",
+    "balans:apotheek": "node apotheek/tools/simuleer-apotheek.js"
   },
   "devDependencies": {
     "playwright-core": "^1.63.0",

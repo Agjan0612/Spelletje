@@ -5,7 +5,7 @@ Een spel over het bouwen en runnen van een **openbare apotheek**, in de geest va
 
 - **Werktitel:** Recept tot Zorg *(alternatieven onderaan)*
 - **Branch:** `claude/pharmacy-game-design-175sl2`
-- **Status:** plan — **er is nog niets gebouwd**
+- **Status:** fase 0 en 0b zijn **gebouwd** — de kernlus draait, zie §16
 - **Verwant:** hergebruikt de motor en de werkwijze van *Dorp tot Stad* (zie `CLAUDE.md`)
 
 **Vastgelegd (12 sep 2026):** geloofwaardig vakspel · zwaartepunt op de casus ·
@@ -370,8 +370,8 @@ draait, dan diepte, dan breedte.
 
 | Fase | Wat | Omvang | Speelbaar? |
 |---|---|---|---|
-| **0 · Skelet** | pand-grid, 3 objecten, 2 assistenten, recepten stromen binnen, één signaaltype, uitgifte, wachttijd, geld | 🟡 | ja — de kernlus draait |
-| **0b · Meetlat** | `simuleer-apotheek.js` + eerste balans | 🟡 ⚠️ | n.v.t. — maar onmisbaar |
+| **0 · Skelet** ✅ | pand-grid, 3 objecten, 2 assistenten, recepten stromen binnen, één signaaltype, uitgifte, wachttijd, geld | 🟡 | **af** — de kernlus draait |
+| **0b · Meetlat** ✅ | `simuleer-apotheek.js` + eerste balans | 🟡 ⚠️ | **af** — en het verdiende zich meteen terug |
 | **1 · De casus** | receptkaart, signalenbibliotheek, dossier & ontbrekende gegevens, overleg, de apotheker als flessenhals, fouten & bijna-fouten, protocollen | 🔴 ⚠️ | dit is het spel |
 | **2 · Het pand** | volledige objectcatalogus, bouwmenu, loopafstand, overlays, koelkast/kluis/robot, spreekkamer, ruimte bijkopen | 🟡 | tycoon-laag erbij |
 | **3 · De onderneming** | voorraad, groothandel, servicegraad, TIB, volledig geldmodel, personeel + rooster + opleiding, drie reputaties | 🔴 ⚠️ | het wordt een bedrijf |
@@ -379,7 +379,7 @@ draait, dan diepte, dan breedte.
 | **5 · Vorm** | groeifasen, doelen, scenario's, statistieken, kroniek, geluid, uitleg voor nieuwe spelers | 🟡 | het wordt af |
 | **6 · Optioneel** | casusmodus (alleen recepten beoordelen, zonder bouwen), tweede vestiging, dienstapotheek | 🟡 | zie §12 |
 
-### Fase 0 in detail — de kleinste versie die al leuk is
+### Fase 0 in detail — de kleinste versie die al leuk is *(gebouwd)*
 
 Eén ruimte, drie objecten (balie · bewakingswerkplek · verzamellade), twee
 assistenten die er tussen lopen. Recepten druppelen binnen met één soort signaal
@@ -490,9 +490,59 @@ de objecten en de loopafstandsfunctie veranderen er niet van.
 
 ---
 
-## 16. Wat er nu klaarstaat
+## 16. Wat er staat — fase 0 en 0b
 
-Dit document is het plan; er is nog geen regel code geschreven. De eerstvolgende
-stap is **fase 0 uit §11**: het skelet met drie objecten, twee assistenten en één
-soort signaal — de kleinste versie die al spanning geeft. Daarna meteen §10, de
-meetlat, voordat er inhoud bij komt.
+Gebouwd in `apotheek/`: eigen entry, eigen bundel, eigen namespace
+(`window.Apotheek`), een uitgeklede kopie van de renderlaag. Draaien met
+`npm run dev` → `/apotheek/`, meten met `npm run balans:apotheek`. De
+conventies staan in `apotheek/CLAUDE.md`.
+
+**Wat er speelt.** Recepten druppelen binnen volgens een dagprofiel met een
+ochtendpiek en een vloedgolf om vier uur. Drie stations — bewaking, verzamellade,
+balie — verwerken ze; twee assistenten lopen ertussen en een station kan er maar
+één tegelijk bedienen. Wie in de zaak wacht heeft geduld voor 34 minuten en loopt
+daarna weg. Eén op de zes recepten geeft een signaal, en dan stopt de machine
+tot jij kiest:
+
+- **Overleg met de huisarts** — altijd goed, kost een assistent zes minuten.
+- **Akkoord** — kost niets, tot blijkt dat het signaal terecht was.
+
+Je kunt niet zien welke van de twee het is. Dat is geen ontbrekende functie maar
+het onderwerp van fase 1: gegevens opvragen is straks wat een gok in een oordeel
+verandert.
+
+**Wat het harnas eruit haalde.** Drie dingen, en dat is precies waarom het vroeg
+moest komen in plaats van laat:
+
+1. *Doorlooptijd was geen doorlooptijd.* De eerste meting gaf 60% bezetting bij
+   een doorlooptijd van 110 minuten — onmogelijk, tenzij je het verkeerde meet.
+   De teller telde de uren mee dat een recept klaar in het rek lag te wachten op
+   een patiënt die 's middags pas langskwam. Nu zijn het twee getallen: wat de
+   apotheek zelf doet, en wat de patiënt in de zaak ervaart.
+2. *De keuze was nep.* Bij de eerste balans won "altijd overleggen" op geld én
+   op tevredenheid, dus was er niets te kiezen. Oorzaak: een weggelopen patiënt
+   kostte niets en een fout €40. Nu kost weglopen ook geld, en verslaat een
+   speler die zich aan de drukte aanpast (+€74/dag) zowel altijd-overleggen
+   (+€23) als altijd-akkoord (+€35).
+3. *Tevredenheid was een aftelklok.* Die zakte elke dag verder tot nul. Nu loopt
+   het herstel naar 100 toe in plaats van lineair, dus vindt het een evenwicht
+   dat zegt hoe goed je speelt in plaats van hoe lang je speelt.
+
+**Stand** (10 zaden × 3 dagen, standaardbeleid): 108 afgeleverd · 5 weggelopen ·
+1,8 fouten · doorlooptijd 18 min · **bezetting 81%** · saldo +€140 ·
+tevredenheid 81%. Dat zit in de band uit §10, met ruimte voor een speler om het
+beter te doen dan de bot.
+
+**Eén afwijking van dit plan, bewust.** §9 zet PixiJS in de mappenlijst; fase 0
+tekent met Canvas 2D. Een skelet met drie meubels en twee poppetjes verdient geen
+WebGL-opzet — dit is honderdvijftig regels en nul configuratie. Het overstappunt
+is fase 2, als er echt iets te tekenen valt; de projectie zit al in `camera.js`
+en verandert daar niet van.
+
+### Wat als eerste komt in fase 1
+
+De receptkaart is er al, maar toont nu één signaal en twee knoppen. Fase 1 maakt
+er het spel van: de signalenbibliotheek als config, het dossier met gaten erin,
+gegevens opvragen als handeling die tijd kost en zekerheid oplevert, de apotheker
+als aparte en schaarse rol, en protocollen zodat de speler op den duur beleid
+instelt in plaats van elk recept aan te klikken.

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recept tot Zorg — apotheekspel</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💊</text></svg>">
+<link rel="stylesheet" href="css/stijl.css">
+</head>
+<body>
+
+<div id="app">
+
+  <header id="hud">
+    <div id="hud-links">
+      <div class="kruis">✚</div>
+      <div class="naam">
+        <div id="apotheeknaam">Apotheek De Waag</div>
+        <div id="fase" class="sub">Fase 0 — skelet</div>
+      </div>
+    </div>
+
+    <div id="hud-midden">
+      <div class="meter" id="m-klok"><span class="ico">🕘</span><span class="val">08:00</span></div>
+      <div class="meter" id="m-rij"><span class="ico">📋</span><span class="val">0</span></div>
+      <div class="meter" id="m-wachtend"><span class="ico">🪑</span><span class="val">0</span></div>
+      <div class="meter" id="m-doorloop"><span class="ico">⏱️</span><span class="val">—</span></div>
+      <div class="meter" id="m-tevreden"><span class="ico">🙂</span><span class="val">100%</span></div>
+      <div class="meter" id="m-geld"><span class="ico">💶</span><span class="val">0</span></div>
+    </div>
+
+    <div id="hud-rechts">
+      <div id="snelheden">
+        <button class="spd" data-snelheid="0" title="Pauze (spatie)">⏸</button>
+        <button class="spd actief" data-snelheid="1" title="Normaal (1)">1×</button>
+        <button class="spd" data-snelheid="2" title="Snel (2)">2×</button>
+        <button class="spd" data-snelheid="4" title="Zeer snel (3)">4×</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="vloer">
+    <canvas id="canvas"></canvas>
+
+    <aside id="werklijst" class="kaart">
+      <h3>Werkvoorraad <span id="werklijst-telling" class="telling">0</span></h3>
+      <div id="werklijst-inhoud"></div>
+    </aside>
+
+    <aside id="receptkaart" class="kaart verborgen"></aside>
+
+    <div id="logbox"></div>
+    <div id="toast" class="verborgen"></div>
+  </main>
+
+</div>
+
+<div id="overlay" class="verborgen">
+  <div id="overlay-kaart">
+    <h2 id="overlay-titel"></h2>
+    <div id="overlay-body"></div>
+    <div id="overlay-acties"></div>
+  </div>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

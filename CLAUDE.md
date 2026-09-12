@@ -226,6 +226,19 @@ New **events**, **contracts**, **research** and **charter terms** (`faamEisen`) 
 - **Language split:** domain code (identifiers, building/resource ids, log text) is in **Dutch**; code comments are in **English**. Match this when editing.
 - **Balancing = the food economy.** The two failure modes that were deliberately engineered out: hunger must remove food-workers *last* (`population.js` `rang()`), and low happiness must not throttle food production into a death spiral (production multiplier floors at `0.75`). Keep these invariants when touching `population.js` / `economy.js`.
 
+## Een tweede spel in dezelfde repo
+
+`apotheek/` is **Recept tot Zorg**, een spel over het runnen van een openbare
+apotheek in de geest van *Project Hospital*. Het staat los van Dorp tot Stad:
+eigen entry (`apotheek/index.html`), eigen bundel, eigen namespace
+(`window.Apotheek`), en een uitgeklede **kopie** van de renderlaag in plaats van
+gedeelde code — een gedeelde motor uittrekken zou eerst dit spel verbouwen
+voordat dat spel iets doet. Beide komen uit één `npm run build`; Pages serveert
+ze als `/Spelletje/` en `/Spelletje/apotheek/`.
+
+Werk je daarin, lees dan `apotheek/CLAUDE.md`. Het plan staat in
+`BOUWPLAN-APOTHEEK.md`. Balans meten gaat met `npm run balans:apotheek`.
+
 ## Branches
 
 `main` is what GitHub Pages serves. Work happens on `claude/...` feature branches and is merged into `main` when it is validated.
