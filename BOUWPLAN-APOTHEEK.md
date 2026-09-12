@@ -8,6 +8,10 @@ Een spel over het bouwen en runnen van een **openbare apotheek**, in de geest va
 - **Status:** plan — **er is nog niets gebouwd**
 - **Verwant:** hergebruikt de motor en de werkwijze van *Dorp tot Stad* (zie `CLAUDE.md`)
 
+**Vastgelegd (12 sep 2026):** geloofwaardig vakspel · zwaartepunt op de casus ·
+submap `apotheek/` in deze repo · objecten plaatsen in een vast pand.
+Wat die vier keuzes betekenen staat in §15.
+
 **Legenda moeite:** 🟢 klein · 🟡 middel · 🔴 groot
 **Legenda risico:** ✅ los onderdeel · ⚠️ raakt de balans of de speltoestand
 
@@ -128,6 +132,15 @@ dramatischer én eerlijker dan een directe strafpunt.
 | **Zorg** | spreekkamer (medicatiebeoordeling, reisadvies, bloeddruk) · kantoor apotheker |
 | **Logistiek** | magazijn · ontvangstplek groothandel · bezorgplek · LNA-bereidingsruimte |
 | **Mensen** | koffiekamer — personeel herstelt energie; het equivalent van `tevredenheid` maar dan voor je team |
+
+Het pand **ligt er al** — je tekent geen muren, je richt in. Je begint met een
+klein overgenomen pandje en koopt er later ruimte bij (de leegstaande winkel
+ernaast, de zolder, de kelder): een uitbreiding is één knop die een stuk grid
+vrijgeeft. Dat scheelt een compleet bouwgereedschap met muren, deuren en
+ruimtebenoeming, en het sluit aan op `construction.js`, dat plaatsen, verplaatsen,
+slopen en een bouwwachtrij al kan. De indeling blijft een puzzel omdat de
+loopafstanden dat afdwingen; de vrijheid zit in *waar wat staat*, niet in de
+plattegrond.
 
 Elk object heeft **capaciteit, bemanning en een wachtrij**. Een tweede
 bewakingswerkplek is pas nuttig als je iemand hebt om erachter te zetten — dat is
@@ -360,11 +373,11 @@ draait, dan diepte, dan breedte.
 | **0 · Skelet** | pand-grid, 3 objecten, 2 assistenten, recepten stromen binnen, één signaaltype, uitgifte, wachttijd, geld | 🟡 | ja — de kernlus draait |
 | **0b · Meetlat** | `simuleer-apotheek.js` + eerste balans | 🟡 ⚠️ | n.v.t. — maar onmisbaar |
 | **1 · De casus** | receptkaart, signalenbibliotheek, dossier & ontbrekende gegevens, overleg, de apotheker als flessenhals, fouten & bijna-fouten, protocollen | 🔴 ⚠️ | dit is het spel |
-| **2 · Het pand** | volledige objectcatalogus, bouwmenu, loopafstand, overlays, koelkast/kluis/robot, spreekkamer | 🔴 | tycoon-laag erbij |
+| **2 · Het pand** | volledige objectcatalogus, bouwmenu, loopafstand, overlays, koelkast/kluis/robot, spreekkamer, ruimte bijkopen | 🟡 | tycoon-laag erbij |
 | **3 · De onderneming** | voorraad, groothandel, servicegraad, TIB, volledig geldmodel, personeel + rooster + opleiding, drie reputaties | 🔴 ⚠️ | het wordt een bedrijf |
 | **4 · De wereld** | gebeurtenissen, tekortenmechaniek, huisartsen & FTO, verzekeraarscontract, seizoenen, inspectie | 🟡 ⚠️ | het wordt onvoorspelbaar |
 | **5 · Vorm** | groeifasen, doelen, scenario's, statistieken, kroniek, geluid, uitleg voor nieuwe spelers | 🟡 | het wordt af |
-| **6 · Optioneel** | casusmodus (alleen recepten beoordelen, zonder bouwen), tweede vestiging, dienstapotheek | 🟡 | zie hieronder |
+| **6 · Optioneel** | casusmodus (alleen recepten beoordelen, zonder bouwen), tweede vestiging, dienstapotheek | 🟡 | zie §12 |
 
 ### Fase 0 in detail — de kleinste versie die al leuk is
 
@@ -421,15 +434,65 @@ zie de vragen hieronder.
 
 ---
 
-## 15. Openstaande vragen
+## 15. Vastgelegde keuzes
 
-Vier dingen veranderen het plan wezenlijk; ze staan in het gesprek als vraag en
-worden hier verwerkt zodra ze beantwoord zijn.
+De vier vragen uit de eerste versie van dit plan zijn beantwoord. Ze staan hier
+met hun gevolg, zodat later duidelijk is waarom het spel zo in elkaar zit.
 
-1. **Waarvoor is het?** Puur spel · geloofwaardig vakspel · ook bruikbaar als
-   oefenmateriaal voor het team.
-2. **Waar ligt het zwaartepunt?** De casus (Project Hospital), het bouwen (tycoon),
-   of allebei even zwaar.
-3. **Waar komt het te staan?** Submap in deze repo, of een eigen repo.
-4. **Hoeveel bouwvrijheid?** Zelf muren tekenen zoals Project Hospital, of objecten
-   plaatsen in een vast pand.
+### 1. Het wordt een geloofwaardig vakspel
+
+Een echt spel, maar de vakinhoud klopt. Een collega herkent z'n werk, een
+buitenstaander kan het spelen zonder apotheker te zijn.
+
+**Gevolg:** de signalen, de tekorten, de tarieven en de servicegraad worden
+gemodelleerd zoals ze werkelijk werken, niet als abstracte getallen. Elk signaal
+krijgt naast z'n vakinhoudelijke naam **één zin in gewone taal** in de tooltip —
+dat is wat het speelbaar houdt voor wie het vak niet kent, en het is de goedkoopste
+verzekering tegen jargon-overdaad. De configbestanden (`signalen.js`,
+`artikelen.js`, `zorgprestaties.js`) worden bewust zo opgezet dat de inhoud
+uitgebreid kan worden zonder één regel code — dat is waar de diepte vandaan komt.
+
+### 2. Het zwaartepunt ligt op de casus
+
+Het recept met een verborgen probleem is het hart; het pand is de context eromheen.
+
+**Gevolg:** fase 1 is de grootste en belangrijkste fase, en de bouwlaag mag
+eenvoudiger blijven dan in Project Hospital. Als er ergens geschrapt moet worden,
+wordt er in de tycoon-laag geschrapt en niet in de casuslaag. De apotheker als
+schaarse flessenhals, de ontbrekende gegevens en de protocollen zijn geen extra's
+maar de kern.
+
+### 3. Het komt in een submap van deze repo
+
+`apotheek/` naast het bestaande spel, met een eigen entry en een eigen bundel.
+
+**Gevolg:** de renderlaag (camera, beweging, sfeer, lagen) wordt **gekopieerd en
+uitgekleed**, niet gedeeld. Dat is bewust: een gedeelde motor uittrekken zou eerst
+*Dorp tot Stad* verbouwen voordat het nieuwe spel iets doet, en die verbouwing
+levert pas iets op als beide spellen af zijn. Kopiëren betekent dat er twee
+versies van `camera.js` bestaan die uit elkaar kunnen groeien — dat is hier de
+goedkopere fout. Het bestaande spel kan hierdoor niet breken.
+
+Praktisch: `vite.config.mjs` krijgt een tweede ingang, en de Pages-workflow
+publiceert straks beide spellen onder één `dist/` (`/Spelletje/` en
+`/Spelletje/apotheek/`). Dat wordt bij fase 0 meteen goed gezet, want achteraf
+paden verbouwen is precies het soort werk dat niemand leuk vindt.
+
+### 4. Je richt een vast pand in
+
+Geen muren tekenen, wel objecten plaatsen — en later ruimte bijkopen.
+
+**Gevolg:** zie §4. Dit scheelt naar schatting een halve fase aan bouwgereedschap
+en het maakt de looproutes eenvoudig te berekenen (geen deuren, geen onbereikbare
+hoeken), wat de wachtrij-balans uit §10 een stuk voorspelbaarder maakt. Mocht vrij
+bouwen later toch gemist worden, dan is het een uitbreiding en geen verbouwing:
+de objecten en de loopafstandsfunctie veranderen er niet van.
+
+---
+
+## 16. Wat er nu klaarstaat
+
+Dit document is het plan; er is nog geen regel code geschreven. De eerstvolgende
+stap is **fase 0 uit §11**: het skelet met drie objecten, twee assistenten en één
+soort signaal — de kleinste versie die al spanning geeft. Daarna meteen §10, de
+meetlat, voordat er inhoud bij komt.
