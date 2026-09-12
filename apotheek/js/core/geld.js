@@ -30,7 +30,10 @@
     /* De vaste lasten vallen in één keer als de deur dicht gaat, zodat de
        speler het effect van een dag in één cijfer ziet. */
     dagafsluiting: function (s) {
-      var loon = I.loonPerDag * s.personeel.length;
+      var loon = 0;
+      for (var i = 0; i < s.personeel.length; i++) {
+        loon += I.loon[s.personeel[i].rol] || I.loon.assistent;
+      }
       s.geld -= loon + I.huurPerDag;
       s.vandaag.kosten += loon + I.huurPerDag;
       return {

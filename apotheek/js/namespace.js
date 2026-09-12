@@ -26,6 +26,9 @@ Apotheek.util = {
     return u + ' u ' + Math.round(min % 60);
   },
 
+  /* "1 fout" / "3 fouten" */
+  telwoord: function (n, enkel, meer) { return n + ' ' + (n === 1 ? enkel : meer); },
+
   euro: function (n) {
     var neg = n < 0;
     var v = Math.abs(n).toFixed(2).replace('.', ',');

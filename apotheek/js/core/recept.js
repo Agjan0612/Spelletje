@@ -1,13 +1,17 @@
 /* Het recept: één zaak die door de molen gaat.
  *
- * De fasen zijn de kernlus uit het bouwplan, één op één:
+ * De fasen zijn de kernlus uit het bouwplan:
  *
- *   bewaking → (besluit → overleg) → gereedmaken → uitgifte → af
- *                                                          ↘ weg
+ *   bewaking → [besluit ⇄ opvragen] → overleg | oordeel → gereedmaken
+ *            → controle → uitgifte → af                        ↘ weg
  *
- * 'besluit' is de enige fase zonder station: daar wacht het recept op de
- * speler. Dat is met opzet de flessenhals — het is de plek waar het spel om
- * aandacht vraagt in plaats van om muisklikken. */
+ * 'besluit' is de enige fase zonder station: daar wacht het recept op de speler
+ * of op zijn protocol. Dat is met opzet de flessenhals — het is de plek waar het
+ * spel om aandacht vraagt in plaats van om muisklikken.
+ *
+ * Het dubbele pijltje naar 'opvragen' is waar fase 1 om draait. Een signaal is
+ * pas een oordeel als je weet wat er onder ligt; tot die tijd is het een gok.
+ * Opvragen kost tijd, lukt niet altijd, en verandert daarna wél alles. */
 (function (A) {
 
   var I = A.config.inst;
@@ -15,23 +19,55 @@
   var ACHTERNAMEN = [
     'Bakker', 'de Vries', 'Jansen', 'van Dijk', 'Visser', 'Smit', 'Meijer',
     'de Boer', 'Mulder', 'Bos', 'Vos', 'Peters', 'Hendriks', 'van Leeuwen',
-    'Dekker', 'Brouwer', 'de Wit', 'Dijkstra', 'Kok', 'van der Berg',
-    'El Amrani', 'Yilmaz', 'Kowalski', 'Nguyen'
+    'Dekker', 'Brouwer', 'de Wit', 'Dijkstra', 'Kok', 'van den Berg',
+    'El Amrani', 'Yilmaz', 'Kowalski', 'Nguyen', 'Öztürk', 'Fernandes'
   ];
   var LETTERS = 'ABCDEFGHIJKLMNOPRSTVW';
+
+  function werktijd(s, sleutel) {
+    var basis = I.werk[sleutel];
+    var sp = I.werkSpreiding;
+    return basis * A.core.rng.tussen(s, 1 - sp, 1 + sp);
+  }
 
   /* Wanneer komt iemand die later ophaalt terug? Nooit ná sluitingstijd: een
      recept dat blijft liggen tot morgen is een echte situatie, maar het maakt
      van één speeldag een boekhouding over twee dagen. Dat is fase 3, niet nu. */
   function ophaalmoment(s) {
     var vroegst = s.tijd + A.core.rng.tussen(s, I.ophalenNa[0], I.ophalenNa[1]);
-    return Math.min(vroegst, I.dagEind - 25);
+    var laatst = I.dagEind - 20;
+    if (vroegst <= laatst) return vroegst;
+    /* Wie anders ná sluitingstijd terug zou komen, spreiden we over het laatste
+       uur in plaats van ze allemaal op hetzelfde moment terug te laten komen.
+       Dat afkappen op één tijdstip bouwde een piek die er niet hoort te zijn en
+       liet de dag pas om zeven uur leeglopen. */
+    return Math.max(s.tijd + 15, A.core.rng.tussen(s, I.dagEind - 95, laatst));
   }
 
-  function werktijd(s, station) {
-    var basis = I.werk[station];
-    var sp = I.werkSpreiding;
-    return basis * A.core.rng.tussen(s, 1 - sp, 1 + sp);
+  function kiesKlasse(s) {
+    var v = I.klasseVerdeling;
+    var r = A.core.rng.trek(s);
+    if (r < v.A) return 'A';
+    if (r < v.A + v.B) return 'B';
+    return 'C';
+  }
+
+  /* Wat je te zien krijgt als het gegeven boven water komt. De waarde ís het
+     antwoord — dat is het verschil met een spel waarin een knop "goed" of "fout"
+     zegt: hier lees je een nierfunctie en trek je zelf de conclusie. */
+  function gegeven(s, soort, echt) {
+    if (soort === 'nierfunctie') {
+      var e = echt ? A.core.rng.heel(s, 28, 48) : A.core.rng.heel(s, 62, 96);
+      return { kort: 'eGFR ' + e, lang: 'Nierfunctie: eGFR ' + e + ' ml/min' };
+    }
+    if (soort === 'allergie') {
+      return echt
+        ? { kort: 'echte allergie', lang: 'Allergie bevestigd: uitslag en benauwdheid, gemeld door de huisarts.' }
+        : { kort: 'geen allergie', lang: 'De melding blijkt maagklachten te zijn geweest — geen allergie.' };
+    }
+    return echt
+      ? { kort: 'gebruikt door', lang: 'Afleverhistorie: haalt dit middel elke maand op, laatste keer vier weken geleden.' }
+      : { kort: 'gestopt', lang: 'Afleverhistorie: laatste aflevering ruim acht maanden geleden.' };
   }
 
   A.core.recept = {
@@ -43,9 +79,15 @@
        kansen meer hoeft te gooien: dat maakt een dag herhaalbaar. */
     maak: function (s) {
       var wacht = A.core.rng.kans(s, I.wachtAandeel);
-      var heeftSignaal = A.core.rng.kans(s, I.signaalKans);
       var letter = LETTERS[A.core.rng.heel(s, 0, LETTERS.length - 1)];
       var naam = ACHTERNAMEN[A.core.rng.heel(s, 0, ACHTERNAMEN.length - 1)];
+
+      var sig = null, echt = false;
+      if (A.core.rng.kans(s, I.signaalKans)) {
+        var lijst = A.config.signalenVanKlasse(kiesKlasse(s));
+        sig = lijst[A.core.rng.heel(s, 0, lijst.length - 1)];
+        echt = A.core.rng.kans(s, sig.echtKans);
+      }
 
       var r = {
         id: 'r' + s.volgnummer,
@@ -55,56 +97,109 @@
         binnen: s.tijd,
         wacht: wacht,
         ophalen: wacht ? s.tijd : ophaalmoment(s),
+
         fase: 'bewaking',
         rest: werktijd(s, 'bewaking'),
         bezig: false,
-        signaal: heeftSignaal ? A.config.signalen[0].id : null,
-        /* De verborgen waarheid. De speler kan hem in fase 0 niet zien — in
-           fase 1 is dat precies wat het opvragen van gegevens gaat opleveren. */
-        echt: heeftSignaal ? A.core.rng.kans(s, I.signaalEcht) : false,
+
+        signaal: sig ? sig.id : null,
+        klasse: sig ? sig.klasse : null,
+        /* De verborgen waarheid. Opvragen is de enige manier om hem te zien —
+           en dat is precies wat een gok in een oordeel verandert. */
+        echt: echt,
+        onthuld: false,
+        opvraagMislukt: false,
+        gegeven: sig && sig.vraagt ? gegeven(s, sig.vraagt, echt) : null,
+
         besluit: null,
         fout: false,
+        verzamelfout: false,
+        bijnaFout: false,
+        gecontroleerd: false,
+        gereed: null,
         klaar: null
       };
       s.volgnummer++;
       s.recepten.push(r);
       s.vandaag.binnen++;
+      if (sig) s.vandaag.signalen++;
       return r;
     },
 
-    /* Het station dat bij de huidige fase hoort, of null als het recept nu
-       niet op iemand wacht die eraan kan werken. */
-    station: function (r) {
-      if (r.fase === 'bewaking') return 'bewaking';
-      if (r.fase === 'overleg') return 'overleg';
-      if (r.fase === 'gereedmaken') return 'gereedmaken';
-      if (r.fase === 'uitgifte') return 'uitgifte';
-      return null;
+    /* Welke handelingen zijn hier nú mogelijk. De receptkaart tekent hier zijn
+       knoppen mee en het protocol kiest er één uit — dus geen tweede lijst. */
+    mogelijk: function (s, r) {
+      var sig = A.config.signaal(r.signaal);
+      if (!sig) return [];
+      var uit = [];
+      var toegestaan = A.config.toegestaan[sig.klasse] || [];
+      for (var i = 0; i < toegestaan.length; i++) {
+        var id = toegestaan[i];
+        if (id === 'opvragen' && (!sig.vraagt || r.onthuld || r.opvraagMislukt)) continue;
+        uit.push(A.config.actie(id));
+      }
+      return uit;
     },
 
-    /* Het besluit van de speler op een bewakingssignaal. Ook het harnas roept
+    /* De handeling van de speler (of van zijn protocol). Ook het harnas roept
        precies deze functie aan, zodat een headless run niet stiekem een ander
        spel meet dan de speler speelt. */
-    beslis: function (s, id, keuze) {
+    doe: function (s, id, actieId) {
       var r = A.core.state.recept(s, id);
       if (!r || r.fase !== 'besluit') return false;
-      r.besluit = keuze;
+      var sig = A.config.signaal(r.signaal);
+      if (!sig) return false;
 
-      if (keuze === 'overleg') {
+      var toegestaan = A.config.toegestaan[sig.klasse] || [];
+      if (toegestaan.indexOf(actieId) < 0) return false;
+
+      if (actieId === 'opvragen') {
+        r.fase = 'opvragen';
+        r.rest = werktijd(s, 'opvragen');
+        return true;
+      }
+      if (actieId === 'overleg') {
         r.fase = 'overleg';
         r.rest = werktijd(s, 'overleg');
         s.vandaag.overlegd++;
-        A.ui.log.schrijf(s, '☎️ Overleg met de huisarts over ' + r.patient + '.');
-      } else {
-        r.fase = 'gereedmaken';
-        r.rest = werktijd(s, 'gereedmaken');
-        s.vandaag.akkoord++;
-        /* Akkoord op een signaal dat écht was, is een fout. Die komt in fase 0
-           aan de balie aan het licht — een gevolg dat pas weken later opduikt
-           is het plan voor fase 1, en daar hoort een langere tijdlijn bij. */
-        if (r.echt) r.fout = true;
+        return true;
       }
-      return true;
+      if (actieId === 'apotheker') {
+        r.fase = 'oordeel';
+        /* Met het gegeven er al bij is de apotheker in een derde van de tijd
+           klaar. Dat is de hele reden om een assistent eerst te laten uitzoeken:
+           je ruilt goedkope tijd tegen de duurste tijd in huis. */
+        r.rest = werktijd(s, r.onthuld ? 'oordeelKort' : 'oordeel');
+        s.vandaag.beoordeeld++;
+        return true;
+      }
+      if (actieId === 'akkoord') {
+        r.besluit = 'akkoord';
+        s.vandaag.akkoord++;
+        /* Akkoord op een signaal dat écht was, is een fout. Of die de deur uit
+           gaat hangt af van de controletafel. */
+        if (r.echt && sig.klasse !== 'C') r.fout = true;
+        A.core.werkvloer.naarGereedmaken(s, r);
+        return true;
+      }
+      return false;
+    },
+
+    /* Het gegeven is opgehaald — of niet. Dat tweede is geen pech maar het
+       tegenwicht: zonder de kans dat je met lege handen terugkomt zou opvragen
+       altijd het beste antwoord zijn en was er weer niets te kiezen. */
+    onthul: function (s, r) {
+      if (A.core.rng.kans(s, I.opvraagKans)) {
+        r.onthuld = true;
+        s.vandaag.opgevraagd++;
+        A.ui.log.schrijf(s, '🔎 ' + r.patient + ': ' + (r.gegeven ? r.gegeven.kort : 'gegeven binnen') + '.');
+      } else {
+        r.opvraagMislukt = true;
+        s.vandaag.opvraagMislukt++;
+        A.ui.log.schrijf(s, '🔎 Geen gegeven gevonden voor ' + r.patient + '.');
+      }
+      r.fase = 'besluit';
+      r.rest = 0;
     }
   };
 

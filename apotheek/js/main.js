@@ -27,6 +27,10 @@
     A.core.klok.tick(s, dm);
     A.core.toeloop.tick(s, dm);
     A.core.personeel.tick(s, dm);
+    /* Protocollen draaien ná het personeel: een recept dat deze tik op
+       'besluit' belandt, wordt in dezelfde tik door het beleid opgepakt in
+       plaats van een tik te blijven liggen. */
+    A.core.protocollen.tick(s);
     A.core.werkvloer.tick(s, dm);
   }
   spel.stap = stap;
@@ -51,6 +55,7 @@
     A.ui.hud.ververs(s);
     A.ui.werklijst.ververs(s, forceer);
     A.ui.receptkaart.ververs(s);
+    A.ui.beleid.ververs(s, forceer);
   }
 
   /* ------------------------------------------------------------------ lus -- */
@@ -132,6 +137,10 @@
     spel.ctx = canvas.getContext('2d');
     spel.cam = new A.render.Camera();
 
+    document.getElementById('btn-beleid').addEventListener('click', function () {
+      A.ui.beleid.wissel(spel.state);
+    });
+
     document.getElementById('snelheden').addEventListener('click', function (e) {
       var k = e.target.closest('.spd');
       if (k) snelheid(Number(k.dataset.snelheid));
@@ -144,6 +153,7 @@
       else if (e.key === '2') snelheid(2);
       else if (e.key === '3') snelheid(4);
       else if (e.key === 'Enter') A.ui.receptkaart.volgende(spel.state);
+      else if (e.key === 'p' || e.key === 'P') A.ui.beleid.wissel(spel.state);
       else if (e.key === 'Escape') A.ui.receptkaart.sluit();
     });
 

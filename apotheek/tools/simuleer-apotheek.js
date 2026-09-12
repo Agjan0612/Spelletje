@@ -54,21 +54,18 @@ function nieuweWereld() {
 
 /* ------------------------------------------------------------------ bot -- */
 
-/* Een bewust middelmatige, bewust vaste speler. Het getal dat hij oplevert is
-   alleen iets waard omdat het dezelfde speler is aan beide kanten van een
-   wijziging — vergelijk hem nooit met een mens. */
-var beleidDrempel = 6;
-
-function bot(A, s, beleid) {
+/* De bot ís het protocol. Sinds fase 1 kan de speler zijn beleid vastleggen, en
+   dan is het eerlijkst — en veruit het nuttigst — om precies díe standen te
+   meten in plaats van een eigen botlogica te verzinnen die niemand kan spelen.
+   Wat hier gemeten wordt is dus letterlijk een speelbare speelstijl.
+   Het vangnet hieronder is er voor de stand 'vraag', waar een mens aan zet is:
+   in een headless run zou het recept dan eeuwig blijven liggen. */
+function botVangnet(A, s) {
   var open = A.core.state.besluiten(s);
-  if (!open.length) return;
-  var druk = A.core.state.onderhanden(s);
   for (var i = 0; i < open.length; i++) {
-    var keuze;
-    if (beleid === 'overleg') keuze = 'overleg';
-    else if (beleid === 'akkoord') keuze = 'akkoord';
-    else keuze = druk > beleidDrempel ? 'akkoord' : 'overleg';  /* wijk als het druk is */
-    A.core.recept.beslis(s, open[i].id, keuze);
+    var r = open[i];
+    if (A.core.protocollen.keuze(s, r)) continue;      /* het beleid pakt hem op */
+    A.core.recept.doe(s, r.id, r.klasse === 'A' ? 'apotheker' : 'overleg');
   }
 }
 
@@ -79,9 +76,20 @@ function draaiZaad(zaad, opties) {
   var A = ctx.window.Apotheek;
 
   if (opties.recepten) A.config.inst.receptenPerDag = opties.recepten;
-  if (opties.personeel) { /* fase 0 heeft er vast twee; haak voor later */ }
+  /* --knop=naam:waarde zet één instelling om, zodat een sweep geen bestand
+     hoeft te bewerken. Alleen platte getallen; alles ingewikkelder hoort in
+     instellingen.js thuis en niet op de opdrachtregel. */
+  opties.knoppen.forEach(function (k) {
+    var d = k.split(':');
+    if (d.length === 2 && A.config.inst[d[0]] !== undefined) {
+      A.config.inst[d[0]] = Number(d[1]);
+    }
+  });
 
   var s = A.core.state.nieuw(zaad, 'Harnas');
+  s.protocol.A = opties.beleidA;
+  s.protocol.B = opties.beleidB;
+  s.protocol.controle = opties.controle;
   var dm = ctx.window.spel.TICK * A.config.inst.minutenPerSeconde;
 
   var dagen = [];
@@ -89,15 +97,18 @@ function draaiZaad(zaad, opties) {
     var vast = 0;
     while (!s.dagKlaar) {
       ctx.window.spel.stap(s, dm);
-      bot(A, s, opties.beleid);
+      botVangnet(A, s);
       /* Vangnet: als de dag na sluitingstijd niet leegloopt, is er iets mis met
          de doorstroom — dat is een bevinding, geen reden om te blijven hangen. */
       if (s.tijd > A.config.inst.dagEind + 600) { vast = 1; A.core.klok.sluit(s); }
     }
     var g = s.gisteren, b = g.boek;
     dagen.push({
-      af: b.af, binnen: b.binnen, weg: b.weggelopen, fouten: b.fouten,
-      overlegd: b.overlegd, akkoord: b.akkoord,
+      af: b.af, binnen: b.binnen, weg: b.weggelopen,
+      fouten: b.fouten, bijna: b.bijnaFouten,
+      overlegd: b.overlegd, akkoord: b.akkoord, beoordeeld: b.beoordeeld,
+      opgevraagd: b.opgevraagd,
+      apotheker: g.bezettingApotheker,
       doorloop: b.gereedN ? b.gereedSom / b.gereedN : 0,
       doorloopMax: b.gereedMax,
       wachttijd: b.wachtN ? b.wachtSom / b.wachtN : 0,
@@ -141,17 +152,20 @@ function vlag(naam, standaard) {
 var opties = {
   zaden: Number(vlag('zaden', 12)),
   dagen: Number(vlag('dagen', 3)),
-  beleid: vlag('beleid', 'gemengd'),
+  beleidA: vlag('a', 'uitzoeken'),        /* apotheker | uitzoeken | vraag */
+  beleidB: vlag('b', 'uitzoeken'),        /* uitzoeken | overleg | akkoord | vraag */
+  controle: vlag('controle', 'alles'),    /* alles | signaal | geen */
   recepten: Number(vlag('recepten', 0)) || 0,
-  drempel: Number(vlag('drempel', 6))
+  knoppen: process.argv.filter(function (a) { return a.indexOf('--knop=') === 0; })
+    .map(function (a) { return a.slice(7); })
 };
-beleidDrempel = opties.drempel;
 var alsJson = process.argv.indexOf('--json') >= 0;
 
 var rijen = [];
 for (var z = 1; z <= opties.zaden; z++) rijen.push(draaiZaad(z * 7919, opties));
 
-var kolommen = ['af', 'weg', 'fouten', 'doorloop', 'doorloopMax', 'wachttijd', 'bezetting', 'saldo', 'tevreden', 'eind'];
+var kolommen = ['af', 'weg', 'fouten', 'bijna', 'doorloop', 'doorloopMax', 'wachttijd',
+  'bezetting', 'apotheker', 'saldo', 'tevreden', 'eind'];
 var med = {};
 kolommen.forEach(function (k) {
   med[k] = mediaan(rijen.map(function (r) { return r[k]; }));
@@ -161,31 +175,32 @@ if (alsJson) {
   console.log(JSON.stringify({ opties: opties, mediaan: med, zaden: rijen }, null, 2));
 } else {
   console.log('');
-  console.log('  Apotheek — ' + opties.zaden + ' zaden × ' + opties.dagen + ' dagen, beleid: ' + opties.beleid);
-  console.log('  recepten/dag: ' + (opties.recepten || 'standaard'));
+  console.log('  Apotheek — ' + opties.zaden + ' zaden × ' + opties.dagen + ' dagen');
+  console.log('  beleid: A=' + opties.beleidA + '  B=' + opties.beleidB +
+    '  controle=' + opties.controle + '  recepten/dag=' + (opties.recepten || 'standaard'));
   console.log('');
-  console.log('  zaad   af   weg  fout   gereed   max   balie   bezetting   saldo   tevr   klaar om');
-  rijen.forEach(function (r, i) {
-    console.log('  ' + pad(i + 1, 4) + pad(Math.round(r.af), 5) + pad(Math.round(r.weg), 6) +
-      pad(r.fouten.toFixed(1), 6) + pad(r.doorloop.toFixed(1), 9) +
-      pad(Math.round(r.doorloopMax), 6) + pad(r.wachttijd.toFixed(1), 8) +
-      pad(Math.round(r.bezetting * 100) + '%', 12) +
-      pad(Math.round(r.saldo), 8) + pad(Math.round(r.tevreden) + '%', 7) +
-      pad(klok(r.eind), 11));
-  });
-  console.log('  ' + '-'.repeat(72));
-  console.log('  MED ' + pad(Math.round(med.af), 5) + pad(Math.round(med.weg), 6) +
-    pad(med.fouten.toFixed(1), 6) + pad(med.doorloop.toFixed(1), 9) +
-    pad(Math.round(med.doorloopMax), 6) + pad(med.wachttijd.toFixed(1), 8) +
-    pad(Math.round(med.bezetting * 100) + '%', 12) +
-    pad(Math.round(med.saldo), 8) + pad(Math.round(med.tevreden) + '%', 7) +
-    pad(klok(med.eind), 11));
+  console.log('  zaad   af  weg  fout bijna  gereed   max  balie   bezet  apoth   saldo  tevr  klaar');
+  rijen.forEach(function (r, i) { console.log('  ' + regel(i + 1, r)); });
+  console.log('  ' + '-'.repeat(78));
+  console.log('  MED ' + regel('', med).slice(4));
   console.log('');
   var b = med.bezetting;
   console.log('  ' + (b > 0.90 ? '⚠️  Te krap: boven 0,90 groeit de rij de hele dag.'
     : b < 0.60 ? '⚠️  Te ruim: onder 0,60 heeft de speler niets te doen.'
       : '✅ Bezetting in de speelbare band (0,75–0,85 streef).'));
+  if (med.apotheker > 0.9) console.log('  ⚠️  De apotheker zit vast: klasse A stapelt op.');
   console.log('');
+}
+
+function regel(nr, r) {
+  return pad(nr, 4) + pad(Math.round(r.af), 5) + pad(Math.round(r.weg), 5) +
+    pad(r.fouten.toFixed(1), 6) + pad(r.bijna.toFixed(1), 6) +
+    pad(r.doorloop.toFixed(1), 8) + pad(Math.round(r.doorloopMax), 6) +
+    pad(r.wachttijd.toFixed(1), 7) +
+    pad(Math.round(r.bezetting * 100) + '%', 8) +
+    pad(Math.round(r.apotheker * 100) + '%', 7) +
+    pad(Math.round(r.saldo), 8) + pad(Math.round(r.tevreden) + '%', 6) +
+    pad(klok(r.eind), 7);
 }
 
 function pad(v, n) { var s = String(v); while (s.length < n) s = ' ' + s; return s; }

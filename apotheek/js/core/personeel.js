@@ -2,11 +2,13 @@
  *
  *   vrij → lopen → werken → vrij
  *
- * Meer is het niet, en meer moet het in fase 0 ook niet zijn. Wat er wél echt
- * in zit is de loopafstand: een assistent legt de weg tussen twee stations
- * werkelijk af, dus tijd die aan lopen opgaat is capaciteit die niet aan
- * recepten opgaat. Dat is de reden dat de plattegrond straks een puzzel is en
- * niet alleen een plaatje. */
+ * Twee dingen zitten er echt in. De loopafstand: iemand legt de weg tussen twee
+ * stations werkelijk af, dus tijd die aan lopen opgaat is capaciteit die niet
+ * aan recepten opgaat — daarom is de plattegrond straks een puzzel en niet
+ * alleen een plaatje. En de rol: de apotheker kan alles wat een assistent kan,
+ * maar is de enige die een klasse A mag afdoen, en voor hem gaat dat vóór al
+ * het andere. Dat maakt hem de flessenhals zonder hem stil te zetten op een
+ * rustige dag. */
 (function (A) {
 
   var I = A.config.inst;
@@ -22,6 +24,10 @@
         else if (p.bezig === 'werken') werk(s, p, dm);
 
         s.meting.klokMin += dm;
+        if (p.rol === 'apotheker') {
+          s.meting.apothekerKlok += dm;
+          if (p.bezig !== 'vrij') s.meting.apothekerWerk += dm;
+        }
       }
     },
 
@@ -31,6 +37,14 @@
       var t = s.meting.klokMin;
       if (t <= 0) return 0;
       return (s.meting.werkMin + s.meting.loopMin) / t;
+    },
+
+    /* De apotheker apart, want die is de flessenhals en verdient zijn eigen
+       cijfer op het dagrapport. */
+    bezettingApotheker: function (s) {
+      var t = s.meting.apothekerKlok;
+      if (t <= 0) return 0;
+      return s.meting.apothekerWerk / t;
     }
   };
 

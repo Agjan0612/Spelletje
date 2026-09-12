@@ -23,6 +23,7 @@
     <div id="hud-midden">
       <div class="meter" id="m-klok"><span class="ico">🕘</span><span class="val">08:00</span></div>
       <div class="meter" id="m-rij"><span class="ico">📋</span><span class="val">0</span></div>
+      <div class="meter" id="m-apotheker"><span class="ico">🩺</span><span class="val">0</span></div>
       <div class="meter" id="m-wachtend"><span class="ico">🪑</span><span class="val">0</span></div>
       <div class="meter" id="m-doorloop"><span class="ico">⏱️</span><span class="val">—</span></div>
       <div class="meter" id="m-tevreden"><span class="ico">🙂</span><span class="val">100%</span></div>
@@ -30,6 +31,7 @@
     </div>
 
     <div id="hud-rechts">
+      <button id="btn-beleid" title="Protocollen (P)">📋 Protocollen</button>
       <div id="snelheden">
         <button class="spd" data-snelheid="0" title="Pauze (spatie)">⏸</button>
         <button class="spd actief" data-snelheid="1" title="Normaal (1)">1×</button>
@@ -48,6 +50,7 @@
     </aside>
 
     <aside id="receptkaart" class="kaart verborgen"></aside>
+    <aside id="beleid" class="kaart verborgen"></aside>
 
     <div id="logbox"></div>
     <div id="toast" class="verborgen"></div>

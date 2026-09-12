@@ -36,6 +36,7 @@
         huur: af.huur,
         saldo: af.saldo,
         bezetting: A.core.personeel.bezetting(s),
+        bezettingApotheker: A.core.personeel.bezettingApotheker(s),
         tevredenheid: s.tevredenheid
       };
       optellen(s.totaal, s.vandaag);
@@ -51,7 +52,7 @@
       s.dagKlaar = false;
       s.recepten = [];
       s.vandaag = A.core.state.nieuwDagboek();
-      s.meting = { werkMin: 0, loopMin: 0, klokMin: 0 };
+      s.meting = A.core.state.nieuwMeting();
       for (var i = 0; i < s.personeel.length; i++) {
         var p = s.personeel[i];
         p.taak = null; p.doel = null; p.bezig = 'vrij';

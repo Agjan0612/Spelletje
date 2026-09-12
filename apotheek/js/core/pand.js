@@ -8,7 +8,7 @@
  * decoratie zijn. */
 (function (A) {
 
-  var BREED = 14;
+  var BREED = 15;
   var DIEP = 10;
 
   /* Tegelsoorten. Het rooster zelf is een platte array van getallen, zodat een
@@ -35,9 +35,16 @@
 
   /* Waar de vaste inrichting staat. Eén regel per object; de assistent loopt
      naar de tegel ernaast (werkplek), niet op het meubel zelf. */
+  /* De opstelling is bewust niet symmetrisch. Bewaking en kantoor staan naast
+     elkaar omdat een klasse A daar heen en weer gaat; de controletafel staat
+     tussen de lade en de balie in, want dat is de weg die het recept aflegt.
+     Vanaf fase 2 mag de speler hieraan sleutelen — dan gaat deze opstelling van
+     "hoe het is" naar "hoe jij het hebt neergezet". */
   var OPSTELLING = [
-    { object: 'bewaking', x: 3, y: 2, sta: { x: 3, y: 3 } },
-    { object: 'lade', x: 10, y: 2, sta: { x: 10, y: 3 } },
+    { object: 'bewaking', x: 2, y: 2, sta: { x: 2, y: 3 } },
+    { object: 'kantoor', x: 4, y: 1, sta: { x: 4, y: 2 } },
+    { object: 'lade', x: 11, y: 2, sta: { x: 11, y: 3 } },
+    { object: 'controle', x: 9, y: 3, sta: { x: 9, y: 4 } },
     { object: 'balie', x: 7, y: 5, sta: { x: 7, y: 4 } },
     { object: 'deur', x: 7, y: 9, sta: { x: 7, y: 8 } }
   ];
@@ -49,7 +56,7 @@
   (function () {
     var rijen = [7, 8];
     for (var i = 0; i < rijen.length; i++) {
-      for (var x = 2; x <= 11; x++) WACHTPLEKKEN.push({ x: x, y: rijen[i] });
+      for (var x = 2; x <= 12; x++) WACHTPLEKKEN.push({ x: x, y: rijen[i] });
     }
   })();
 

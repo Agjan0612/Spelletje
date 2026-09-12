@@ -18,6 +18,16 @@
       uitleg: 'Hier wordt het middel gepakt en geëtiketteerd.'
     },
     {
+      id: 'controle', naam: 'Controletafel', emoji: '🔍',
+      station: 'controle', kleur: '#7a6a8a', hoogte: 11,
+      uitleg: 'Het tweede paar ogen. Vangt de meeste fouten voordat ze de deur uit gaan.'
+    },
+    {
+      id: 'kantoor', naam: 'Kantoor apotheker', emoji: '📋',
+      station: 'oordeel', kleur: '#2c5468', hoogte: 16,
+      uitleg: 'Waar de apotheker de klasse A-signalen afdoet. Er is er maar één.'
+    },
+    {
       id: 'balie', naam: 'Balie', emoji: '🧑‍⚕️',
       station: 'uitgifte', kleur: '#2f6b57', hoogte: 10,
       uitleg: 'Hier gaat het medicijn over de toonbank, mét uitleg.'

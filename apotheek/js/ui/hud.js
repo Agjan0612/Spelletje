@@ -37,8 +37,17 @@
 
       zet('m-geld', A.util.euro(s.geld), s.geld < 0 ? 'slecht' : '');
 
+      /* De apotheker apart, want die is de flessenhals. Zodra er een rij voor
+         zijn deur staat, is dat het eerste wat je wilt weten. */
+      var bijApotheker = 0;
+      for (var i = 0; i < s.recepten.length; i++) {
+        if (s.recepten[i].fase === 'oordeel') bijApotheker++;
+      }
+      zet('m-apotheker', bijApotheker,
+        bijApotheker > 5 ? 'slecht' : bijApotheker > 2 ? 'let-op' : '');
+
       var f = document.getElementById('fase');
-      if (f) f.textContent = 'Dag ' + s.dag + ' — fase 0, skelet';
+      if (f) f.textContent = 'Dag ' + s.dag;
     }
   };
 

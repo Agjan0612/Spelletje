@@ -32,13 +32,15 @@
         geld: 2500,
         tevredenheid: I.tevredenStart,
 
+        protocol: A.core.protocollen.nieuw(),
+
         vandaag: leegDagboek(),
         gisteren: null,
         totaal: leegDagboek(),
 
         /* Bezetting van het personeel over de dag, om de wachtrijklif uit het
            bouwplan te kunnen meten in plaats van hem te moeten raden. */
-        meting: { werkMin: 0, loopMin: 0, klokMin: 0 },
+        meting: leegMeting(),
 
         log: [],
         dagKlaar: false
@@ -49,12 +51,20 @@
         s.objecten.push({ object: o.object, x: o.x, y: o.y, sta: { x: o.sta.x, y: o.sta.y } });
       }
 
-      var namen = ['Fatima', 'Joost'];
-      for (var p = 0; p < namen.length; p++) {
-        var start = A.core.pand.werkplek(s, p === 0 ? 'bewaking' : 'balie');
+      /* Twee assistenten en één apotheker. De apotheker draait gewoon mee in
+         het werk — hij is alleen de enige die een klasse A mag afdoen, en dat
+         maakt hem de flessenhals zonder hem stil te zetten. */
+      var bemanning = [
+        { naam: 'Fatima', rol: 'assistent', bij: 'bewaking' },
+        { naam: 'Joost', rol: 'assistent', bij: 'lade' },
+        { naam: 'Ineke', rol: 'apotheker', bij: 'kantoor' }
+      ];
+      for (var p = 0; p < bemanning.length; p++) {
+        var start = A.core.pand.werkplek(s, bemanning[p].bij);
         s.personeel.push({
-          id: 'a' + (p + 1),
-          naam: namen[p],
+          id: 'm' + (p + 1),
+          naam: bemanning[p].naam,
+          rol: bemanning[p].rol,
           x: start.x, y: start.y,
           doel: null,
           taak: null,
@@ -115,13 +125,27 @@
       return uit;
     },
 
-    nieuwDagboek: leegDagboek
+    nieuwDagboek: leegDagboek,
+    nieuwMeting: leegMeting,
+
+    apotheker: function (s) {
+      for (var i = 0; i < s.personeel.length; i++) {
+        if (s.personeel[i].rol === 'apotheker') return s.personeel[i];
+      }
+      return null;
+    }
   };
+
+  function leegMeting() {
+    return { werkMin: 0, loopMin: 0, klokMin: 0, apothekerWerk: 0, apothekerKlok: 0 };
+  }
 
   function leegDagboek() {
     return {
-      binnen: 0, af: 0, weggelopen: 0, fouten: 0,
-      overlegd: 0, akkoord: 0,
+      binnen: 0, af: 0, weggelopen: 0,
+      signalen: 0, fouten: 0, bijnaFouten: 0,
+      overlegd: 0, akkoord: 0, beoordeeld: 0,
+      opgevraagd: 0, opvraagMislukt: 0, teruggestuurd: 0, buitenNorm: 0,
       omzet: 0, kosten: 0,
       /* Twee klokken, twee metingen — en ze verwarren is precies de fout die
          het harnas er meteen uit haalde. `gereed` is wat de apotheek zelf doet:

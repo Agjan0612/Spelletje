@@ -5,7 +5,7 @@ Een spel over het bouwen en runnen van een **openbare apotheek**, in de geest va
 
 - **Werktitel:** Recept tot Zorg *(alternatieven onderaan)*
 - **Branch:** `claude/pharmacy-game-design-175sl2`
-- **Status:** fase 0 en 0b zijn **gebouwd** — de kernlus draait, zie §16
+- **Status:** fase 0, 0b en **1** zijn gebouwd — de casus is het spel, zie §16
 - **Verwant:** hergebruikt de motor en de werkwijze van *Dorp tot Stad* (zie `CLAUDE.md`)
 
 **Vastgelegd (12 sep 2026):** geloofwaardig vakspel · zwaartepunt op de casus ·
@@ -372,7 +372,7 @@ draait, dan diepte, dan breedte.
 |---|---|---|---|
 | **0 · Skelet** ✅ | pand-grid, 3 objecten, 2 assistenten, recepten stromen binnen, één signaaltype, uitgifte, wachttijd, geld | 🟡 | **af** — de kernlus draait |
 | **0b · Meetlat** ✅ | `simuleer-apotheek.js` + eerste balans | 🟡 ⚠️ | **af** — en het verdiende zich meteen terug |
-| **1 · De casus** | receptkaart, signalenbibliotheek, dossier & ontbrekende gegevens, overleg, de apotheker als flessenhals, fouten & bijna-fouten, protocollen | 🔴 ⚠️ | dit is het spel |
+| **1 · De casus** ✅ | receptkaart, signalenbibliotheek, dossier & ontbrekende gegevens, overleg, de apotheker als flessenhals, fouten & bijna-fouten, protocollen | 🔴 ⚠️ | **af** — dit is het spel |
 | **2 · Het pand** | volledige objectcatalogus, bouwmenu, loopafstand, overlays, koelkast/kluis/robot, spreekkamer, ruimte bijkopen | 🟡 | tycoon-laag erbij |
 | **3 · De onderneming** | voorraad, groothandel, servicegraad, TIB, volledig geldmodel, personeel + rooster + opleiding, drie reputaties | 🔴 ⚠️ | het wordt een bedrijf |
 | **4 · De wereld** | gebeurtenissen, tekortenmechaniek, huisartsen & FTO, verzekeraarscontract, seizoenen, inspectie | 🟡 ⚠️ | het wordt onvoorspelbaar |
@@ -539,10 +539,94 @@ WebGL-opzet — dit is honderdvijftig regels en nul configuratie. Het overstappu
 is fase 2, als er echt iets te tekenen valt; de projectie zit al in `camera.js`
 en verandert daar niet van.
 
-### Wat als eerste komt in fase 1
+---
 
-De receptkaart is er al, maar toont nu één signaal en twee knoppen. Fase 1 maakt
-er het spel van: de signalenbibliotheek als config, het dossier met gaten erin,
-gegevens opvragen als handeling die tijd kost en zekerheid oplevert, de apotheker
-als aparte en schaarse rol, en protocollen zodat de speler op den duur beleid
-instelt in plaats van elk recept aan te klikken.
+## 17. Fase 1 — de casus
+
+Het scharnier is één idee: **informatie is een grondstof**. In fase 0 was de
+keuze een gok — akkoord of overleg, en je kon niet weten welke goed was. Nu kun
+je het uitzoeken, en dat maakt er een oordeel van.
+
+**Wat erbij is gekomen.** Tien signalen in `js/config/signalen.js`, verdeeld over
+drie klassen; elk met de vakinhoudelijke regel én één zin in gewone taal. Een
+dossier met gaten erin: de nierfunctie, de allergie of de afleverhistorie is
+onbekend tot je hem ophaalt, en dat lukt in 82% van de gevallen. Een apotheker
+als derde medewerker, die alles kan wat een assistent kan maar als enige een
+klasse A mag afdoen. Een controletafel. En protocollen, zodat je na een paar
+dagen beleid instelt in plaats van elk recept aan te klikken.
+
+**De vier handelingen en wat ze kosten:**
+
+| | kost | levert |
+|---|---|---|
+| **Opvragen** | 2,5 min assistent, lukt in 82% | je weet of het signaal terecht is |
+| **Overleg huisarts** | 6 min assistent **plus 22–45 min terugbellen** | altijd goed |
+| **Naar de apotheker** | 3 min van de enige apotheker — of 1,2 min als je het gegeven al hebt | altijd goed |
+| **Akkoord** | niets | tot blijkt dat het signaal terecht was |
+
+Die terugbeltijd is wat het geheel doet werken. Zonder die wachttijd is
+opvragen een omweg; mét is het de manier om in de helft van de gevallen een half
+uur stilstand te vermijden. Een wachtende patiënt wordt tijdens dat overleg naar
+huis gestuurd — dat kost goodwill, geen klant.
+
+### Wat het harnas eruit haalde, deze keer
+
+Vier keer een ontwerp dat op papier klopte en in de meting niet:
+
+1. **"Alles doorlaten" was de beste strategie** (+€124 tegen −€235 voor
+   zorgvuldig zijn), omdat de controletafel de fouten toch wel ving en een
+   gevangen fout bijna niets kostte. Nu is een gevangen fout *herwerk*: het
+   recept moet opnieuw langs de beslissing of opnieuw klaargemaakt worden. Dat
+   kost tijd, de enige munt die er in dit spel toe doet.
+2. **Het model vond te lang wachten erger dan een verkeerd middel afleveren.**
+   Een fout kostte €25 en drie punten tevredenheid, een wegloper €12 en twee.
+   Professioneel de wereld op z'n kop. Een fout kost nu €90 en tien punten.
+3. **Uitzoeken leverde niets op** tegenover blind overleggen, omdat doorlooptijd
+   alleen iets kostte bij wachtende patiënten. Er is nu een servicenorm van 25
+   minuten die voor élk recept geldt — ook wie 's middags terugkomt merkt of het
+   er ligt.
+4. **De controletafel werd dood gewicht** zodra je goed leerde beslissen: geen
+   denkfouten, dus niets te vangen. Daarom zijn er nu twee soorten fouten. Een
+   verkeerd doosje uit de la overkomt iedereen, op 3% van álle recepten, ook zonder
+   signaal — en dát is de echte reden dat een apotheek dubbel controleert.
+
+Verworpen na meting: **veroudering in de wachtrij**. De lange staart in de
+doorlooptijd is geen uithongering maar de drukte van het laatste uur, dus het
+hielp niet, en sterk genoeg afgesteld om wél iets te doen kostte het zeven
+weglopers per dag.
+
+### De beleidsruimte, gemeten
+
+10 zaden × 3 dagen, telkens één stand verzet:
+
+| | afgeleverd | fout de deur uit | doorlooptijd | saldo | tevredenheid |
+|---|---|---|---|---|---|
+| **B: uitzoeken** | 125 | 1,0 | 28,5 min | +€222 | 87% |
+| **B: altijd overleggen** | 124 | 0,7 | 32,5 min | +€251 | 86% |
+| **B: alles doorlaten** | 124 | 6,0 | 18,3 min | −€257 | 43% |
+| **Controle: alles** | 125 | 1,0 | 28,5 min | +€222 | 87% |
+| **Controle: de helft** | 125 | 2,3 | 23,7 min | +€97 | 74% |
+| **Controle: geen** | 124 | 4,0 | 18,5 min | −€43 | 59% |
+
+Uitzoeken en altijd-overleggen liggen dicht bij elkaar — het eerste is sneller,
+het tweede iets goedkoper. Dat is met opzet: geen van beide is overal het beste
+antwoord, en een mens kan het bovendien beter dan allebei, omdat hij per geval
+kan kiezen (uitzoeken voor wie staat te wachten, overleggen voor de rest) en het
+protocol dat niet kan uitdrukken. Alles doorlaten is duidelijk fout, en de
+controletafel verdient zichzelf terug.
+
+**Stand** (14 zaden × 4 dagen): 124 afgeleverd · 1 weggelopen · 0,8 fouten de
+deur uit · 2,6 door de controle gevangen · doorlooptijd 29 min · **bezetting 76%**
+(apotheker 72%) · saldo +€231 · tevredenheid 70%.
+
+Tussen 125 en 132 recepten per dag ligt de klif uit §10: de doorlooptijd springt
+van 27 naar 39 minuten en de dag loopt pas om zeven uur leeg. De standaard staat
+daar bewust net onder.
+
+### Wat er nog niet in zit
+
+De apotheker is nog geen echte flessenhals — hij draait op 72%, dus "eerst
+uitzoeken, dan de apotheker" betaalt zich pas terug op een drukke dag. Dat is
+eerlijk (een beleid dat alleen onder druk loont, is een echt beleid) en het
+dagrapport zegt het erbij, maar het wordt pas spannend als de speler zelf over
+personeel gaat — en dat is fase 3.
